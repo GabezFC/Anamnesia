@@ -28,6 +28,7 @@ from app.services.jev import JevService
 from app.services.metrics import get_logger, jsonl
 from app.services.obsidian import ObsidianVault
 from app.services.pricing import cost_usd
+from app.services.scope import Scope, discover, parse_scope
 
 
 class MemoryGateway:
@@ -51,6 +52,23 @@ class MemoryGateway:
             self.retrieval_cfg.graphify_query_budget, self.retrieval_cfg.graphify_timeout_s)
         self._jev_backend = jev_backend
         self.jev = self.make_jev(self.jev_cfg)
+        # Set per-search so pipelines can scope candidates early; None means global (§14).
+        self.active_scope: Scope | None = None
+
+    # -- projects -----------------------------------------------------------------
+    def projects(self) -> dict:
+        """Discover project/area entities from the vault (§15, §30). Fully generic: a new project
+        folder is picked up with no code change. Counts are read from the filesystem, not cached.
+        """
+        from app.services.scope import areas as area_counts
+
+        paths = self.vault.list_markdown()
+        registry = discover(paths)
+        return {
+            "total_notes": len(paths),
+            "areas": area_counts(paths),
+            "projects": [p.to_dict() for p in sorted(registry.values(), key=lambda x: -x.note_count)],
+        }
 
     # -- helpers ------------------------------------------------------------------
     def make_jev(self, cfg: JevConfig, cache: bool | None = None) -> JevService:
@@ -84,7 +102,8 @@ class MemoryGateway:
 
     def search(self, query: str, pipeline: str = "graphify_jev", max_results: int = 10,
                jev_overrides: dict[str, Any] | None = None, context_budget: int | None = None,
-               persist: bool = True, run_meta: dict[str, Any] | None = None) -> MemoryResult:
+               persist: bool = True, run_meta: dict[str, Any] | None = None,
+               scope: str | None = None) -> MemoryResult:
         if pipeline not in PIPELINES:
             raise ValueError(f"pipeline inválido: {pipeline}. Use um de {PIPELINES}")
         max_results = max(1, min(int(max_results), 50))
@@ -94,9 +113,12 @@ class MemoryGateway:
         meta = dict(run_meta or {})
         run_id = meta.get("run_id") or uuid.uuid4().hex[:12]
         jcfg = replace(self.jev_cfg, **jev_overrides) if jev_overrides else self.jev_cfg
+        parsed_scope = parse_scope(scope)
         t0 = time.perf_counter()
         error = None
         try:
+            # Pipelines read gw.active_scope to drop out-of-scope candidates before the judge.
+            self.active_scope = parsed_scope
             if pipeline == "graphify_jev":
                 jev = self.make_jev(jcfg) if jev_overrides else self.jev
                 cands, full, m = PIPELINE_FUNCS[pipeline](self, query, max_results, jev=jev)
@@ -105,14 +127,29 @@ class MemoryGateway:
         except Exception as exc:  # noqa: BLE001
             self.log.exception("pipeline %s failed", pipeline)
             cands, full, m, error = [], {}, {}, f"{type(exc).__name__}: {exc}"
+        finally:
+            self.active_scope = None
         tb = time.perf_counter()
         all_judged = m.pop("_all_candidates", None)
+        # Defence in depth: scope is enforced inside the pipelines (before the judge, so it saves
+        # tokens) AND again here, so a future pipeline that forgets about it cannot leak (§14, §40).
+        if not parsed_scope.is_global:
+            kept = [c for c in cands if parsed_scope.matches(c.source_file)]
+            if len(kept) != len(cands):
+                m["scope_leaked_blocked"] = len(cands) - len(kept)
+            cands = kept
+        m["scope"] = parsed_scope.label()
         context, sources, ctx_tokens = self.build_context(cands, full, context_budget)
         t1 = time.perf_counter()
 
         before = m.get("candidate_tokens_before_filter") or 0
         jev_in = m.get("jev_input_tokens")
         jev_cost = cost_usd(jev_in, m.get("jev_output_tokens"), jcfg.model) if pipeline == "graphify_jev" else 0.0
+        # Tokens actually spent to answer one query, across EVERY stage that talks to a model.
+        # context_reduction alone is misleading: a filter can shrink the final context while spending
+        # far more tokens judging candidates. total_tokens_spent is the only honest cost signal.
+        judge_tokens = (jev_in or 0) + (m.get("jev_output_tokens") or 0) if pipeline == "graphify_jev" else 0
+        total_spent = judge_tokens + ctx_tokens
         m.update({
             "pipeline": pipeline,
             "candidates": m.get("documents_found", 0),
@@ -121,10 +158,14 @@ class MemoryGateway:
             "context_tokens": ctx_tokens,
             "context_tokens_after_filter": ctx_tokens,
             "context_reduction": round(1 - ctx_tokens / before, 4) if before else None,
+            "judge_tokens": judge_tokens,
+            "total_tokens_spent": total_spent,
+            # >1 means the pipeline spends more tokens than it delivers as context (filtering overhead).
+            "token_amplification": round(total_spent / ctx_tokens, 2) if ctx_tokens else None,
             "context_build_latency_ms": round((t1 - tb) * 1000, 1),
             "total_latency_ms": round((t1 - t0) * 1000, 1),
             "retrieval_tokens": before,
-            "jev_tokens": (jev_in or 0) + (m.get("jev_output_tokens") or 0) if pipeline == "graphify_jev" else 0,
+            "jev_tokens": judge_tokens,
             "jev_cost": jev_cost,
             "cache_enabled": self.bench_cfg.cache_enabled,
             "jev_mode": jcfg.mode if pipeline == "graphify_jev" else None,
