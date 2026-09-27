@@ -1,0 +1,14 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+data/
+logs/
+benchmark.db
+benchmark.db-*
+.pytest_cache/
+integrations/hermes/hermes_home/*
+!integrations/hermes/hermes_home/config.yaml
+.delegation/
+integrations/hermes/hermes_bench/*
+!integrations/hermes/hermes_bench/config.yaml

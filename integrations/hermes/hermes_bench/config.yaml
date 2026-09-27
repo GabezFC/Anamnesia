@@ -1,0 +1,17 @@
+# Isolated Hermes home for the END-TO-END BENCHMARK consumer (context mode).
+# The Gateway already retrieved the context and puts it in the prompt, so this agent needs NO tools and
+# NO MCP server (prevents it from calling memory_search itself and contaminating the comparison).
+# qwen3:8b fits fully on the RTX 3060 12GB at 64K ctx; qwen3:14b at 64K spills 35% to CPU (observed).
+model:
+  default: qwen3:8b
+  provider: custom
+  base_url: http://localhost:11434/v1
+  context_length: 65536
+  ollama_num_ctx: 65536
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+compression:
+  enabled: false
+tools:
+  tool_search: false
