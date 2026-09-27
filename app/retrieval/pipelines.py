@@ -14,10 +14,24 @@ from app.gateway.token_budget import estimate_tokens
 from app.schemas.models import Candidate
 from app.services.dedup import deduplicate, preprocess
 from app.services.obsidian import split_sections
+from app.services.prefilter import prefilter
 
 
 def _tokens(cands: list[Candidate]) -> int:
     return sum(c.token_estimate or estimate_tokens(c.snippet) for c in cands)
+
+
+def _apply_scope(gw, cands: list[Candidate]) -> tuple[list[Candidate], int]:
+    """Drop out-of-scope candidates as EARLY as possible (§14).
+
+    Scoping before the judge (not only before context building) is what makes multi-project
+    isolation cheap: an out-of-scope note that is filtered here never costs judge tokens.
+    """
+    scope = getattr(gw, "active_scope", None)
+    if scope is None or scope.is_global:
+        return cands, 0
+    kept = [c for c in cands if scope.matches(c.source_file)]
+    return kept, len(cands) - len(kept)
 
 
 def run_baseline(gw, query: str, max_results: int) -> tuple[list[Candidate], dict, dict[str, Any]]:
@@ -25,6 +39,7 @@ def run_baseline(gw, query: str, max_results: int) -> tuple[list[Candidate], dic
     t0 = time.perf_counter()
     raw = gw.baseline.search(query, limit=rc.max_candidates)
     t1 = time.perf_counter()
+    raw, out_of_scope = _apply_scope(gw, raw)
     cands = preprocess(raw, rc.snippet_max_tokens)
     cand_tokens = _tokens(cands)
     uniq, removed = deduplicate(cands, rc.dedup_max_per_note)
@@ -34,6 +49,7 @@ def run_baseline(gw, query: str, max_results: int) -> tuple[list[Candidate], dic
         "retrieval_latency_ms": round((t1 - t0) * 1000, 1),
         "filter_latency_ms": round((t2 - t1) * 1000, 1),
         "documents_found": len(raw),
+        "documents_out_of_scope": out_of_scope,
         "documents_deduplicated": removed,
         "candidate_tokens_before_filter": cand_tokens,
         "baseline_sections_indexed": gw.baseline.sections_indexed,
@@ -45,6 +61,7 @@ def _graphify_candidates(gw, query: str):
     t0 = time.perf_counter()
     raw, ginfo = gw.graphify.search(query, limit=rc.max_candidates)
     t1 = time.perf_counter()
+    raw, out_of_scope = _apply_scope(gw, raw)
     cands = preprocess(raw, rc.snippet_max_tokens)
     cand_tokens = _tokens(cands)
     uniq, removed = deduplicate(cands, rc.dedup_max_per_note)
@@ -54,6 +71,7 @@ def _graphify_candidates(gw, query: str):
         "retrieval_latency_ms": round((t1 - t0) * 1000, 1),
         "dedup_latency_ms": round((t2 - t1) * 1000, 1),
         "documents_found": len(raw),
+        "documents_out_of_scope": out_of_scope,
         "documents_deduplicated": removed,
         "candidate_tokens_before_filter": cand_tokens,
         "average_graphify_score": round(sum(scores) / len(scores), 4) if scores else None,
@@ -86,8 +104,12 @@ def full_note_text(gw, c: Candidate) -> str:
 def run_graphify_jev(gw, query: str, max_results: int, jev=None):
     uniq, metrics = _graphify_candidates(gw, query)
     jev = jev or gw.jev
+    rc = gw.retrieval_cfg
+    # Deterministic top-K cut BEFORE the paid judge (zero tokens). See app/services/prefilter.py.
+    judged_in, withheld, pf = prefilter(query, uniq, rc.prefilter_top_k, rc.prefilter_lexical_weight)
+    metrics.update(pf)
     t0 = time.perf_counter()
-    survivors, jm = jev.evaluate(query, uniq)
+    survivors, jm = jev.evaluate(query, judged_in)
     t1 = time.perf_counter()
     survivors = sorted(survivors, key=lambda c: (-(c.relevance or 0), -c.score))[:max_results]
     full = {c.candidate_id: full_note_text(gw, c) for c in survivors}
@@ -97,7 +119,7 @@ def run_graphify_jev(gw, query: str, max_results: int, jev=None):
         "filter_latency_ms": round(metrics.pop("dedup_latency_ms") + (t1 - t0) * 1000, 1),
         "jev_latency_ms": jd["latency_ms"],
         "full_note_latency_ms": round((t2 - t1) * 1000, 1),
-        "documents_sent_to_jev": len(uniq),
+        "documents_sent_to_jev": len(judged_in),
         "documents_kept": jd["candidates_kept"],
         "documents_review": jd["candidates_review"],
         "documents_dropped": jd["candidates_dropped"],
@@ -109,7 +131,9 @@ def run_graphify_jev(gw, query: str, max_results: int, jev=None):
         "jev_cache_hits": jd["cache_hits"],
         "jev_cache_enabled": jd["cache_enabled"],
         "jev": jd,
-        "_all_candidates": uniq,  # every judged candidate (incl. dropped) — popped by the gateway for storage
+        # every judged candidate plus the ones withheld by the pre-filter, so a survivor the
+        # pre-filter dropped can still be marked as a false negative later (§25).
+        "_all_candidates": judged_in + withheld,
     })
     return survivors, full, metrics
 

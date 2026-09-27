@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from config import PROJECT_ROOT, env_int, env_str
+from config import PROJECT_ROOT, env_float, env_int, env_str
 
 
 @dataclass
@@ -17,6 +17,10 @@ class RetrievalConfig:
     # Budget of the final context delivered to ANY consumer model (§29 CLAUDE_CONTEXT_BUDGET, renamed neutral).
     model_context_budget: int = field(default_factory=lambda: env_int("MODEL_CONTEXT_BUDGET", env_int("CLAUDE_CONTEXT_BUDGET", 6000)))
     per_source_max_tokens: int = field(default_factory=lambda: env_int("PER_SOURCE_MAX_TOKENS", 1500))
+    # Deterministic pre-filter before the paid judge (0 = disabled, judge every candidate).
+    # 25 keeps ~92% of measured JEV survivors at half the judge input. See app/services/prefilter.py.
+    prefilter_top_k: int = field(default_factory=lambda: env_int("PREFILTER_TOP_K", 25))
+    prefilter_lexical_weight: float = field(default_factory=lambda: env_float("PREFILTER_LEXICAL_WEIGHT", 0.3))
     graphify_bin: str = field(default_factory=lambda: env_str("GRAPHIFY_BIN", "graphify"))
     graphify_query_budget: int = field(default_factory=lambda: env_int("GRAPHIFY_QUERY_BUDGET", 6000))
     graphify_timeout_s: int = field(default_factory=lambda: env_int("GRAPHIFY_TIMEOUT_S", 60))
