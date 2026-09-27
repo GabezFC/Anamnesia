@@ -1,0 +1,70 @@
+[
+  {
+    "id": "q01",
+    "question": "Por que o projeto trocou o gerenciador de pacotes padrão?",
+    "category": "decisoes_tecnicas",
+    "expected_sources": ["30-Projetos/Exemplo_Cerebro/decisoes/decisao-gerenciador-de-pacotes.md"],
+    "answer_hint": "Resposta esperada, em uma frase, com o fato concreto que a nota registra.",
+    "answerable": true
+  },
+  {
+    "id": "q02",
+    "question": "Qual banco de dados a API usa e por que a alternativa foi descartada?",
+    "category": "decisoes_tecnicas",
+    "expected_sources": ["30-Projetos/Exemplo_Cerebro/decisoes/decisao-banco-de-dados.md"],
+    "answer_hint": "Tecnologia escolhida, versão e o motivo objetivo da rejeição da alternativa.",
+    "answerable": true
+  },
+  {
+    "id": "q03",
+    "question": "Qual comando roda as migrações e por que elas não rodam ao subir o container?",
+    "category": "programacao",
+    "expected_sources": ["30-Projetos/Exemplo_Cerebro/procedimentos/como-rodar-migracoes.md"],
+    "answer_hint": "O comando exato e a razão técnica de ser um passo explícito.",
+    "answerable": true
+  },
+  {
+    "id": "q04",
+    "question": "Quais são os três grupos de licença de software e o que cada um significa?",
+    "category": "conceitos",
+    "expected_sources": ["40-Estudos/licencas-de-software.md"],
+    "answer_hint": "Pergunta conceitual: a resposta está numa nota de estudo, não numa decisão.",
+    "answerable": true
+  },
+  {
+    "id": "q05",
+    "question": "Qual modelo local é usado e em qual porta o serviço escuta?",
+    "category": "ferramentas",
+    "expected_sources": ["20-Dev-IA/infra-local.md"],
+    "answer_hint": "Pergunta factual curta: nome do modelo e porta.",
+    "answerable": true
+  },
+  {
+    "id": "q06",
+    "question": "Como a decisão de infraestrutura se relaciona com a preferência declarada sobre licenças?",
+    "category": "cruzamento",
+    "expected_sources": [
+      "30-Projetos/Exemplo_Cerebro/decisoes/decisao-infraestrutura.md",
+      "40-Estudos/licencas-de-software.md",
+      "50-Pessoal/preferencias/preferencias-de-trabalho.md"
+    ],
+    "answer_hint": "Pergunta de CRUZAMENTO: exige juntar notas de áreas diferentes do vault.",
+    "answerable": true
+  },
+  {
+    "id": "q07",
+    "question": "Qual cluster Kubernetes e quais manifests Helm são usados em produção?",
+    "category": "sem_resposta",
+    "expected_sources": [],
+    "answer_hint": null,
+    "answerable": false
+  },
+  {
+    "id": "q08",
+    "question": "Qual versão do Terraform provisiona a infraestrutura e onde fica o esquema GraphQL?",
+    "category": "sem_resposta",
+    "expected_sources": [],
+    "answer_hint": null,
+    "answerable": false
+  }
+]

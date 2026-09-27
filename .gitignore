@@ -98,3 +98,7 @@ $RECYCLE.BIN/
 *.swo
 *~
 .nfs*
+
+# Benchmark dataset derived from the private vault (real names, business decisions,
+# personal note paths). Never publish. The synthetic questions.example.json ships instead.
+benchmark/questions.json

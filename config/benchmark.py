@@ -16,12 +16,25 @@ SWEEP_THRESHOLDS = (0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90)  # spe
 SWEEP_THRESHOLDS_EXTENDED = (0.10, 0.20, 0.30, 0.40) + SWEEP_THRESHOLDS
 
 
+def _default_questions_path() -> str:
+    """Prefer the private local dataset, fall back to the published synthetic example.
+
+    `benchmark/questions.json` is derived from the owner's private vault (real names, business
+    decisions, personal note paths), so it is gitignored and never published. The repository ships
+    `benchmark/questions.example.json` instead, which has the same schema and question categories
+    but fully synthetic content, so a fresh clone still runs. Override with BENCHMARK_QUESTIONS.
+    """
+    private = PROJECT_ROOT / "benchmark" / "questions.json"
+    example = PROJECT_ROOT / "benchmark" / "questions.example.json"
+    return str(private if private.exists() else example)
+
+
 @dataclass
 class BenchmarkConfig:
     profile: str = field(default_factory=lambda: env_str("PROFILE", "production"))
     benchmark_mode: bool = field(default_factory=lambda: env_bool("BENCHMARK_MODE", False))
     cache_enabled_env: bool = field(default_factory=lambda: env_bool("CACHE_ENABLED", True))
-    questions_path: str = field(default_factory=lambda: str(PROJECT_ROOT / "benchmark" / "questions.json"))
+    questions_path: str = field(default_factory=lambda: env_str("BENCHMARK_QUESTIONS", _default_questions_path()))
     db_path: str = field(default_factory=lambda: env_str("DB_PATH", str(PROJECT_ROOT / "benchmark.db")))
     host: str = field(default_factory=lambda: env_str("HOST", "0.0.0.0"))
     port: int = field(default_factory=lambda: env_int("PORT", 8000))

@@ -224,6 +224,14 @@ mcp_servers:
 - Unidade: pergunta + pipeline + agente + modelo + configuração. Dataset: `benchmark/questions.json`
   (12 perguntas reais: projetos, decisões, programação, conceitos, ferramentas, erros, cruzamento, 2 sem resposta),
   com `expected_sources` → métrica `expected_sources_found.recall` por run.
+
+> **Privacidade do dataset.** `benchmark/questions.json` é derivado do vault pessoal (nomes reais,
+> decisões de negócio, caminhos de notas privadas), então é **gitignored e nunca publicado**. O
+> repositório traz `benchmark/questions.example.json`: mesmo schema e mesmas categorias, conteúdo
+> sintético. O código usa o arquivo privado quando ele existe e cai no exemplo quando não existe,
+> então um clone novo roda sem configuração. Para apontar para outro dataset: `BENCHMARK_QUESTIONS`.
+> Um dataset útil precisa de perguntas com resposta conhecida no seu vault **e** perguntas
+> deliberadamente sem resposta (para medir alucinação) — veja o exemplo como modelo.
 - **Retrieval-only** (sem geração) e **end-to-end** (retrieval + JEV + geração por UM consumidor por vez).
   Dentro de um consumidor, prompt/modelo/parâmetros são idênticos; só o retrieval muda. Prompt único neutro:
   `app/gateway/context_builder.py::CONSUMER_PROMPT_TEMPLATE`.
