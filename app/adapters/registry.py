@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 from functools import lru_cache
 
 from config.agents import AgentsConfig
@@ -42,11 +43,29 @@ def _detect_agents_cached() -> tuple:
                                          OpenCodeAdapter(cfg)))
 
 
+# detect_models() probes Ollama and vLLM over the network on every call. Measured 2026-09-27:
+# detect_all() took 8.6-10.6 s EVERY time because only the agent half was cached, which made
+# GET /system/info a 34 s request — and that endpoint is called on every dashboard page load.
+# Availability changes rarely, so a short TTL is the right trade-off; ?refresh=1 forces a probe.
+_MODELS_TTL_S = 60.0
+_models_cache: dict[str, object] = {"at": 0.0, "value": None}
+
+
+def _detect_models_cached(refresh: bool = False) -> dict:
+    now = time.monotonic()
+    if not refresh and _models_cache["value"] is not None \
+            and now - float(_models_cache["at"]) < _MODELS_TTL_S:
+        return _models_cache["value"]  # type: ignore[return-value]
+    value = detect_models()
+    _models_cache["at"], _models_cache["value"] = now, value
+    return value
+
+
 def detect_all(refresh: bool = False) -> dict:
     if refresh:
         _detect_agents_cached.cache_clear()
     agents = list(_detect_agents_cached())
-    models = detect_models()
+    models = _detect_models_cached(refresh)
     agents.append({"agent": "generic", "available": any(m["available"] for m in models.values()),
                    "version": None, "mcp": False, "cli": False, "metrics": "FULL",
                    "reason": "API direta (Ollama/OpenAI-compatible/Anthropic)"})
