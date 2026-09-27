@@ -34,6 +34,9 @@ class SearchRequest(BaseModel):
     review_action: Literal["keep", "drop"] | None = None
     context_budget: int | None = Field(None, ge=200, le=100000)
     include_candidates: bool = False
+    # Memory scoping (§14): "projeto:<slug>", comma-separated for several projects,
+    # "area:<Area>", or omitted/"global" for the whole brain.
+    scope: str | None = Field(None, max_length=500)
 
 
 class ConsumerSpec(BaseModel):
@@ -72,7 +75,8 @@ def _search(req: SearchRequest, pipeline: str):
     try:
         r = gw().search(req.query, pipeline, req.max_results,
                         jev_overrides=_overrides(req.jev_mode, req.threshold, req.review_action),
-                        context_budget=req.context_budget, run_meta={"kind": "api", "agent": "rest"})
+                        context_budget=req.context_budget, scope=req.scope,
+                        run_meta={"kind": "api", "agent": "rest"})
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     return r.to_dict(include_candidates=req.include_candidates)
@@ -257,3 +261,13 @@ def system_info():
 @router.get("/system/integrations")
 def integrations(refresh: bool = False):
     return detect_all(refresh)
+
+
+@router.get("/system/projects")
+def system_projects():
+    """Project/area entities discovered from the vault (§15, §30).
+
+    Fully data-driven: a new project folder appears here with no code change, which is what
+    makes the dashboard's Projects page generic instead of a hardcoded list.
+    """
+    return gw().projects()
