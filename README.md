@@ -74,10 +74,68 @@ Auditoria de 2026-09-27 sobre 170 runs reais (`python scripts/audit_pipeline.py`
 | Recall (ground truth no contexto) | **1,000** | 0,800 | 0,600 |
 | Latência total | **16 ms** | 627 ms | 1.167 ms |
 
-**O Baseline é o padrão** porque ganha em recall, latência e custo simultaneamente. O `graphify_jev`
-reduz o contexto final em 77% mas gasta ~10x mais tokens *no total*, porque paga o juiz para
-avaliar ~50 candidatos e manter 1. Detalhes e causa-raiz: `30-Projetos/Memory_Gateway/` no vault.
-`graphify` e `graphify_jev` continuam disponíveis como opções experimentais medidas, não como padrão.
+**Depois das correções desta rodada** (retrieval híbrido + pré-filtro K=8 + rede de segurança),
+medido com a API real do JEV nas 10 perguntas respondíveis:
+
+| | antes | depois |
+| --- | --- | --- |
+| Recall `graphify` | 0,800 | **1,000** |
+| Recall `graphify_jev` | 0,600 | **0,900** |
+| Contextos vazios (`graphify_jev`) | 3/10 | **0/10** |
+| Candidatos enviados ao juiz | 50 | **8** |
+| Tokens de entrada do juiz | 19.391 | **2.984** (−85%) |
+| Tokens totais/query | 20.530 | **5.044** (−75%) |
+| Latência `graphify` | 627 ms | **13 ms** (−98%) |
+| Latência `graphify_jev` | 1.167 ms | **332 ms** (−72%) |
+
+O **Baseline continua o padrão**: ainda é o único com recall 1,000 a 16 ms e custo zero. O
+`graphify_jev` deixou de ser indefensável (era 10x mais caro e perdia 40% das respostas), mas
+ainda paga um juiz para, na mediana, gastar ~7x o que entrega como contexto.
+`graphify` e `graphify_jev` seguem como opções experimentais medidas, não como padrão.
+
+### Retrieval híbrido do Graphify (`app/retrieval/graphify_hybrid.py`)
+
+A CLI do Graphify escolhe as sementes casando a query contra **labels de nós**, e o grafo só tem
+nomes de arquivo e títulos de heading (1.109 nós = 74 páginas + 1.035 headings). Ele **nunca
+indexa o corpo das notas**. Isso causava duas falhas distintas e independentes:
+
+- **q01** — a CLI truncava no `--budget 6000` antes de alcançar a nota certa (ela existia: aparecia
+  na posição 124 com budget maior).
+- **q06** — a resposta (`qwen2.5-coder:7b`, `127.0.0.1:49374`) está no **corpo** da nota. Nenhum
+  label contém esses termos, então **nenhuma** estratégia baseada só em grafo acha, em budget algum.
+
+Estratégias comparadas nas mesmas 10 perguntas (`scripts/graphify_seed_experiment.py`):
+
+| estratégia | recall |
+| --- | --- |
+| CLI atual | 8/10 |
+| seeds lexicais sobre `graph.json` | 8/10 |
+| seeds + BFS nas arestas reais | 9/10 |
+| **BM25 (corpo) + expansão por grafo** | **10/10** |
+
+Ou seja: o grafo é a ferramenta errada para **encontrar** uma nota e a certa para **relacionar**
+notas. O híbrido usa BM25 sobre o corpo como porta de entrada e o BFS do grafo para trazer
+vizinhos estruturais que não compartilham vocabulário com a query. Como elimina o subprocesso da
+CLI, também ficou 47x mais rápido. `GRAPHIFY_HYBRID=false` volta ao comportamento antigo.
+
+### Rede de segurança do juiz (`JEV_MIN_SURVIVORS`)
+
+Medido: o juiz dá 0,07–0,40 para notas **corretas** em algumas perguntas. Com threshold KEEP=0,78,
+q05/q07/q10 terminavam com **zero** sobreviventes — o usuário recebia contexto vazio e ainda assim
+pagava o juiz. Devolver nada é pior que devolver os melhores candidatos do retrieval sem
+julgamento, então quando o juiz elimina tudo o pipeline cai para os `JEV_MIN_SURVIVORS` (padrão 3)
+melhores candidatos e marca a decisão com sufixo `_FALLBACK` + métrica `jev_fallback_used`.
+Nunca sobrepõe um `QUARANTINE` (injeção). `JEV_MIN_SURVIVORS=0` desliga.
+
+### Otimização rejeitada (registrada de propósito)
+
+Os critérios do JEV são estáticos e reenviados a cada candidato: 82 tokens × ~50 = ~4.100
+tokens/query de pura repetição. O SDK aceita `Noul(criteria=None)`, então dava para declará-los
+uma única vez no `state`. Testado contra a API real (`scripts/jev_boilerplate_experiment.py`):
+entrada caiu 3.814 → 2.971 (**−22%**), **mas o julgamento mudou** — a nota correta da q02 caiu de
+0,79 (KEEP) para 0,75 (REVIEW) e 2 de 12 decisões de roteamento viraram. Os critérios por pergunta
+fazem parte do que o juiz avalia, não são moldura que se possa içar. **Não adotado.**
+
 
 ### Pré-filtro determinístico (`app/services/prefilter.py`)
 
