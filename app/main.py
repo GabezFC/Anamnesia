@@ -15,6 +15,7 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
+from app.adapters.registry import warm_detection  # noqa: E402
 from app.api import routes  # noqa: E402
 from app.gateway.memory_gateway import MemoryGateway  # noqa: E402
 
@@ -38,6 +39,9 @@ async def lifespan(_app: FastAPI):
     info = g.warm()
     g.log.info("gateway warm: %s", info)
     routes._state["gateway"] = g
+    # Probe agents/models off the request path: the first /system/info would otherwise block
+    # ~9 s on network probes, exactly when the dashboard is being opened.
+    warm_detection()
     yield
 
 
