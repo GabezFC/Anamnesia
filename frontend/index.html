@@ -3,63 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Memory Gateway</title>
+<title>Memory Gateway — Observability</title>
+<meta name="description" content="Dashboard de observabilidade dos pipelines de retrieval do Memory Gateway.">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <h1>Memory Gateway</h1>
-  <span id="health" class="pill">…</span>
-  <nav>
-    <button data-tab="run" class="active">Run / Compare</button>
-    <button data-tab="history">Histórico</button>
-    <button data-tab="stats">Stats</button>
-    <button data-tab="sweep">Threshold sweep</button>
-    <button data-tab="system">Sistema</button>
-  </nav>
-</header>
-
-<main>
-<section id="tab-run" class="tab active">
-  <div class="form">
-    <label class="wide">Question<textarea id="q" rows="2">Qual driver do Postgres o Norteia usa e por quê?</textarea></label>
-    <label>Agent<select id="agent"><option value="">(retrieval-only)</option></select></label>
-    <label>Provider<select id="provider"><option value=""></option></select></label>
-    <label>Model<select id="model"><option value=""></option></select></label>
-    <label>Pipeline<select id="pipeline">
-      <option>graphify_jev</option><option>graphify</option><option>baseline</option></select></label>
-    <label>JEV mode<select id="jevmode"><option>performance</option><option>strict</option></select></label>
-    <label>Threshold<input id="threshold" type="number" step="0.01" min="0" max="1" value="0.78"></label>
-    <label>Repetitions<select id="reps"><option>1</option><option>3</option><option>5</option><option>10</option></select></label>
-    <label>Max results<input id="maxres" type="number" value="10" min="1" max="50"></label>
-  </div>
-  <div class="buttons">
-    <button id="btn-run">Run</button>
-    <button id="btn-all">Run All Pipelines</button>
-    <button id="btn-bench">Run Benchmark (dataset)</button>
-    <button id="btn-compare">Compare</button>
-    <span id="estimate" class="muted"></span>
-  </div>
-  <div id="status" class="muted"></div>
-  <div id="result"></div>
-</section>
-
-<section id="tab-history" class="tab">
-  <h2>Sessões</h2><div id="sessions"></div>
-  <h2>Runs</h2><div id="runs"></div>
-  <div id="run-detail"></div>
-</section>
-
-<section id="tab-stats" class="tab"><div id="stats"></div></section>
-
-<section id="tab-sweep" class="tab">
-  <p>Chama o JEV uma vez por pergunta do dataset e reaplica o roteamento em código para cada threshold.</p>
-  <button id="btn-sweep">Executar sweep</button>
-  <div id="sweep"></div>
-</section>
-
-<section id="tab-system" class="tab"><div id="system"></div></section>
-</main>
-<script src="/static/app.js"></script>
+<noscript>
+  <p style="padding:24px;color:#F5F7FA;background:#0B0F14">
+    Este dashboard precisa de JavaScript. A API REST continua disponível em <code>/health</code>,
+    <code>/benchmark/runs</code> e <code>/system/info</code>.
+  </p>
+</noscript>
+<!-- Shell, router and pages are rendered by js/app.js (ES modules, no build step, no CDN). -->
+<script type="module" src="/static/js/app.js"></script>
 </body>
 </html>
