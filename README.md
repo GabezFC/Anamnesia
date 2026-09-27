@@ -60,8 +60,75 @@ Para acesso pela rede, o Windows pode exigir uma regra de firewall (não é cria
 | --- | --- | --- | --- |
 | Candidatos | SQLite FTS5 `bm25()`, tokenizer `unicode61 remove_diacritics 2`, termos OR sem stop-words, seção com peso 2x | `graphify query "<q>" --budget 6000 --graph data/vault_mirror/graphify-out/graph.json` | igual ao Graphify |
 | Pós-processamento | limpeza, snippet ≤ 300 tokens, sha256 do texto normalizado, dedup por hash / (arquivo, seção, snippet), 1 por nota | idem | idem |
-| Filtro | — | — | JEV Noul `is_relevant` (+ `contains_instruction_injection` em `strict`) em **uma requisição por lote**; KEEP/REVIEW/DROP/QUARANTINE decididos em código |
+| Filtro | — | — | **pré-filtro determinístico (0 tokens)** → JEV Noul `is_relevant` (+ `contains_instruction_injection` em `strict`) em **uma requisição por lote**; KEEP/REVIEW/DROP/QUARANTINE decididos em código |
 | Contexto | `ModelContextBuilder`: relevância → score → round-robin por arquivo → `MODEL_CONTEXT_BUDGET` | idem | sobreviventes recebem a **nota completa** (seção relevante primeiro), limitada a `PER_SOURCE_MAX_TOKENS` |
+
+### Qual pipeline usar (medido, não teórico)
+
+Auditoria de 2026-09-27 sobre 170 runs reais (`python scripts/audit_pipeline.py`), medianas:
+
+| | Baseline | Graphify | Graphify + JEV |
+| --- | --- | --- | --- |
+| Contexto final (tokens) | 2.088 | 1.919 | 483 |
+| **Tokens totais gastos/query** | **2.088** | **1.919** | **20.530** |
+| Recall (ground truth no contexto) | **1,000** | 0,800 | 0,600 |
+| Latência total | **16 ms** | 627 ms | 1.167 ms |
+
+**O Baseline é o padrão** porque ganha em recall, latência e custo simultaneamente. O `graphify_jev`
+reduz o contexto final em 77% mas gasta ~10x mais tokens *no total*, porque paga o juiz para
+avaliar ~50 candidatos e manter 1. Detalhes e causa-raiz: `30-Projetos/Memory_Gateway/` no vault.
+`graphify` e `graphify_jev` continuam disponíveis como opções experimentais medidas, não como padrão.
+
+### Pré-filtro determinístico (`app/services/prefilter.py`)
+
+Corte top-K **antes** do juiz pago, custo zero em tokens. Ordena por híbrido de
+(percentil de rank do score do Graphify, com empates mediados) + (sobreposição lexical dos termos
+da query contra caminho, heading e snippet da nota, sem acentos e sem stop-words).
+
+- `PREFILTER_TOP_K` (padrão 25; `0` desliga e volta ao comportamento anterior)
+- `PREFILTER_LEXICAL_WEIGHT` (padrão 0.3)
+
+Medido nos 42 runs gravados: K=25 retém 91,7% dos sobreviventes do JEV com metade da entrada.
+Verificado ao vivo contra a API real do JEV: entrada do juiz caiu de 19.391 → 10.342 tokens (-47%)
+mantendo a nota correta. **Armadilha registrada**: a primeira versão normalizava com min-max, o que
+dava 1,0 a todos os empatados e deixava 29 notas irrelevantes empatadas derrubarem a nota cujo nome
+batia com a query — um teste unitário pegou isso; hoje usa percentil de rank com empates mediados.
+
+### Métricas honestas de custo
+
+`context_reduction` isolado **engana**: ele caía 77% enquanto o custo total subia 10x. Por isso todo
+run agora grava também:
+
+- `judge_tokens` — tokens gastos pelo juiz (JEV)
+- `total_tokens_spent` = `judge_tokens + context_tokens` — o custo real por query
+- `token_amplification` = `total_tokens_spent / context_tokens` — `> 1` significa que o pipeline
+  gasta mais do que entrega como contexto (medido: 22,41 no `graphify_jev`)
+
+## Memória multiprojeto (global vs. por projeto)
+
+Projetos e áreas são **descobertos dos caminhos do vault**, sem nenhum nome fixo no código: criar
+`30-Projetos/<Novo_Projeto>/` faz o projeto aparecer sozinho (`app/services/scope.py`).
+
+`GET /system/projects` → `{total_notes, areas{}, projects[{slug, display_name, area, note_count}]}`
+
+Toda busca aceita `scope`, aplicado **antes do juiz** (escopo estreito custa menos tokens) e
+reaplicado antes de montar o contexto (defesa em profundidade contra vazamento entre projetos):
+
+| `scope` | Busca |
+| --- | --- |
+| omitido / `global` | cérebro inteiro |
+| `projeto:norteia` | um projeto |
+| `projeto:norteia,projeto:memory-gateway` | vários projetos (união) |
+| `area:50-Pessoal` | uma área |
+
+```bash
+curl -X POST localhost:8000/memory/search/baseline -H "Content-Type: application/json" \
+  -d '{"query":"decisao driver postgres","scope":"projeto:norteia"}'
+```
+
+Cada run grava `scope` e `documents_out_of_scope`. Convenção de layout em `PROJECT_AREAS`
+(`app/services/scope.py`): só subpastas de `30-Projetos/` são projetos — `50-Pessoal/perfil/` e
+`50-Pessoal/preferencias/` são pastas organizacionais, não projetos.
 
 ### Graphify
 
@@ -172,6 +239,22 @@ Separados em: `candidate_tokens_before_filter`, `context_tokens`, `jev_input_tok
 e ferramentas) e `agent_overhead_tokens`. Preços apenas verificados (`config/pricing.py`): JEV US$ 0,042/Mtok de entrada,
 saída gratuita; modelos locais = 0. Preço ou token desconhecido → `null` ("unavailable"), nunca estimado.
 `break_even()` reporta overhead do JEV, economia de contexto, `net_cost_change` e `net_latency_change` — sem veredito.
+
+### Auditoria determinística do pipeline (0 tokens de LLM)
+
+```powershell
+.venv\Scripts\python.exe scripts\audit_pipeline.py          # tabela legível
+.venv\Scripts\python.exe scripts\audit_pipeline.py --json    # para automação
+```
+
+Lê `benchmark.db` em modo somente-leitura e regenera o funil completo por pipeline: candidatos
+recuperados → removidos por dedup → tokens de candidato → enviados ao juiz → tokens do juiz →
+mantidos/descartados → sobreviventes → **contexto final**, mais latência por etapa, custo,
+eficiência e duplicação. É a forma barata de reauditar o sistema sem gastar um único token de
+modelo — rode isso antes de tirar qualquer conclusão sobre performance.
+
+Ao ler a saída: `context_reduction` alto **não** significa economia. Compare sempre com
+`total_tokens_spent` e `token_amplification`.
 
 ### Feedback humano
 

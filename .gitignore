@@ -1,14 +1,100 @@
-.venv/
-.env
+# ---------------------------------------------------------------------------
+# Memory Gateway — .gitignore
+# Publication safety: this project reads a PRIVATE Obsidian vault. Anything
+# derived from the vault (mirrors, state dumps, logs, benchmark DBs) is PRIVATE
+# and must never reach a public remote.
+# ---------------------------------------------------------------------------
+
+# --- Python artifacts ---
 __pycache__/
+*.py[cod]
+*$py.class
 *.pyc
-data/
-logs/
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# --- Environment / secrets ---
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+*.p12
+secrets.yaml
+secrets.yml
+credentials.json
+
+# --- Databases (benchmark + SQLite WAL sidecars) ---
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
 benchmark.db
 benchmark.db-*
-.pytest_cache/
+
+# --- Logs / run output ---
+logs/
+*.log
+*.jsonl
+
+# --- PRIVATE: anything derived from the user's Obsidian vault ---
+# `data/` is ignored wholesale so new vault-derived artifacts are private by
+# default; the specific paths are also named explicitly for clarity.
+data/
+data/vault_mirror/
+data/vault_state_before.json
+
+# --- Agent delegation / scratch output ---
+.delegation/
+graphify-out/
+*.graphify-cache/
+
+# --- Hermes integration homes (personal config, cache, history) ---
+# Only the curated config.yaml files are published.
 integrations/hermes/hermes_home/*
 !integrations/hermes/hermes_home/config.yaml
-.delegation/
 integrations/hermes/hermes_bench/*
 !integrations/hermes/hermes_bench/config.yaml
+integrations/hermes/*/cache/
+integrations/hermes/*/sessions/
+integrations/hermes/*/memories/
+integrations/hermes/*/logs/
+
+# --- OS junk ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# --- Editor / IDE junk ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.nfs*
