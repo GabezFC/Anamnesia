@@ -11,8 +11,10 @@ import time
 from typing import Any
 
 from app.gateway.token_budget import estimate_tokens
+from app.retrieval.graphify_hybrid import hybrid_search
 from app.schemas.models import Candidate
 from app.services.dedup import deduplicate, preprocess
+from app.services.jev import QUARANTINE
 from app.services.obsidian import split_sections
 from app.services.prefilter import prefilter
 
@@ -59,7 +61,22 @@ def run_baseline(gw, query: str, max_results: int) -> tuple[list[Candidate], dic
 def _graphify_candidates(gw, query: str):
     rc = gw.retrieval_cfg
     t0 = time.perf_counter()
-    raw, ginfo = gw.graphify.search(query, limit=rc.max_candidates)
+    # Hybrid needs a real graph.json to expand structurally. When it is absent (fresh checkout,
+    # graph not built yet, or an injected test double), fall back to the service's own search so
+    # behaviour degrades to the previous pipeline instead of silently losing the graph stage.
+    index = getattr(gw, "graph_index", None)
+    if index is not None:
+        index.load()
+    use_hybrid = getattr(rc, "graphify_hybrid", True) and index is not None and index.loaded
+    if use_hybrid:
+        # BM25 body text for content + graph edges for structure. Recall 10/10 vs 8/10 for the
+        # CLI traversal (measured 2026-09-27). See app/retrieval/graphify_hybrid.py.
+        raw, ginfo = hybrid_search(gw, query, rc.max_candidates,
+                                   text_seeds=rc.graphify_text_seeds,
+                                   graph_expand=rc.graphify_graph_expand)
+    else:
+        raw, ginfo = gw.graphify.search(query, limit=rc.max_candidates)
+        ginfo = {**ginfo, "graphify_mode": "cli"}
     t1 = time.perf_counter()
     raw, out_of_scope = _apply_scope(gw, raw)
     cands = preprocess(raw, rc.snippet_max_tokens)
@@ -112,6 +129,21 @@ def run_graphify_jev(gw, query: str, max_results: int, jev=None):
     survivors, jm = jev.evaluate(query, judged_in)
     t1 = time.perf_counter()
     survivors = sorted(survivors, key=lambda c: (-(c.relevance or 0), -c.score))[:max_results]
+
+    # SAFETY NET (§25). Measured 2026-09-27: the judge scores correct notes 0.07-0.40 for some
+    # questions, so q05/q07/q10 survived with ZERO candidates and the user got an EMPTY context
+    # while still paying the judge. Returning nothing is strictly worse than returning the best
+    # retrieval candidates unjudged, so when the judge eliminates everything we fall back to the
+    # top pre-filter candidates and flag it. This never overrides a QUARANTINE (injection) call.
+    fallback_used = 0
+    if not survivors and judged_in:
+        safe = [c for c in judged_in if c.decision != QUARANTINE]
+        fallback = sorted(safe, key=lambda c: -c.score)[:min(rc.jev_min_survivors, max_results)]
+        for c in fallback:
+            c.decision = f"{c.decision}_FALLBACK" if c.decision else "FALLBACK"
+        survivors = fallback
+        fallback_used = len(fallback)
+
     full = {c.candidate_id: full_note_text(gw, c) for c in survivors}
     t2 = time.perf_counter()
     jd = jm.to_dict()
@@ -125,6 +157,7 @@ def run_graphify_jev(gw, query: str, max_results: int, jev=None):
         "documents_dropped": jd["candidates_dropped"],
         "documents_quarantined": jd["candidates_quarantined"],
         "documents_unjudged": jd["candidates_unjudged"],
+        "jev_fallback_used": fallback_used,
         "survivor_tokens_snippets": _tokens(survivors),
         "jev_input_tokens": jd["input_tokens"],
         "jev_output_tokens": jd["output_tokens"],

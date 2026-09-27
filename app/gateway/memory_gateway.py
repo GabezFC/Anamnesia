@@ -21,6 +21,7 @@ from config.retrieval import RetrievalConfig
 from app.database.db import Database
 from app.gateway.context_builder import ModelContextBuilder
 from app.retrieval.baseline import BaselineIndex
+from app.retrieval.graphify_hybrid import GraphIndex
 from app.retrieval.pipelines import PIPELINE_FUNCS
 from app.schemas.models import PIPELINES, MemoryResult
 from app.services.graphify import GraphifyService
@@ -52,6 +53,8 @@ class MemoryGateway:
             self.retrieval_cfg.graphify_query_budget, self.retrieval_cfg.graphify_timeout_s)
         self._jev_backend = jev_backend
         self.jev = self.make_jev(self.jev_cfg)
+        # Lazy in-memory view of graph.json used by the hybrid retriever (reloads on mtime change).
+        self.graph_index = GraphIndex(self.graphify.graph_path)
         # Set per-search so pipelines can scope candidates early; None means global (§14).
         self.active_scope: Scope | None = None
 
