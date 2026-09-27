@@ -1,3 +1,4 @@
+import json
 import threading
 
 import pytest
@@ -24,7 +25,12 @@ def cands(n=3):
 
 
 class FakeBackend:
-    """evaluate(state, questions) -> (answers, usage, model). Scores looked up by candidate id."""
+    """evaluate(state, questions) -> (answers, usage, model).
+
+    Scores are looked up by candidate id. The payload no longer carries the candidate id (it was
+    a redundant ~18 tokens per candidate); it carries a short int `ref` = index within the batch,
+    so the fake resolves ref -> candidate through the batch order, exactly like production code.
+    """
 
     def __init__(self, rel=None, inj=None, usage=None, fail=False, rel_second=None):
         self.rel = rel or {}
@@ -33,6 +39,7 @@ class FakeBackend:
         self.usage = usage if usage is not None else {"input_tokens": 100, "output_tokens": 10}
         self.fail = fail
         self.calls: list[tuple[dict, dict]] = []
+        self.batches: list[list[str]] = []  # candidate ids per call, set by the test when needed
         self._lock = threading.Lock()
 
     def evaluate(self, state, questions):
@@ -42,9 +49,12 @@ class FakeBackend:
         if self.fail:
             raise RuntimeError("backend down")
         rel = self.rel_second if (self.rel_second is not None and n > 1) else self.rel
+        # Reconstruct the batch's candidate ids from the section marker the fixtures use ("S<i>"),
+        # which is stable and unique per candidate in these tests.
         answers = {}
         for name, q in questions.items():
-            cid = q["instructions"]["candidate"]["id"]
+            cand = q["instructions"]["candidate"]
+            cid = f"c{cand['section'][1:]}" if str(cand.get("section", "")).startswith("S") else str(cand.get("ref"))
             if name.startswith("rel_"):
                 answers[name] = rel.get(cid, 0.9)
             elif name.startswith("inj_"):
@@ -96,10 +106,21 @@ def test_strict_mode_rel_and_inj_same_request():
 
 
 def test_payload_only_minimal_keys():
+    """The judge must receive only what it needs to decide — never internal ids or metadata.
+
+    `id` was dropped in prompt v2: it repeated `source` plus a line anchor the judge cannot use,
+    costing ~18 tokens per candidate (~900 per 50-candidate query). `ref` is a short int used only
+    to correlate the answer back to the candidate.
+    """
     fb = FakeBackend()
     JevService(cfg(mode="strict"), backend=fb).evaluate("q", cands(2))
     for q in fb.calls[0][1].values():
-        assert set(q["instructions"]["candidate"]) == {"id", "source", "section", "snippet", "graph_score"}
+        payload = q["instructions"]["candidate"]
+        assert set(payload) == {"ref", "source", "section", "snippet", "graph_score"}
+        # the candidate's meta dict carries a secret in the fixture; it must never be sent
+        assert "secret" not in json.dumps(payload)
+        # only the note basename travels, not the full vault path
+        assert "/" not in payload["source"]
 
 
 def test_adaptive_batching_multiple_requests_and_usage_summed():
@@ -164,8 +185,8 @@ def test_cache_get_and_put_used():
     survivors, m = svc.evaluate("q", cs)
     assert len(gets) == 3
     assert m.cache_hits == 1 and m.cache_enabled
-    sent_ids = {q["instructions"]["candidate"]["id"] for q in fb.calls[0][1].values()}
-    assert sent_ids == {"c1", "c2"}
+    sent_ids = {q["instructions"]["candidate"]["section"] for q in fb.calls[0][1].values()}
+    assert sent_ids == {"S1", "S2"}  # only the uncached candidates reach the judge
     assert {k for k, _ in puts} == {cache_key("q", cs[1], c), cache_key("q", cs[2], c)}
     assert cs[0].relevance == 0.95 and cs[0].decision == KEEP
 
@@ -184,8 +205,8 @@ def test_second_pass_only_reasks_review():
     svc = JevService(cfg(second_pass=True), backend=fb)
     _, m = svc.evaluate("q", cands(3))
     assert len(fb.calls) == 2
-    second_ids = {q["instructions"]["candidate"]["id"] for q in fb.calls[1][1].values()}
-    assert second_ids == {"c1"}
+    second_ids = {q["instructions"]["candidate"]["section"] for q in fb.calls[1][1].values()}
+    assert second_ids == {"S1"}  # section is the stable per-candidate marker now that `id` is gone
     assert m.second_pass_requests == 1 and m.request_count == 2
 
 
@@ -200,3 +221,35 @@ def test_invalid_config_rejected():
         JevService(cfg(mode="bogus"), backend=FakeBackend())
     with pytest.raises(ValueError):
         JevService(cfg(review_threshold=0.9, relevance_threshold=0.5), backend=FakeBackend())
+
+
+# -- cache key normalization (prompt v2) ---------------------------------------
+def test_cache_key_ignores_wording_and_word_order():
+    """Paraphrases of the same question must reuse the judgement (measured hit rate was 0)."""
+    c = cfg()
+    cd = cands(1)[0]
+    base = cache_key("Qual driver do Postgres o Norteia usa?", cd, c)
+    assert cache_key("Que driver de Postgres o Norteia usa?", cd, c) == base   # stopwords differ
+    assert cache_key("driver Postgres Norteia", cd, c) == base                 # order differs
+    assert cache_key("QUAL DRIVER DO POSTGRES O NORTEIA USA", cd, c) == base   # case differs
+    assert cache_key("Qual driver do Postgrés o Nortéia usa?", cd, c) == base  # accents differ
+
+
+def test_cache_key_still_separates_different_questions():
+    c = cfg()
+    cd = cands(1)[0]
+    a = cache_key("Qual driver do Postgres o Norteia usa?", cd, c)
+    b = cache_key("Qual o preco do plano KVM da Hostinger?", cd, c)
+    assert a != b
+
+
+def test_cache_key_invalidates_on_content_and_config_change():
+    """A changed note, model, prompt version or mode must never reuse a stale judgement."""
+    c = cfg()
+    cd = cands(1)[0]
+    base = cache_key("q sobre driver", cd, c)
+    changed = Candidate(candidate_id=cd.candidate_id, source_file=cd.source_file, section=cd.section,
+                        snippet=cd.snippet, score=cd.score, content_hash="DIFFERENT")
+    assert cache_key("q sobre driver", changed, c) != base
+    assert cache_key("q sobre driver", cd, cfg(model="jev-9.9.9")) != base
+    assert cache_key("q sobre driver", cd, cfg(mode="strict")) != base

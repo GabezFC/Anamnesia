@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from config import env_bool, env_float, env_int, env_str
 
 # Bump whenever question wording/criteria change: part of the cache key and benchmark identity (§45).
-JEV_PROMPT_VERSION = "relevance-v1+injection-v1"
+# v2 (2026-09-27): candidate payload slimmed — dropped the redundant `id` (repeated `source`) and
+# send the note basename plus a short int `ref` instead of the full vault path. Wording unchanged.
+JEV_PROMPT_VERSION = "relevance-v2+injection-v1"
 JEV_CONFIG_VERSION = "cfg-v1"
 
 
