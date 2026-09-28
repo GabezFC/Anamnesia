@@ -4,10 +4,47 @@ from pathlib import Path
 
 from config import PROJECT_ROOT, env_bool, env_float, env_int, env_str
 
+# The example corpus that ships WITH the repository. It is the default so that a fresh clone runs
+# end to end on any machine, on any OS, with no configuration at all — the project must never
+# depend on one developer's home directory.
+DEFAULT_VAULT = PROJECT_ROOT / "data" / "synthetic_vault"
+
+# Canonical variable, plus the legacy name kept working for existing .env files.
+VAULT_ENV_VAR = "MEMORY_GATEWAY_VAULT"
+LEGACY_VAULT_ENV_VAR = "OBSIDIAN_VAULT_PATH"
+
+
+def resolve_vault_path(raw: str | Path | None = None) -> Path:
+    """Resolve the vault directory from an explicit value, the environment, or the bundled corpus.
+
+    Precedence: explicit argument (a CLI `--vault`) > MEMORY_GATEWAY_VAULT > OBSIDIAN_VAULT_PATH >
+    the bundled `data/synthetic_vault`. Relative paths resolve against the current working
+    directory, absolute paths are used as given, and `~` is expanded, so all of
+    `--vault ./data/synthetic_vault`, `--vault ~/notes` and `--vault /srv/vault` behave.
+    """
+    value = raw or env_str(VAULT_ENV_VAR, "") or env_str(LEGACY_VAULT_ENV_VAR, "")
+    if not value:
+        return DEFAULT_VAULT
+    return Path(str(value)).expanduser().resolve()
+
+
+def validate_vault_path(path: Path) -> Path:
+    """Fail loudly and legibly instead of silently indexing an empty directory."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(
+            f"Vault directory not found: {p}\n"
+            f"Set {VAULT_ENV_VAR} in your .env (see .env.example) or pass --vault <path>. "
+            f"The repository ships an example corpus at {DEFAULT_VAULT}."
+        )
+    if not p.is_dir():
+        raise NotADirectoryError(f"Vault path is not a directory: {p}")
+    return p
+
 
 @dataclass
 class RetrievalConfig:
-    vault_path: Path = field(default_factory=lambda: Path(env_str("OBSIDIAN_VAULT_PATH", r"C:\Users\fonse\Cérebro_AI")))
+    vault_path: Path = field(default_factory=resolve_vault_path)
     data_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data")
     # Directories inside the vault that are never indexed.
     excluded_dirs: tuple[str, ...] = (".obsidian", ".trash", ".git", "99-Templates")

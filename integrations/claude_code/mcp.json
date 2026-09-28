@@ -1,9 +1,10 @@
 {
+  "_comment": "Add to your Claude Code MCP config. Replace <PROJECT_ROOT> with the absolute path of your Memory_Gateway checkout. On Linux/macOS the interpreter is <PROJECT_ROOT>/.venv/bin/python.",
   "mcpServers": {
     "memory-gateway": {
-      "command": "C:\\Users\\fonse\\Projetos_AI\\Memory_Gateway\\.venv\\Scripts\\python.exe",
+      "command": "<PROJECT_ROOT>/.venv/Scripts/python.exe",
       "args": ["-m", "app.mcp.server"],
-      "cwd": "C:\\Users\\fonse\\Projetos_AI\\Memory_Gateway"
+      "cwd": "<PROJECT_ROOT>"
     }
   }
 }

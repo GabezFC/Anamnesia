@@ -13,10 +13,14 @@ Verificado em 2026-09-24. Só fatos observados; atualize ao descobrir algo novo.
 | Docker | ativo | `ai-memory` em 127.0.0.1:49374 (não usado pelo Gateway) |
 
 ## Vault
-`C:\Users\fonse\Cérebro_AI` — 61 arquivos `.md` (fora de `.obsidian/`). READ ONLY.
+Vault de desenvolvimento apontado por `MEMORY_GATEWAY_VAULT` (`<YOUR_VAULT_PATH>`; alias legado
+`OBSIDIAN_VAULT_PATH` ainda aceito; sem nenhum dos dois, cai no corpus de exemplo
+`data/synthetic_vault`). O vault usado na verificação tinha ~61 arquivos `.md` (fora de
+`.obsidian/`). Tratado sempre como READ ONLY.
 
 ## Graphify
-- `graphify 0.9.59` em `C:\Users\fonse\.local\bin\graphify` (CLI; sem API Python pública usada).
+- `graphify 0.9.59` instalado como CLI no PATH do usuário (ex.: `~/.local/bin/graphify`);
+  sem API Python pública usada.
 - Grafo do vault: o Graphify escreve `graphify-out/` no diretório analisado, portanto **não pode rodar no vault**.
   Solução: espelho somente-leitura dos `.md` em `data/vault_mirror/` (cópia) e `graphify update data/vault_mirror`
   (AST, sem LLM, ~3 s). Resultado: 940 nós (`file_type=document`, `node_kind=heading`), 1094 arestas
@@ -33,7 +37,8 @@ Verificado em 2026-09-24. Só fatos observados; atualize ao descobrir algo novo.
   O campo `model` retorna a versão concreta (ex.: `jev-1.13.0`), usada como identificação imutável.
 - Retry oficial: `RetryPolicy(max_retries=2, backoff 0.5→5s, statuses {408,429,5xx})`. Doc: 429 rate limit, 529 overloaded.
 - Endpoint HTTP: `POST https://api.typesafe.ai/v1/systemone`. Várias perguntas no mesmo request = fan-out nativo.
-- Exemplo local anterior: `C:\Users\fonse\Projetos_AI\JEV_test\api.py`.
+- Existe um protótipo anterior de integração (`api.py`) fora deste repositório, mantido localmente
+  pelo desenvolvedor; não é dependência do Gateway.
 
 ## Agentes / consumidores
 | Agente | Versão | Estado |
