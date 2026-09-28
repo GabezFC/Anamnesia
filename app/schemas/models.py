@@ -4,8 +4,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-PipelineName = Literal["baseline", "graphify", "graphify_jev"]
-PIPELINES: tuple[str, ...] = ("baseline", "graphify", "graphify_jev")
+PipelineName = Literal["baseline", "graphify", "graphify_jev", "graphify_jev_opt"]
+PIPELINES: tuple[str, ...] = ("baseline", "graphify", "graphify_jev", "graphify_jev_opt")
 UNAVAILABLE = None  # metrics a platform does not expose are stored as null, never estimated (§43, §103)
 
 

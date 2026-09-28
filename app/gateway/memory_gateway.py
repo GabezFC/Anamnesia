@@ -17,6 +17,7 @@ from typing import Any
 
 from config.benchmark import BenchmarkConfig
 from config.jev import JevConfig
+from config.optimization import OptimizationConfig
 from config.retrieval import RetrievalConfig
 from app.database.db import Database
 from app.gateway.context_builder import ModelContextBuilder
@@ -31,14 +32,23 @@ from app.services.obsidian import ObsidianVault
 from app.services.pricing import cost_usd
 from app.services.scope import Scope, discover, parse_scope
 
+# Pipelines that call the paid judge: they alone carry judge tokens, judge cost and JEV metadata.
+JEV_PIPELINES = ("graphify_jev", "graphify_jev_opt")
+
 
 class MemoryGateway:
     def __init__(self, retrieval_cfg: RetrievalConfig | None = None, jev_cfg: JevConfig | None = None,
                  bench_cfg: BenchmarkConfig | None = None, db: Database | None = None,
-                 jev_backend=None, graphify_service: GraphifyService | None = None):
+                 jev_backend=None, graphify_service: GraphifyService | None = None,
+                 opt_cfg: OptimizationConfig | None = None):
         self.retrieval_cfg = retrieval_cfg or RetrievalConfig()
         self.jev_cfg = jev_cfg or JevConfig()
         self.bench_cfg = bench_cfg or BenchmarkConfig()
+        # Token optimizations (§32). Default is the frozen baseline: every flag off.
+        self.opt_cfg = opt_cfg or OptimizationConfig()
+        # Cache isolation handle. "" in production; a benchmark sets it so its arms cannot read
+        # judgements cached by a previous run (see app/services/jev.py cache_key).
+        self.cache_namespace = ""
         self.log = get_logger()
         self.vault = ObsidianVault(self.retrieval_cfg.vault_path, self.retrieval_cfg.excluded_dirs)
         if not self.vault.exists():
@@ -79,7 +89,8 @@ class MemoryGateway:
         return JevService(cfg, backend=self._jev_backend,
                           cache_get=self.db.cache_get if use_cache else None,
                           cache_put=self.db.cache_put if use_cache else None,
-                          logger=lambda e: jsonl("jev", e))
+                          logger=lambda e: jsonl("jev", e),
+                          cache_namespace=self.cache_namespace)
 
     def warm(self) -> dict:
         t0 = time.perf_counter()
@@ -122,7 +133,7 @@ class MemoryGateway:
         try:
             # Pipelines read gw.active_scope to drop out-of-scope candidates before the judge.
             self.active_scope = parsed_scope
-            if pipeline == "graphify_jev":
+            if pipeline in JEV_PIPELINES:
                 jev = self.make_jev(jcfg) if jev_overrides else self.jev
                 cands, full, m = PIPELINE_FUNCS[pipeline](self, query, max_results, jev=jev)
             else:
@@ -147,11 +158,12 @@ class MemoryGateway:
 
         before = m.get("candidate_tokens_before_filter") or 0
         jev_in = m.get("jev_input_tokens")
-        jev_cost = cost_usd(jev_in, m.get("jev_output_tokens"), jcfg.model) if pipeline == "graphify_jev" else 0.0
+        is_jev = pipeline in JEV_PIPELINES
+        jev_cost = cost_usd(jev_in, m.get("jev_output_tokens"), jcfg.model) if is_jev else 0.0
         # Tokens actually spent to answer one query, across EVERY stage that talks to a model.
         # context_reduction alone is misleading: a filter can shrink the final context while spending
         # far more tokens judging candidates. total_tokens_spent is the only honest cost signal.
-        judge_tokens = (jev_in or 0) + (m.get("jev_output_tokens") or 0) if pipeline == "graphify_jev" else 0
+        judge_tokens = (jev_in or 0) + (m.get("jev_output_tokens") or 0) if is_jev else 0
         total_spent = judge_tokens + ctx_tokens
         m.update({
             "pipeline": pipeline,
@@ -171,8 +183,8 @@ class MemoryGateway:
             "jev_tokens": judge_tokens,
             "jev_cost": jev_cost,
             "cache_enabled": self.bench_cfg.cache_enabled,
-            "jev_mode": jcfg.mode if pipeline == "graphify_jev" else None,
-            "threshold": jcfg.relevance_threshold if pipeline == "graphify_jev" else None,
+            "jev_mode": jcfg.mode if is_jev else None,
+            "threshold": jcfg.relevance_threshold if is_jev else None,
         })
         if error:
             m["error"] = error

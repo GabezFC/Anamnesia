@@ -172,3 +172,12 @@ def run_graphify_jev(gw, query: str, max_results: int, jev=None):
 
 
 PIPELINE_FUNCS = {"baseline": run_baseline, "graphify": run_graphify, "graphify_jev": run_graphify_jev}
+
+
+def _optimized(gw, query: str, max_results: int, jev=None):
+    """PIPELINE D — the cascade. Registered lazily to avoid a circular import at module load."""
+    from app.retrieval.pipelines_opt import run_graphify_jev_optimized
+    return run_graphify_jev_optimized(gw, query, max_results, jev=jev)
+
+
+PIPELINE_FUNCS["graphify_jev_opt"] = _optimized
