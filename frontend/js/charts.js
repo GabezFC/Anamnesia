@@ -1,5 +1,6 @@
 // charts.js — self-contained inline-SVG charts. No external library, no CDN.
-// Every chart: responsive (re-renders on container resize), hover tooltips, legend, units.
+// Every chart: responsive (re-renders on container resize), hover tooltips, legend, units,
+// and an explicit "Não medido" state when the series carries no real values.
 import { esc } from './format.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -17,13 +18,16 @@ function tipFor(wrap) {
 }
 function bindTip(wrap, node, html) {
   const tip = tipFor(wrap);
-  node.addEventListener('mousemove', (ev) => {
+  const move = (ev) => {
     const b = wrap.getBoundingClientRect();
     tip.innerHTML = html;
-    tip.style.left = `${ev.clientX - b.left}px`;
-    tip.style.top = `${ev.clientY - b.top - 8}px`;
+    // Clamp inside the wrapper so the tooltip never escapes the panel.
+    const x = Math.min(Math.max(ev.clientX - b.left, 60), Math.max(60, b.width - 60));
+    tip.style.left = `${x}px`;
+    tip.style.top = `${Math.max(24, ev.clientY - b.top - 8)}px`;
     tip.style.opacity = '1';
-  });
+  };
+  node.addEventListener('mousemove', move);
   node.addEventListener('mouseleave', () => { tip.style.opacity = '0'; });
 }
 
@@ -39,27 +43,44 @@ function legendHTML(series) {
     `<span class="key"><i style="background:${esc(s.color)}"></i>${esc(s.label)}</span>`).join('')}</div>`;
 }
 
+/** The mandated empty state inside a chart slot: explicit, never a blank axis. */
 function emptyInto(wrap, msg) {
-  wrap.innerHTML = `<div class="state"><div class="state-title">Sem dados</div>${esc(msg)}</div>`;
+  disconnect(wrap);
+  wrap.innerHTML = `<div class="state state-compact">
+    <div class="state-icon">◌</div>
+    <div class="state-title">Não medido</div>
+    <p class="state-body">${esc(msg)}</p></div>`;
+}
+
+function disconnect(wrap) {
+  if (wrap._chartRO) { wrap._chartRO.disconnect(); wrap._chartRO = null; }
+  if (wrap._chartWin) { window.removeEventListener('resize', wrap._chartWin); wrap._chartWin = null; }
+}
+
+/** Disconnect every chart observer under `root`. Called before a page is replaced. */
+export function destroyCharts(root) {
+  (root || document).querySelectorAll('.chart-wrap').forEach(disconnect);
 }
 
 /**
  * Re-render chart whenever the container is resized.
- * draw(wrap, width) must fully repaint wrap.
+ * draw(width) must fully repaint wrap.
  */
 function responsive(wrap, draw) {
   let last = 0;
   const run = () => {
+    if (!wrap.isConnected) { disconnect(wrap); return; }
     const w = Math.max(280, Math.floor(wrap.clientWidth || wrap.parentElement?.clientWidth || 600));
     if (Math.abs(w - last) < 6) return;
     last = w;
     draw(w);
   };
-  if (wrap._chartRO) wrap._chartRO.disconnect();
+  disconnect(wrap);
   if (typeof ResizeObserver === 'function') {
     wrap._chartRO = new ResizeObserver(run);
     wrap._chartRO.observe(wrap);
   } else {
+    wrap._chartWin = run;
     window.addEventListener('resize', run);
   }
   run();
@@ -70,35 +91,36 @@ function responsive(wrap, draw) {
 /* ======================================================================== */
 /** Horizontal bar chart. rows: [{label, value, color?, tip?}] */
 export function hBarChart(wrap, { rows, unit = '', fmt = String, emptyMsg = 'nenhuma série disponível' }) {
-  if (!rows || !rows.length || rows.every((r) => !(r.value > 0))) return emptyInto(wrap, emptyMsg);
+  const usable = (rows || []).filter((r) => typeof r.value === 'number' && Number.isFinite(r.value));
+  if (!usable.length || usable.every((r) => !(r.value > 0))) return emptyInto(wrap, emptyMsg);
   responsive(wrap, (W) => {
-    const padL = Math.min(180, Math.max(96, Math.round(W * 0.22)));
-    const padR = 68, rowH = 30, padT = 8, padB = 22;
-    const H = padT + rows.length * rowH + padB;
-    const max = niceMax(Math.max(...rows.map((r) => r.value || 0)));
+    const padL = Math.min(190, Math.max(96, Math.round(W * 0.24)));
+    const padR = 72; const rowH = 32; const padT = 8; const padB = 24;
+    const H = padT + usable.length * rowH + padB;
+    const max = niceMax(Math.max(...usable.map((r) => r.value || 0)));
     const plotW = Math.max(40, W - padL - padR);
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: 'img' });
 
     for (let i = 0; i <= 4; i++) {
       const x = padL + (plotW * i) / 4;
-      svg.appendChild(el('line', { class: 'grid-line', x1: x, x2: x, y1: padT, y2: padT + rows.length * rowH }));
+      svg.appendChild(el('line', { class: 'grid-line', x1: x, x2: x, y1: padT, y2: padT + usable.length * rowH }));
       const t = el('text', { class: 'axis', x, y: H - 6, 'text-anchor': 'middle' });
       t.textContent = fmt((max * i) / 4);
       svg.appendChild(t);
     }
-    rows.forEach((r, i) => {
+    usable.forEach((r, i) => {
       const y = padT + i * rowH;
       const w = max ? Math.max(1, ((r.value || 0) / max) * plotW) : 1;
-      const lbl = el('text', { class: 'axis', x: padL - 8, y: y + rowH / 2 + 3, 'text-anchor': 'end' });
+      const lbl = el('text', { class: 'axis', x: padL - 10, y: y + rowH / 2 + 3, 'text-anchor': 'end' });
       lbl.textContent = r.label;
       svg.appendChild(lbl);
       const bar = el('rect', {
-        class: 'bar', x: padL, y: y + 5, width: w, height: rowH - 12,
+        class: 'bar', x: padL, y: y + 6, width: w, height: rowH - 14,
         rx: 2, fill: r.color || 'var(--info)',
       });
       bindTip(wrap, bar, `<b>${esc(r.label)}</b><br>${esc(fmt(r.value))}${unit ? ` ${esc(unit)}` : ''}${r.tip ? `<br>${r.tip}` : ''}`);
       svg.appendChild(bar);
-      const val = el('text', { class: 'axis-val', x: padL + w + 6, y: y + rowH / 2 + 3 });
+      const val = el('text', { class: 'axis-val', x: padL + w + 8, y: y + rowH / 2 + 3 });
       val.textContent = fmt(r.value);
       svg.appendChild(val);
     });
@@ -111,11 +133,11 @@ export function hBarChart(wrap, { rows, unit = '', fmt = String, emptyMsg = 'nen
 /* ======================================================================== */
 /** Grouped vertical bar chart. groups:[{label}], series:[{label,color,values:[]}] */
 export function groupedBarChart(wrap, { groups, series, unit = '', fmt = String, emptyMsg = 'nenhuma série disponível' }) {
-  const any = series?.some((s) => s.values?.some((v) => v > 0));
+  const any = series?.some((s) => s.values?.some((v) => typeof v === 'number' && v > 0));
   if (!groups?.length || !any) return emptyInto(wrap, emptyMsg);
   responsive(wrap, (W) => {
-    const padL = 62, padR = 12, padT = 12, padB = 40, H = 260;
-    const plotW = Math.max(60, W - padL - padR), plotH = H - padT - padB;
+    const padL = 64; const padR = 12; const padT = 12; const padB = 44; const H = 268;
+    const plotW = Math.max(60, W - padL - padR); const plotH = H - padT - padB;
     const max = niceMax(Math.max(...series.flatMap((s) => s.values.map((v) => v || 0))));
     const gW = plotW / groups.length;
     const bW = Math.max(3, Math.min(34, (gW * 0.72) / series.length));
@@ -142,7 +164,7 @@ export function groupedBarChart(wrap, { groups, series, unit = '', fmt = String,
         bindTip(wrap, bar, `<b>${esc(g.label)}</b> · ${esc(s.label)}<br>${esc(fmt(v))}${unit ? ` ${esc(unit)}` : ''}`);
         svg.appendChild(bar);
       });
-      const lbl = el('text', { class: 'axis', x: cx, y: H - 22, 'text-anchor': 'middle' });
+      const lbl = el('text', { class: 'axis', x: cx, y: H - 24, 'text-anchor': 'middle' });
       lbl.textContent = g.label;
       svg.appendChild(lbl);
     });
@@ -154,15 +176,76 @@ export function groupedBarChart(wrap, { groups, series, unit = '', fmt = String,
 }
 
 /* ======================================================================== */
+/**
+ * Real stacked horizontal bars. rows:[{label, parts:[{label,value,color}]}].
+ * Used for token composition (judge vs context), where the TOTAL is the point.
+ */
+export function stackedBarChart(wrap, { rows, unit = '', fmt = String, emptyMsg = 'nenhuma série disponível' }) {
+  const usable = (rows || []).map((r) => ({
+    ...r,
+    parts: (r.parts || []).filter((p) => typeof p.value === 'number' && p.value > 0),
+  })).filter((r) => r.parts.length);
+  if (!usable.length) return emptyInto(wrap, emptyMsg);
+  const legend = [];
+  for (const r of usable) {
+    for (const p of r.parts) if (!legend.some((l) => l.label === p.label)) legend.push({ label: p.label, color: p.color });
+  }
+  responsive(wrap, (W) => {
+    const padL = Math.min(190, Math.max(100, Math.round(W * 0.24)));
+    const padR = 80; const rowH = 34; const padT = 8; const padB = 24;
+    const H = padT + usable.length * rowH + padB;
+    const totals = usable.map((r) => r.parts.reduce((a, p) => a + p.value, 0));
+    const max = niceMax(Math.max(...totals));
+    const plotW = Math.max(40, W - padL - padR);
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: 'img' });
+
+    for (let i = 0; i <= 4; i++) {
+      const x = padL + (plotW * i) / 4;
+      svg.appendChild(el('line', { class: 'grid-line', x1: x, x2: x, y1: padT, y2: padT + usable.length * rowH }));
+      const t = el('text', { class: 'axis', x, y: H - 6, 'text-anchor': 'middle' });
+      t.textContent = fmt((max * i) / 4);
+      svg.appendChild(t);
+    }
+    usable.forEach((r, i) => {
+      const y = padT + i * rowH;
+      const lbl = el('text', { class: 'axis', x: padL - 10, y: y + rowH / 2 + 3, 'text-anchor': 'end' });
+      lbl.textContent = r.label;
+      svg.appendChild(lbl);
+      let x = padL;
+      for (const p of r.parts) {
+        const w = Math.max(1, (p.value / max) * plotW);
+        const seg = el('rect', { class: 'bar', x, y: y + 7, width: w, height: rowH - 16, fill: p.color });
+        bindTip(wrap, seg, `<b>${esc(r.label)}</b> · ${esc(p.label)}<br>${esc(fmt(p.value))}${unit ? ` ${esc(unit)}` : ''}`
+          + `<br><span class="muted">total ${esc(fmt(totals[i]))}</span>`);
+        svg.appendChild(seg);
+        x += w;
+      }
+      const val = el('text', { class: 'axis-val', x: x + 8, y: y + rowH / 2 + 3 });
+      val.textContent = fmt(totals[i]);
+      svg.appendChild(val);
+    });
+    wrap.innerHTML = '';
+    wrap.appendChild(svg);
+    wrap.insertAdjacentHTML('beforeend', legendHTML(legend) +
+      (unit ? `<div class="chart-legend"><span class="muted">Unidade: ${esc(unit)}</span></div>` : ''));
+  });
+}
+
+/* ======================================================================== */
 /** Multi-series line chart. points: [{x:number(epoch s), y:number}] per series. */
 export function lineChart(wrap, { series, unit = '', fmt = String, xFmt = String, emptyMsg = 'nenhuma série disponível' }) {
-  const pts = series?.flatMap((s) => s.points || []) || [];
-  if (pts.length < 1) return emptyInto(wrap, emptyMsg);
+  const clean = (series || []).map((s) => ({
+    ...s,
+    points: (s.points || []).filter((p) => typeof p.x === 'number' && Number.isFinite(p.x)
+      && typeof p.y === 'number' && Number.isFinite(p.y)),
+  })).filter((s) => s.points.length);
+  const pts = clean.flatMap((s) => s.points);
+  if (!pts.length) return emptyInto(wrap, emptyMsg);
   responsive(wrap, (W) => {
-    const padL = 62, padR = 14, padT = 12, padB = 38, H = 250;
-    const plotW = Math.max(60, W - padL - padR), plotH = H - padT - padB;
-    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
-    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const padL = 64; const padR = 16; const padT = 12; const padB = 40; const H = 258;
+    const plotW = Math.max(60, W - padL - padR); const plotH = H - padT - padB;
+    const xs = pts.map((p) => p.x); const ys = pts.map((p) => p.y);
+    const x0 = Math.min(...xs); const x1 = Math.max(...xs);
     const yMax = niceMax(Math.max(...ys, 0)) || 1;
     const sx = (x) => padL + (x1 === x0 ? plotW / 2 : ((x - x0) / (x1 - x0)) * plotW);
     const sy = (y) => padT + plotH - (y / yMax) * plotH;
@@ -183,16 +266,15 @@ export function lineChart(wrap, { series, unit = '', fmt = String, xFmt = String
       t.textContent = xFmt(xv);
       svg.appendChild(t);
     });
-    for (const s of series) {
-      const p = (s.points || []).slice().sort((a, b) => a.x - b.x);
-      if (!p.length) continue;
+    for (const s of clean) {
+      const p = s.points.slice().sort((a, b) => a.x - b.x);
       if (p.length > 1) {
         svg.appendChild(el('path', {
           d: p.map((q, i) => `${i ? 'L' : 'M'}${sx(q.x).toFixed(1)},${sy(q.y).toFixed(1)}`).join(' '),
           fill: 'none', stroke: s.color, 'stroke-width': 1.8, 'stroke-linejoin': 'round',
         }));
       }
-      const showDots = p.length <= 90;
+      const showDots = p.length <= 120;
       for (const q of p) {
         const c = el('circle', { cx: sx(q.x), cy: sy(q.y), r: showDots ? 2.6 : 1.4, fill: s.color });
         bindTip(wrap, c, `<b>${esc(s.label)}</b><br>${esc(xFmt(q.x))}<br>${esc(fmt(q.y))}${unit ? ` ${esc(unit)}` : ''}${q.tip ? `<br>${q.tip}` : ''}`);
@@ -201,10 +283,7 @@ export function lineChart(wrap, { series, unit = '', fmt = String, xFmt = String
     }
     wrap.innerHTML = '';
     wrap.appendChild(svg);
-    wrap.insertAdjacentHTML('beforeend', legendHTML(series) +
+    wrap.insertAdjacentHTML('beforeend', legendHTML(clean) +
       (unit ? `<div class="chart-legend"><span class="muted">Unidade: ${esc(unit)}</span></div>` : ''));
   });
 }
-
-/** Stub for stacked-bar style token composition (total/context/in/out) reuse. */
-export function stackedBarChart(wrap, opts) { return groupedBarChart(wrap, opts); }

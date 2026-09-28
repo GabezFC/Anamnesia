@@ -3,16 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Memory Gateway — Observability</title>
-<meta name="description" content="Dashboard de observabilidade dos pipelines de retrieval do Memory Gateway.">
+<title>Memory Gateway — Observabilidade de contexto e retrieval</title>
+<meta name="description" content="Dashboard de observabilidade dos pipelines de retrieval do Memory Gateway: tokens gastos vs contexto entregue, procedência dos resultados e configuração ativa.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#070A0E">
 <link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070A0E'/%3E%3Cpath d='M7 22V10l5 7 5-7v12' stroke='%234F9CF9' stroke-width='2.5' fill='none' stroke-linejoin='round'/%3E%3Ccircle cx='24' cy='12' r='2.5' fill='%23A78BFA'/%3E%3C/svg%3E">
 </head>
 <body>
 <noscript>
-  <p style="padding:24px;color:#F5F7FA;background:#0B0F14">
-    Este dashboard precisa de JavaScript. A API REST continua disponível em <code>/health</code>,
-    <code>/benchmark/runs</code> e <code>/system/info</code>.
-  </p>
+  <div style="padding:24px;max-width:70ch;color:#F2F6FB;background:#070A0E;font:14px/1.6 system-ui,sans-serif">
+    <h1 style="font-size:18px;margin:0 0 8px">Memory Gateway</h1>
+    <p>Este dashboard precisa de JavaScript (ES modules, sem build e sem CDN). A API REST continua
+    disponível em <code>/health</code>, <code>/system/info</code>, <code>/benchmark/runs</code>,
+    <code>/benchmark/stats</code> e <code>/benchmark/questions</code>, e a documentação interativa
+    em <code>/docs</code>.</p>
+  </div>
 </noscript>
 <!-- Shell, router and pages are rendered by js/app.js (ES modules, no build step, no CDN). -->
 <script type="module" src="/static/js/app.js"></script>

@@ -1,32 +1,38 @@
-// pages-data.js — History, Projects, Memory, Agents, Models, Settings.
-// Strictly data-driven: entities derive from API payloads. No hardcoded project names, no fake numbers.
+// pages-data.js — History, Projects, Memory, Agents, Models.
+// Strictly data-driven: entities derive from API payloads. No hardcoded project names, no fake numbers,
+// and NEVER an absolute developer path (see safePath in format.js).
 import { lineChart } from './charts.js';
 import {
-  PIPELINES, PIPELINE_LABEL, PIPELINE_COLOR, esc, fmtNum, fmtCompact, fmtMs, fmtCost, fmtPct,
-  fmtDate, fmtDateShort, get, num, realRuns, metricsOf, totalTokens, tokenAmplification, recallOf, costOf, mean,
+  PIPELINES, PIPELINE_LABEL, PIPELINE_SHORT, PIPELINE_COLOR, esc, fmtNum, fmtCompact, fmtMs, fmtCost,
+  fmtPct, fmtAmp, fmtDate, fmtDateShort, get, num, realRuns, metricsOf, totalTokens, tokenAmplification,
+  recallOf, precisionOf, costOf, mean, safePath, armOf, judgeTokens, savedTokens,
 } from './format.js';
 import {
-  metricCard, panel, emptyState, notWiredState, table, segmented, help,
+  metricCard, panel, emptyState, notWiredState, notMeasuredState, table, segmented, kvTable,
+  callout, skeletonLines,
 } from './components.js';
 import { consumerRows } from './store.js';
 
 /* ====================================================== HISTORY ========= */
 const HIST_SERIES = {
   tokens: ['Tokens totais gastos', (m) => totalTokens(m), fmtCompact, 'tokens', 'total_tokens'],
-  amplification: ['Amplificação', (m) => tokenAmplification(m), (v) => `${num(v)?.toFixed(1) ?? '—'}×`, '×', 'token_amplification'],
+  judge: ['Tokens do juiz', (m) => judgeTokens(m), fmtCompact, 'tokens', 'judge_tokens'],
+  context: ['Contexto entregue', (m) => num(get(m, 'context_tokens')), fmtCompact, 'tokens', 'context_tokens'],
+  saved: ['Economia estimada', (m) => savedTokens(m), fmtCompact, 'tokens', 'saved_tokens'],
+  amplification: ['Amplificação', (m) => tokenAmplification(m), fmtAmp, '×', 'token_amplification'],
   latency: ['Latência total', (m) => num(get(m, 'total_latency_ms')), fmtMs, 'ms', 'total_latency_ms'],
   cost: ['Custo', (m) => costOf(m), fmtCost, 'USD', 'total_cost'],
   documents: ['Documentos no contexto', (m) => num(get(m, 'documents_sent_to_model')), fmtNum, 'docs', 'documents_sent_to_model'],
   recall: ['Recall', (m) => recallOf(m), (v) => fmtPct(v, 0), 'fração', 'recall'],
-  efficiency: ['Eficiência', (m) => {
-    const d = num(get(m, 'documents_sent_to_model')); const t = totalTokens(m);
-    return d !== null && t ? (d / t) * 1000 : null;
-  }, (v) => fmtNum(v, 2), 'docs/1K tokens', 'efficiency'],
+  precision: ['Precisão do contexto', (m) => precisionOf(m), (v) => fmtPct(v, 0), 'fração', 'precision'],
 };
 
 export function renderHistory(ctx) {
   const rs = realRuns(ctx.runs);
-  if (!rs.length) return emptyState('Nenhuma run registrada', 'O histórico aparece após o primeiro benchmark.');
+  if (!rs.length) {
+    return emptyState('Nenhuma run registrada',
+      '<p class="state-body">O histórico aparece após o primeiro benchmark.</p>');
+  }
   const key = HIST_SERIES[ctx.state.histSeries] ? ctx.state.histSeries : 'tokens';
   const [label, , , unit, tipKey] = HIST_SERIES[key];
   const sessions = ctx.sessions || [];
@@ -35,7 +41,7 @@ export function renderHistory(ctx) {
     const sr = rs.filter((r) => r.session_id === s.session_id);
     const tt = mean(sr.map((r) => totalTokens(metricsOf(r))));
     return `<tr>
-      <td class="mono clickable" data-session="${esc(s.session_id)}">${esc(String(s.session_id).slice(0, 12))}</td>
+      <td><button type="button" class="linkish" data-session="${esc(s.session_id)}">${esc(String(s.session_id).slice(0, 22))}</button></td>
       <td>${esc(s.kind || '—')}</td>
       <td class="num">${fmtNum(s.runs)}</td>
       <td class="num">${fmtCompact(tt)}</td>
@@ -45,18 +51,22 @@ export function renderHistory(ctx) {
     </tr>`;
   });
 
-  const runRows = rs.slice(0, 60).map((r) => {
+  const runRows = rs.slice(0, 80).map((r) => {
     const m = metricsOf(r);
+    const rec = recallOf(m);
     return `<tr>
-      <td class="mono clickable" data-run="${esc(r.run_id)}">${esc(String(r.run_id).slice(0, 10))}</td>
+      <td><button type="button" class="linkish mono" data-run="${esc(r.run_id)}">${esc(String(r.run_id).slice(0, 10))}</button></td>
       <td class="muted">${fmtDate(r.created_at)}</td>
-      <td>${esc(PIPELINE_LABEL[r.pipeline] || r.pipeline)}</td>
-      <td>${esc(r.question_id || String(r.query || '').slice(0, 40))}</td>
+      <td>${esc(PIPELINE_SHORT[r.pipeline] || r.pipeline || '—')}</td>
+      <td class="mono muted">${esc(armOf(r))}</td>
+      <td>${esc(r.question_id || String(r.query || '').slice(0, 40) || '—')}</td>
       <td class="num">${fmtCompact(totalTokens(m))}</td>
       <td class="num">${fmtCompact(num(get(m, 'context_tokens')))}</td>
       <td class="num">${fmtMs(num(get(m, 'total_latency_ms')))}</td>
-      <td class="num">${recallOf(m) === null ? '—' : fmtPct(recallOf(m), 0)}</td>
-      <td>${r.error ? `<span class="pill err"><span class="dot"></span>erro</span>` : `<span class="pill ok"><span class="dot"></span>ok</span>`}</td>
+      <td class="num">${rec === null ? '<span class="muted">n/m</span>' : fmtPct(rec, 0)}</td>
+      <td>${r.error
+    ? '<span class="pill err"><span class="dot"></span>erro</span>'
+    : '<span class="pill ok"><span class="dot"></span>ok</span>'}</td>
     </tr>`;
   });
 
@@ -66,20 +76,22 @@ export function renderHistory(ctx) {
       ${segmented('histSeries', Object.entries(HIST_SERIES).map(([k, v]) => [k, v[0]]), key)}
     </div>
     ${panel(`${label} ao longo do tempo`, '<div class="chart-wrap" data-chart="hist-line"></div>',
-    `${rs.length} runs ordenadas por created_at · unidade: ${unit}`)}
+    { sub: `${rs.length} runs ordenadas por created_at · unidade: ${unit}`, prov: 'experimental' })}
     ${panel('Sessões', table([
     { label: 'Sessão' }, { label: 'Tipo' }, { label: 'Runs', num: true },
     { label: 'Tokens gastos', num: true, tipKey: 'total_tokens' },
     { label: 'Latência', num: true, tipKey: 'total_latency_ms' },
     { label: 'Custo', num: true, tipKey: 'total_cost' }, { label: 'Criada em' },
-  ], sessionRows), `${sessions.length} sessões`)}
+  ], sessionRows, { emptyDetail: 'GET /benchmark/sessions não retornou sessões' }),
+  { sub: `${sessions.length} sessões · clique para detalhar`, prov: 'experimental' })}
+    <div id="session-detail"></div>
     ${panel('Runs recentes', table([
-    { label: 'Run' }, { label: 'Data' }, { label: 'Pipeline' }, { label: 'Pergunta' },
+    { label: 'Run' }, { label: 'Data' }, { label: 'Pipeline' }, { label: 'Braço' }, { label: 'Pergunta' },
     { label: 'Tokens gastos', num: true, tipKey: 'total_tokens' },
     { label: 'Contexto', num: true, tipKey: 'context_tokens' },
     { label: 'Latência', num: true, tipKey: 'total_latency_ms' },
     { label: 'Recall', num: true, tipKey: 'recall' }, { label: 'Status' },
-  ], runRows), `mostrando ${Math.min(60, rs.length)} de ${rs.length}`)}
+  ], runRows), { sub: `mostrando ${Math.min(80, rs.length)} de ${rs.length}`, prov: 'experimental' })}
     <div id="run-detail"></div>
   `;
 }
@@ -92,25 +104,28 @@ export function mountHistory(root, ctx) {
   if (w) {
     lineChart(w, {
       series: PIPELINES.map((p) => ({
-        label: PIPELINE_LABEL[p], color: PIPELINE_COLOR[p],
+        label: PIPELINE_SHORT[p] || p, color: PIPELINE_COLOR[p],
         points: rs.filter((r) => r.pipeline === p)
           .map((r) => ({ x: num(r.created_at), y: num(valFn(metricsOf(r))) }))
           .filter((q) => q.x !== null && q.y !== null),
       })).filter((s) => s.points.length),
       unit, fmt, xFmt: fmtDateShort,
-      emptyMsg: `nenhuma run tem a métrica "${label}"`,
+      emptyMsg: `nenhuma run carregada tem a métrica "${label}"`,
     });
   }
   // run drill-down
   root.querySelectorAll('[data-run]').forEach((a) => {
     a.addEventListener('click', async () => {
       const box = root.querySelector('#run-detail');
-      box.innerHTML = panel('Detalhe da run', '<div class="skel skel-line"></div>'.repeat(4));
+      if (!box) return;
+      box.innerHTML = panel('Detalhe da run', skeletonLines(5));
       try {
         const d = await ctx.api.getRunDetail(a.dataset.run);
         box.innerHTML = renderRunDetail(d);
       } catch (e) {
-        box.innerHTML = panel('Detalhe da run', `<div class="state error">${esc(e.message)}</div>`);
+        box.innerHTML = panel('Detalhe da run',
+          `<div class="state error"><div class="state-title">Não foi possível carregar a run</div>
+            <code>${esc(e.message)}</code></div>`);
       }
       box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -122,24 +137,36 @@ function renderRunDetail(d) {
   const srcRows = (d.sources || []).map((s) => `<tr>
     <td class="mono">${esc(s.file)}</td>
     <td>${esc(String(s.section || '').slice(0, 60))}</td>
-    <td class="num">${fmtNum(s.score)}</td>
-    <td class="num">${s.relevance === null || s.relevance === undefined ? '—' : fmtNum(s.relevance)}</td>
+    <td class="num">${fmtNum(s.score, 3)}</td>
+    <td class="num">${num(s.relevance) === null ? '<span class="muted">—</span>' : fmtNum(s.relevance, 2)}</td>
     <td>${esc(s.decision || '—')}</td>
     <td class="num">${fmtNum(s.tokens)}</td>
   </tr>`);
+  const flags = get(m, 'opt_flags');
   return panel(`Run ${esc(String(d.run_id).slice(0, 10))} — ${esc(PIPELINE_LABEL[d.pipeline] || d.pipeline)}`,
-    `<p class="muted" style="margin:0 0 12px">${esc(d.query || '')}</p>
-     <div class="grid grid-kpi" style="margin-bottom:16px">
-       ${metricCard({ title: 'Tokens gastos', tipKey: 'total_tokens', value: fmtCompact(totalTokens(m)), unit: 'tokens', deltaText: 'run única', deltaCls: 'flat', context: 'sem comparação' })}
-       ${metricCard({ title: 'Contexto final', tipKey: 'context_tokens', value: fmtCompact(num(get(m, 'context_tokens'))), unit: 'tokens', deltaText: 'run única', deltaCls: 'flat', context: 'sem comparação' })}
-       ${metricCard({ title: 'Latência', tipKey: 'total_latency_ms', value: fmtMs(num(get(m, 'total_latency_ms'))), unit: 'total', deltaText: 'run única', deltaCls: 'flat', context: 'sem comparação' })}
-       ${metricCard({ title: 'Amplificação', tipKey: 'token_amplification', value: `${num(tokenAmplification(m))?.toFixed(2) ?? '—'}×`, unit: '× gasto/entregue', deltaText: 'run única', deltaCls: 'flat', context: 'sem comparação' })}
+    `<p class="muted run-query">${esc(d.query || '')}</p>
+     <div class="grid grid-kpi run-kpis">
+       ${metricCard({ title: 'Tokens gastos', tipKey: 'total_tokens', value: totalTokens(m) === null ? undefined : fmtCompact(totalTokens(m)), unit: 'tokens', deltaText: 'run única', deltaCls: 'flat', context: 'sem comparação' })}
+       ${metricCard({ title: 'Contexto entregue', tipKey: 'context_tokens', value: num(get(m, 'context_tokens')) === null ? undefined : fmtCompact(get(m, 'context_tokens')), unit: 'tokens', deltaText: 'run única', deltaCls: 'flat', context: 'sem comparação' })}
+       ${metricCard({ title: 'Latência', tipKey: 'total_latency_ms', value: num(get(m, 'total_latency_ms')) === null ? undefined : fmtMs(get(m, 'total_latency_ms')), unit: 'total', deltaText: 'run única', deltaCls: 'flat', context: 'sem comparação' })}
+       ${metricCard({ title: 'Amplificação', tipKey: 'token_amplification', value: tokenAmplification(m) === null ? undefined : fmtAmp(tokenAmplification(m)), unit: '× gasto/entregue', deltaText: 'run única', deltaCls: 'flat', context: 'sem comparação' })}
      </div>
+     ${kvTable([
+    ['Braço (mode)', `<span class="mono">${esc(armOf(d))}</span>`],
+    ['Sessão', `<span class="mono">${esc(d.session_id || '—')}</span>`],
+    ['Pipeline', esc(PIPELINE_LABEL[d.pipeline] || d.pipeline || '—')],
+    ['opt_flags', Array.isArray(flags)
+      ? (flags.length ? `<span class="mono">${esc(flags.join(', '))}</span>` : '<span class="muted">nenhum (referência)</span>')
+      : '<span class="muted">não registrado</span>'],
+    ['Erro', d.error ? `<span style="color:var(--error)">${esc(d.error)}</span>` : '<span class="muted">nenhum</span>'],
+  ])}
+     <h3 class="sub-head">Fontes entregues ao modelo</h3>
      ${table([{ label: 'Arquivo' }, { label: 'Seção' }, { label: 'Score', num: true },
-    { label: 'Relevância', num: true }, { label: 'Decisão' }, { label: 'Tokens', num: true }], srcRows)}
-     <details style="margin-top:12px"><summary class="muted">metrics_json completo</summary>
+    { label: 'Relevância', num: true }, { label: 'Decisão' }, { label: 'Tokens', num: true }], srcRows,
+  { emptyTitle: 'Contexto vazio', emptyDetail: 'esta run não entregou nenhuma fonte' })}
+     <details class="raw"><summary class="muted">metrics_json completo</summary>
        <pre class="block">${esc(JSON.stringify(m, null, 2))}</pre></details>`,
-    fmtDate(d.created_at));
+    { sub: fmtDate(d.created_at), prov: 'experimental' });
 }
 
 /* ====================================================== PROJECTS ======== */
@@ -177,9 +204,9 @@ export function renderProjects(ctx) {
       <td class="num">${fmtNum(p.note_count)}</td>
       <td class="num">${totalNotes ? fmtPct(num(p.note_count) / totalNotes, 1) : '—'}</td>
       <td class="num">${act ? fmtNum(act.hits) : '<span class="muted">0</span>'}</td>
-      <td class="num">${act ? fmtCompact(act.tokens) : '—'}</td>
-      <td class="num">${act && act.rel.length ? fmtNum(mean(act.rel), 2) : '—'}</td>
-      <td class="num">${act ? fmtNum(act.runs.size) : '—'}</td>
+      <td class="num">${act ? fmtCompact(act.tokens) : '<span class="muted">—</span>'}</td>
+      <td class="num">${act && act.rel.length ? fmtNum(mean(act.rel), 2) : '<span class="muted">—</span>'}</td>
+      <td class="num">${act ? fmtNum(act.runs.size) : '<span class="muted">—</span>'}</td>
     </tr>`;
   });
 
@@ -201,7 +228,7 @@ export function renderProjects(ctx) {
     tip: 'Entidades retornadas por GET /system/projects, derivadas da estrutura de pastas do vault. Nenhum nome está no código.',
   })}
       ${metricCard({
-    title: 'Notas totais', value: fmtNum(totalNotes), unit: 'notas .md',
+    title: 'Notas totais', value: totalNotes === null ? undefined : fmtNum(totalNotes), unit: 'notas .md',
     deltaText: 'fonte: /system/projects', deltaCls: 'flat', context: 'campo total_notes',
   })}
       ${metricCard({
@@ -221,16 +248,12 @@ export function renderProjects(ctx) {
     { label: 'Citações', num: true, tip: 'Vezes que uma nota do projeto entrou em um contexto (sources[]).' },
     { label: 'Tokens citados', num: true }, { label: 'Relevância média', num: true },
     { label: 'Runs', num: true },
-  ], rows), `${reg.projects.length} projetos · GET /system/projects`)}
+  ], rows, { emptyDetail: 'GET /system/projects devolveu projects[] vazio' }),
+  { sub: `${reg.projects.length} projetos · GET /system/projects`, prov: 'verified', provNote: 'Contagens lidas do sistema de arquivos.' })}
     ${panel('Distribuição por área', table([
     { label: 'Área' }, { label: 'Notas', num: true }, { label: 'Share', num: true },
     { label: 'Projetos', num: true },
-  ], areaRows), 'campo areas de GET /system/projects')}
-    <section class="panel"><div class="panel-body">
-      <p class="muted" style="margin:0;font-size:12px">Tabelas geradas iterando os arrays devolvidos pela API.
-      Colunas de notas/área vêm de <code>GET /system/projects</code>; colunas de citações/tokens/relevância são
-      calculadas a partir de <code>sources[]</code> das runs. Nenhum nome de projeto está embutido no código.</p>
-    </div></section>
+  ], areaRows, { emptyDetail: 'campo areas vazio' }), { sub: 'campo areas de GET /system/projects', prov: 'verified' })}
   `;
 }
 
@@ -272,13 +295,15 @@ export function renderMemory(ctx) {
     <td class="num">${fmtNum(f.hits)}</td>
     <td class="num">${fmtNum(f.sections.size)}</td>
     <td class="num">${fmtCompact(mean(f.tokens))}</td>
-    <td class="num">${f.rel.length ? fmtNum(mean(f.rel), 2) : '—'}</td>
+    <td class="num">${f.rel.length ? fmtNum(mean(f.rel), 2) : '<span class="muted">—</span>'}</td>
   </tr>`);
+  const totalNotes = num(get(reg, 'total_notes')) ?? num(get(info, 'markdown_files'));
+  const vaultOk = get(info, 'vault_exists');
 
   return `
     <div class="grid grid-kpi">
       ${metricCard({
-    title: 'Notas no vault', value: fmtNum(num(get(reg, 'total_notes')) ?? get(info, 'markdown_files')),
+    title: 'Notas no vault', value: totalNotes === null ? undefined : fmtNum(totalNotes),
     unit: 'notas .md', deltaText: 'fonte: /system/projects', deltaCls: 'flat', context: 'vault somente leitura',
     tip: 'Campo total_notes de GET /system/projects (fallback: markdown_files de GET /system/info).',
   })}
@@ -288,31 +313,34 @@ export function renderMemory(ctx) {
   })}
       ${metricCard({
     title: 'Cobertura do vault',
-    value: (() => {
-      const tot = num(get(reg, 'total_notes')) ?? num(get(info, 'markdown_files'));
-      return tot ? fmtPct(files.size / tot, 1) : '—';
-    })(),
+    value: totalNotes ? fmtPct(files.size / totalNotes, 1) : undefined,
     unit: 'do vault citado', deltaText: 'derivado', deltaCls: 'flat', context: 'arquivos citados ÷ total de notas',
     tip: 'Fração das notas do vault que já apareceu em algum contexto nas runs carregadas.',
+    missingHint: 'total de notas desconhecido',
   })}
       ${metricCard({
-    title: 'Vault acessível', value: get(info, 'vault_exists') ? 'sim' : 'não', unit: '',
-    deltaText: get(info, 'vault_exists') ? 'ok' : 'falha', deltaCls: get(info, 'vault_exists') ? 'good' : 'bad',
+    title: 'Vault acessível', value: vaultOk === null ? undefined : (vaultOk ? 'sim' : 'não'), unit: '',
+    deltaText: vaultOk ? 'ok' : 'falha', deltaCls: vaultOk ? 'good' : 'bad',
     context: 'campo vault_exists',
   })}
     </div>
-    ${panel('Caminho e grafo', `<table class="data"><tbody>
-      <tr><th class="rowhead">Vault</th><td class="mono">${esc(get(info, 'vault') || '—')}</td></tr>
-      <tr><th class="rowhead">Grafo (graphify)</th><td class="mono">${esc(get(info, 'graph_path') || '—')}</td></tr>
-      <tr><th class="rowhead">Versão graphify</th><td class="mono">${esc(get(info, 'graphify') || '—')}</td></tr>
-      <tr><th class="rowhead">Banco</th><td class="mono">${esc(get(info, 'db') || '—')}</td></tr>
-    </tbody></table>`, 'GET /system/info')}
-    ${panel('Distribuição de notas por área', areaBreakdown(reg), 'GET /system/projects → areas')}
+    ${panel('Localização do vault e do grafo', kvTable([
+    // safePath: the dashboard never prints an absolute developer path.
+    ['Vault', `<span class="mono">${esc(safePath(get(info, 'vault')))}</span>`],
+    ['Grafo (graphify)', `<span class="mono">${esc(safePath(get(info, 'graph_path')))}</span>`],
+    ['Versão graphify', `<span class="mono">${esc(get(info, 'graphify') || '—')}</span>`],
+    ['Banco de benchmark', `<span class="mono">${esc(safePath(get(info, 'db')))}</span>`],
+  ]) + callout('info', 'Caminhos abreviados de propósito',
+    'A UI exibe apenas os últimos segmentos de qualquer caminho absoluto devolvido pela API, '
+    + 'para nunca revelar o diretório pessoal de quem roda o servidor.'),
+  { sub: 'GET /system/info', prov: 'verified' })}
+    ${panel('Distribuição de notas por área', areaBreakdown(reg),
+    { sub: 'GET /system/projects → areas', prov: 'verified' })}
     ${panel('Notas mais recuperadas', rows.length ? table([
     { label: 'Arquivo' }, { label: 'Citações', num: true }, { label: 'Seções distintas', num: true },
     { label: 'Tokens médios', num: true }, { label: 'Relevância média', num: true },
-  ], rows) : notWiredState('sources[] vazio nas runs carregadas'),
-  `top ${top.length} de ${files.size} arquivos`)}
+  ], rows) : notMeasuredState('sources[]', 'As runs carregadas não têm fontes registradas.'),
+  { sub: `top ${top.length} de ${files.size} arquivos`, prov: 'experimental' })}
   `;
 }
 
@@ -336,7 +364,7 @@ export function renderAgents(ctx) {
   const cRows = consumers.map((c) => `<tr>
     <th class="rowhead">${esc(c.agent)}</th>
     <td class="mono">${esc(c.model || '—')}</td>
-    <td>${esc(PIPELINE_LABEL[c.pipeline] || c.pipeline)}</td>
+    <td>${esc(PIPELINE_SHORT[c.pipeline] || c.pipeline)}</td>
     <td class="num">${fmtNum(c.runs)}</td>
     <td class="num">${fmtMs(c.latency)}</td>
     <td class="num">${fmtMs(c.latencyP95)}</td>
@@ -350,14 +378,14 @@ export function renderAgents(ctx) {
     <div class="grid grid-kpi">
       ${metricCard({
     title: 'Agentes detectados', value: fmtNum(agents.length), unit: 'adapters',
-    deltaText: 'fonte: /system/integrations', deltaCls: 'flat', context: 'registry de adapters',
+    deltaText: 'fonte: /system/info', deltaCls: 'flat', context: 'integrations.agents',
   })}
       ${metricCard({
     title: 'Agentes disponíveis', value: fmtNum(avail), unit: `de ${agents.length}`,
     deltaText: avail ? 'ok' : 'nenhum', deltaCls: avail ? 'good' : 'attn', context: 'campo available',
   })}
       ${metricCard({
-    title: 'Consumidores com runs', value: fmtNum(consumers.length), unit: 'grupos agent×model×pipeline',
+    title: 'Consumidores com runs', value: fmtNum(consumers.length), unit: 'grupos agente×modelo×pipeline',
     deltaText: 'fonte: /benchmark/stats', deltaCls: 'flat', context: 'stats.groups',
   })}
       ${metricCard({
@@ -368,15 +396,17 @@ export function renderAgents(ctx) {
     ${panel('Adapters de agente', rows.length ? table([
     { label: 'Agente' }, { label: 'Status' }, { label: 'Versão' }, { label: 'MCP' },
     { label: 'CLI' }, { label: 'Métricas' }, { label: 'Motivo' },
-  ], rows) : notWiredState('/system/integrations não retornou agents[]'), 'GET /system/integrations')}
+  ], rows) : notWiredState('/system/info não retornou integrations.agents[]'),
+  { sub: 'GET /system/info → integrations', prov: 'verified' })}
     ${panel('Desempenho por consumidor', cRows.length ? table([
     { label: 'Agente' }, { label: 'Modelo' }, { label: 'Pipeline' }, { label: 'Runs', num: true },
     { label: 'Latência mediana', num: true, tipKey: 'total_latency_ms' }, { label: 'p95', num: true },
     { label: 'Contexto', num: true, tipKey: 'context_tokens' },
     { label: 'Tokens do agente', num: true }, { label: 'Custo médio', num: true, tipKey: 'total_cost' },
   ], cRows) : emptyState('Nenhuma run com agente',
-    'Todas as runs gravadas são <code>retrieval-only</code> (sem consumidor). Rode um benchmark com <code>consumers</code> para popular esta tabela.'),
-  'GET /benchmark/stats → groups')}
+    '<p class="state-body">Todas as runs gravadas são <code>retrieval-only</code> (sem consumidor). '
+    + 'Rode um benchmark com <code>consumers</code> para popular esta tabela.</p>'),
+  { sub: 'GET /benchmark/stats → groups', prov: 'experimental' })}
   `;
 }
 
@@ -398,7 +428,7 @@ export function renderModels(ctx) {
   const mRows = consumers.map((c) => `<tr>
     <th class="rowhead mono">${esc(c.model)}</th>
     <td>${esc(c.agent)}</td>
-    <td>${esc(PIPELINE_LABEL[c.pipeline] || c.pipeline)}</td>
+    <td>${esc(PIPELINE_SHORT[c.pipeline] || c.pipeline)}</td>
     <td class="num">${fmtNum(c.runs)}</td>
     <td class="num">${fmtCompact(c.inTokens)}</td>
     <td class="num">${fmtCompact(c.outTokens)}</td>
@@ -417,9 +447,9 @@ export function renderModels(ctx) {
     deltaText: availProv ? 'ok' : 'nenhum', deltaCls: availProv ? 'good' : 'attn', context: 'campo available',
   })}
       ${metricCard({
-    title: 'Modelo do juiz (JEV)', value: esc(get(info, 'jev_model') || '—'), unit: '',
+    title: 'Modelo do juiz (JEV)', value: get(info, 'jev_model') || undefined, unit: '',
     deltaText: `SDK ${get(info, 'jev_sdk') || '?'}`, deltaCls: 'flat', context: `modo ${get(info, 'jev_mode') || '—'}`,
-    tip: 'Modelo TypeSafe/JEV usado para julgar relevância no pipeline graphify_jev.',
+    tip: 'Modelo do juiz usado para avaliar relevância nos pipelines com JEV.',
   })}
       ${metricCard({
     title: 'Modelos com runs', value: fmtNum(new Set(consumers.map((c) => c.model)).size), unit: 'modelos medidos',
@@ -429,49 +459,15 @@ export function renderModels(ctx) {
     ${panel('Provedores e modelos', provRows.length ? table([
     { label: 'Provedor' }, { label: 'Status' }, { label: 'Modelos', num: true },
     { label: 'Exemplos' }, { label: 'Observação' },
-  ], provRows) : notWiredState('/system/info não retornou integrations.models'), 'GET /system/info')}
+  ], provRows) : notWiredState('/system/info não retornou integrations.models'),
+  { sub: 'GET /system/info', prov: 'verified' })}
     ${panel('Modelos medidos em runs', mRows.length ? table([
     { label: 'Modelo' }, { label: 'Agente' }, { label: 'Pipeline' }, { label: 'Runs', num: true },
     { label: 'Input tokens', num: true }, { label: 'Output tokens', num: true },
     { label: 'Custo médio', num: true, tipKey: 'total_cost' },
   ], mRows) : emptyState('Nenhum modelo medido',
-    'As runs gravadas não têm <code>model</code> definido (retrieval-only). Nenhum número é inventado aqui.'),
-  'GET /benchmark/stats → groups')}
-  `;
-}
-
-/* ====================================================== SETTINGS ======== */
-export function renderSettings(ctx) {
-  const info = ctx.systemInfo;
-  const rows = [
-    ['Vault', get(info, 'vault')], ['Vault existe', String(get(info, 'vault_exists'))],
-    ['Arquivos .md', get(info, 'markdown_files')], ['Graphify', get(info, 'graphify')],
-    ['Caminho do grafo', get(info, 'graph_path')], ['JEV SDK', get(info, 'jev_sdk')],
-    ['Modelo JEV', get(info, 'jev_model')], ['Modo JEV', get(info, 'jev_mode')],
-    ['Cache habilitado', String(get(info, 'cache_enabled'))], ['Profile', get(info, 'profile')],
-    ['Banco de dados', get(info, 'db')],
-  ].map(([k, v]) => `<tr><th class="rowhead">${esc(k)}</th><td class="mono">${esc(v ?? '—')}</td></tr>`);
-
-  const qs = ctx.questions || [];
-  const qRows = qs.slice(0, 40).map((q) => `<tr>
-    <td class="mono">${esc(q.id)}</td>
-    <td>${esc(String(q.question || '').slice(0, 80))}</td>
-    <td>${esc(q.category || '—')}</td>
-    <td class="num">${fmtNum((q.expected_sources || []).length)}</td>
-    <td>${q.answerable === false ? '<span class="pill warn"><span class="dot"></span>não</span>' : 'sim'}</td>
-  </tr>`);
-
-  return `
-    ${panel('Configuração do sistema', `<table class="data"><tbody>${rows.join('')}</tbody></table>`,
-    'somente leitura · GET /system/info')}
-    ${panel('Dataset de perguntas', qRows.length ? table([
-    { label: 'ID' }, { label: 'Pergunta' }, { label: 'Categoria' },
-    { label: 'Fontes esperadas', num: true }, { label: 'Respondível' },
-  ], qRows) : notWiredState('/benchmark/questions retornou lista vazia'),
-  `${qs.length} perguntas · GET /benchmark/questions`)}
-    ${panel('Escrita e ações', emptyState('Somente leitura',
-    'Este dashboard só faz GET. Disparar benchmarks (<code>POST /benchmark/run-all</code>), '
-    + 'sweeps (<code>POST /benchmark/threshold-sweep</code>) e feedback (<code>POST /feedback/*</code>) '
-    + 'existem na API mas não são acionados por esta UI de observabilidade.'))}
+    '<p class="state-body">As runs gravadas não têm <code>model</code> definido (retrieval-only). '
+    + 'Nenhum número é inventado aqui.</p>'),
+  { sub: 'GET /benchmark/stats → groups', prov: 'experimental' })}
   `;
 }

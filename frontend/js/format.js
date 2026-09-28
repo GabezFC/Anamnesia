@@ -1,13 +1,28 @@
 // format.js — formatting, safe metric access, aggregation. All metric keys are optional.
+// NOTHING here invents a value: every function returns null when the source metric is absent,
+// and the UI layer turns null into an explicit "Não medido" state.
 
-export const PIPELINES = ['baseline', 'graphify', 'graphify_jev'];
+/** Pipelines as defined by app/schemas/models.py PIPELINES (all four, including the cascade). */
+export const PIPELINES = ['baseline', 'graphify', 'graphify_jev', 'graphify_jev_opt'];
 export const PIPELINE_LABEL = {
   baseline: 'Baseline',
   graphify: 'Graphify',
   graphify_jev: 'Graphify + JEV',
+  graphify_jev_opt: 'Graphify + JEV (otimizado)',
+};
+export const PIPELINE_SHORT = {
+  baseline: 'Baseline',
+  graphify: 'Graphify',
+  graphify_jev: 'JEV',
+  graphify_jev_opt: 'JEV opt',
 };
 /** Chart colours per pipeline. Neutral/info hues — NOT good/bad signals. */
-export const PIPELINE_COLOR = { baseline: '#6F7A87', graphify: '#3B82F6', graphify_jev: '#8B5CF6' };
+export const PIPELINE_COLOR = {
+  baseline: '#7C8794',
+  graphify: '#3B82F6',
+  graphify_jev: '#8B5CF6',
+  graphify_jev_opt: '#14B8A6',
+};
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -19,9 +34,34 @@ export function get(obj, path) {
     if (cur == null || typeof cur !== 'object') return null;
     cur = cur[k];
   }
-  return cur === undefined || Number.isNaN(cur) ? null : cur;
+  return cur === undefined || (typeof cur === 'number' && Number.isNaN(cur)) ? null : cur;
 }
 export const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/**
+ * Display form of a filesystem path coming from the API.
+ * The dashboard must NEVER print a developer's home directory, so this:
+ *   1. drops everything up to and including the user name that follows a home marker
+ *      (Users/, home/, Documents/), which is where a personal path always leaks; and
+ *   2. abbreviates whatever is left of an absolute path to its last segments.
+ * Relative paths (the default bundled corpus, `data/synthetic_vault`) pass through unchanged.
+ */
+export function safePath(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '—';
+  let parts = raw.split(/[\\/]+/).filter(Boolean);
+  const absolute = /^[a-zA-Z]:$/.test(parts[0] || '') || /^[\\/]/.test(raw);
+  if (!absolute) return parts.join('/');
+  const HOME_MARKERS = new Set(['users', 'home', 'documents', 'usr']);
+  // Cut past "<marker>/<username>" wherever it appears.
+  for (let i = parts.length - 2; i >= 0; i--) {
+    if (HOME_MARKERS.has(parts[i].toLowerCase())) { parts = parts.slice(i + 2); break; }
+  }
+  // Drop a bare drive letter such as "C:".
+  if (/^[a-zA-Z]:$/.test(parts[0] || '')) parts = parts.slice(1);
+  if (!parts.length) return '—';
+  return `…/${parts.slice(-3).join('/')}`;
+}
 
 /* ---- number formatting ------------------------------------------------- */
 export function fmtNum(v, digits) {
@@ -70,37 +110,47 @@ export function fmtDateShort(epochSeconds) {
   if (n === null) return '—';
   return new Date(n * 1000).toLocaleDateString(undefined, { month: 'short', day: '2-digit' });
 }
+/** Amplification formatted as "43.2×". */
+export const fmtAmp = (v) => (num(v) === null ? '—' : `${num(v).toFixed(num(v) >= 10 ? 1 : 2)}×`);
 
 /* ---- statistics -------------------------------------------------------- */
 export function mean(values) {
-  const v = values.map(num).filter((x) => x !== null);
+  const v = (values || []).map(num).filter((x) => x !== null);
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
 }
 export function sum(values) {
-  const v = values.map(num).filter((x) => x !== null);
+  const v = (values || []).map(num).filter((x) => x !== null);
   return v.length ? v.reduce((a, b) => a + b, 0) : null;
 }
 export function median(values) {
-  const v = values.map(num).filter((x) => x !== null).sort((a, b) => a - b);
+  const v = (values || []).map(num).filter((x) => x !== null).sort((a, b) => a - b);
   if (!v.length) return null;
   const m = Math.floor(v.length / 2);
   return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
+/** Safe ratio: null unless both sides are real numbers and the denominator is non-zero. */
+export const ratio = (a, b) => (num(a) !== null && num(b) ? num(a) / num(b) : null);
 
 /* ---- run helpers ------------------------------------------------------- */
 /** Warm-up runs are excluded from every chart/aggregate (mode==='warmup' or warmup flag). */
 export const isWarmup = (r) => Boolean(r?.warmup) || r?.mode === 'warmup';
 export const realRuns = (runs) => (runs || []).filter((r) => !isWarmup(r));
 export const metricsOf = (r) => (r && r.metrics) || {};
+/** Benchmark arm: runs written by the optimization harness use mode="<arm>|pass<N>". */
+export const armOf = (r) => String(r?.mode || '').split('|')[0] || '—';
 
-/** Group runs by pipeline. */
+/** Group runs by pipeline. Unknown pipelines are kept under their own key. */
 export function byPipeline(runs) {
-  const g = { baseline: [], graphify: [], graphify_jev: [] };
-  for (const r of runs || []) if (g[r.pipeline]) g[r.pipeline].push(r);
+  const g = {};
+  for (const p of PIPELINES) g[p] = [];
+  for (const r of runs || []) {
+    if (!r || !r.pipeline) continue;
+    (g[r.pipeline] = g[r.pipeline] || []).push(r);
+  }
   return g;
 }
 
-/** Mean of metrics[path] across runs. */
+/** Mean/sum of metrics[path] across runs. */
 export const meanMetric = (runs, path) => mean((runs || []).map((r) => get(metricsOf(r), path)));
 export const sumMetric = (runs, path) => sum((runs || []).map((r) => get(metricsOf(r), path)));
 
@@ -118,9 +168,7 @@ export function judgeTokens(m) {
 /**
  * TOTAL tokens actually spent on a run — the honest per-query cost, deliberately
  * distinct from the final context. Prefers backend `total_tokens_spent`; falls back to
- * judge_tokens + context_tokens (i.e. jev_input + jev_output + context_tokens) so the
- * 170 historical runs that predate the key still chart correctly.
- * Final-context reduction can hide a total-token blow-up.
+ * judge_tokens + context_tokens so runs recorded before that key still chart correctly.
  */
 export function totalTokens(m) {
   const direct = num(get(m, 'total_tokens_spent'));
@@ -132,17 +180,68 @@ export function totalTokens(m) {
 /**
  * token_amplification = total_tokens_spent / context_tokens.
  * > 1 means the pipeline spends more tokens than it delivers as context.
- * Prefers the backend key; otherwise derived from the fallbacks above.
  */
 export function tokenAmplification(m) {
   const direct = num(get(m, 'token_amplification'));
   if (direct !== null) return direct;
-  const spent = totalTokens(m);
-  const ctx = num(get(m, 'context_tokens'));
-  return spent !== null && ctx ? spent / ctx : null;
+  return ratio(totalTokens(m), get(m, 'context_tokens'));
 }
-/** Recall from expected_sources_found {expected, found, recall}. */
+
+/** Recall from expected_sources_found {expected, found, recall}. Null when the dataset had none. */
 export const recallOf = (m) => num(get(m, 'expected_sources_found.recall'));
+
+/**
+ * Precision of the delivered context, derived ONLY when the dataset declared expected sources:
+ *   found / documents_sent_to_model
+ * Never estimated: null whenever either side is missing.
+ */
+export function precisionOf(m) {
+  const found = num(get(m, 'expected_sources_found.found'));
+  const sent = num(get(m, 'documents_sent_to_model'));
+  if (found === null || sent === null || sent <= 0) return null;
+  return Math.min(1, found / sent);
+}
+
+/** Paid judge questions actually asked (relevance + injection). */
+export function judgeQuestions(m) {
+  const parts = [get(m, 'jev_relevance_questions'), get(m, 'jev_injection_questions')]
+    .map(num).filter((x) => x !== null);
+  return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+}
+
+/** Judge requests (HTTP calls to the judge). */
+export const judgeRequests = (m) => num(get(m, 'jev.request_count'));
+
+/**
+ * Tokens avoided by the FREE (deterministic, zero-token) stages, as reported by the backend:
+ * prefilter_tokens_saved_estimate + dedup_near_tokens_saved_estimate + snippet_tokens_saved.
+ * These are backend estimates and are labelled as such in the UI — never presented as measured spend.
+ */
+export function savedTokens(m) {
+  const parts = ['prefilter_tokens_saved_estimate', 'dedup_near_tokens_saved_estimate', 'snippet_tokens_saved']
+    .map((k) => num(get(m, k))).filter((x) => x !== null);
+  return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+}
+
+/** Judge cache hits / lookups for one run. Returns {hits, lookups} with nulls when absent. */
+export function cacheCounts(m) {
+  const lookups = num(get(m, 'cache_layers.lookups'));
+  const hits = num(get(m, 'cache_layers.hits'));
+  if (lookups !== null && hits !== null) return { hits, lookups };
+  const jevHits = num(get(m, 'jev_cache_hits')) ?? num(get(m, 'jev.cache_hits'));
+  const received = num(get(m, 'jev.candidates_received')) ?? num(get(m, 'documents_sent_to_jev'));
+  if (jevHits === null || received === null) return { hits: null, lookups: null };
+  return { hits: jevHits, lookups: received };
+}
+
+/** Wave count actually executed by adaptive-K. 1 == no escalation (early stop / single wave). */
+export function waveCount(m) {
+  const sizes = get(m, 'jev_wave_sizes');
+  if (Array.isArray(sizes) && sizes.length) return sizes.length;
+  const w = num(get(m, 'jev_waves'));
+  return w;
+}
+
 /** Total cost: prefer total_cost, else model_cost+jev_cost, else jev_cost. */
 export function costOf(m) {
   const t = num(get(m, 'total_cost'));
