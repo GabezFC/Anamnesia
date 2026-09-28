@@ -1,0 +1,1027 @@
+{
+  "notes": 520,
+  "duplicate_groups": [
+    [
+      "30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-driver-do-banco-07.md",
+      "30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-driver-do-banco-07-copia.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/componentes/aurora-graph-loader-09.md",
+      "00-Inbox/aurora-graph-loader-09-copia.md"
+    ],
+    [
+      "30-Projetos/Kraken_Cerebro/componentes/kraken-answer-composer-04.md",
+      "30-Projetos/Kraken_Cerebro/componentes/kraken-answer-composer-04-copia.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-estrategia-de-cache-09.md",
+      "00-Inbox/aurora-decisao-estrategia-de-cache-09-copia.md"
+    ],
+    [
+      "30-Projetos/Kraken_Cerebro/arquitetura/kraken-limites-de-contexto-06.md",
+      "30-Projetos/Kraken_Cerebro/arquitetura/kraken-limites-de-contexto-06-copia.md"
+    ],
+    [
+      "10-Trabalho/relatorio-para-stakeholders-057.md",
+      "00-Inbox/relatorio-para-stakeholders-057-copia.md"
+    ],
+    [
+      "00-Inbox/inbox-anotacao-de-podcast-015.md",
+      "00-Inbox/inbox-anotacao-de-podcast-015-copia.md"
+    ],
+    [
+      "30-Projetos/Vortex_Cerebro/estudos/vortex-hnsw-na-pratica-09.md",
+      "00-Inbox/vortex-hnsw-na-pratica-09-copia.md"
+    ],
+    [
+      "20-Dev-IA/pipeline-de-ingestao-022.md",
+      "20-Dev-IA/pipeline-de-ingestao-022-copia.md"
+    ],
+    [
+      "30-Projetos/Kraken_Cerebro/componentes/kraken-query-planner-05.md",
+      "00-Inbox/kraken-query-planner-05-copia.md"
+    ],
+    [
+      "40-Estudos/estudo-sistemas-distribuidos-028.md",
+      "40-Estudos/estudo-sistemas-distribuidos-028-copia.md"
+    ],
+    [
+      "30-Projetos/Vortex_Cerebro/estudos/vortex-anatomia-do-frontmatter-06.md",
+      "00-Inbox/vortex-anatomia-do-frontmatter-06-copia.md"
+    ],
+    [
+      "30-Projetos/Vortex_Cerebro/arquitetura/vortex-modulo-de-ranqueamento-05.md",
+      "30-Projetos/Vortex_Cerebro/arquitetura/vortex-modulo-de-ranqueamento-05-copia.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/arquitetura/aurora-fluxo-de-consulta-08.md",
+      "00-Inbox/aurora-fluxo-de-consulta-08-copia.md"
+    ],
+    [
+      "50-Pessoal/plano-de-viagem-004.md",
+      "50-Pessoal/plano-de-viagem-004-copia.md"
+    ],
+    [
+      "10-Trabalho/mapa-de-riscos-036.md",
+      "00-Inbox/mapa-de-riscos-036-copia.md"
+    ],
+    [
+      "00-Inbox/inbox-rascunho-de-api-026.md",
+      "00-Inbox/inbox-rascunho-de-api-026-copia.md"
+    ],
+    [
+      "50-Pessoal/rotina-de-treino-017.md",
+      "00-Inbox/rotina-de-treino-017-copia.md"
+    ],
+    [
+      "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-biblioteca-de-embeddings-10.md",
+      "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-biblioteca-de-embeddings-10-copia.md"
+    ],
+    [
+      "20-Dev-IA/grafo-de-notas-040.md",
+      "00-Inbox/grafo-de-notas-040-copia.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-biblioteca-de-embeddings-10.md",
+      "30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-biblioteca-de-embeddings-10-v2.md"
+    ],
+    [
+      "00-Inbox/inbox-recorte-de-artigo-022.md",
+      "00-Inbox/inbox-recorte-de-artigo-022-v2.md"
+    ],
+    [
+      "50-Pessoal/habitos-de-foco-015.md",
+      "50-Pessoal/habitos-de-foco-015-v2.md"
+    ],
+    [
+      "20-Dev-IA/tokenizer-custom-064.md",
+      "00-Inbox/tokenizer-custom-064-v2.md"
+    ],
+    [
+      "30-Projetos/Vortex_Cerebro/componentes/vortex-answer-composer-10.md",
+      "30-Projetos/Vortex_Cerebro/componentes/vortex-answer-composer-10-v2.md"
+    ],
+    [
+      "20-Dev-IA/fila-de-jobs-006.md",
+      "00-Inbox/fila-de-jobs-006-v2.md"
+    ],
+    [
+      "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-biblioteca-de-embeddings-04.md",
+      "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-biblioteca-de-embeddings-04-v2.md"
+    ],
+    [
+      "30-Projetos/Vortex_Cerebro/estudos/vortex-custos-de-inferencia-10.md",
+      "00-Inbox/vortex-custos-de-inferencia-10-v2.md"
+    ],
+    [
+      "20-Dev-IA/avaliacao-de-rag-032.md",
+      "20-Dev-IA/avaliacao-de-rag-032-v2.md"
+    ],
+    [
+      "00-Inbox/inbox-anotacao-de-podcast-033.md",
+      "00-Inbox/inbox-anotacao-de-podcast-033-v2.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-driver-do-banco-01.md",
+      "30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-driver-do-banco-01-v2.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/estudos/aurora-conceitos-de-bm25-02.md",
+      "00-Inbox/aurora-conceitos-de-bm25-02-v2.md"
+    ],
+    [
+      "10-Trabalho/planejamento-trimestral-040.md",
+      "10-Trabalho/planejamento-trimestral-040-v2.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-biblioteca-de-embeddings-04.md",
+      "00-Inbox/aurora-decisao-biblioteca-de-embeddings-04-v2.md"
+    ],
+    [
+      "40-Estudos/estudo-avaliacao-offline-033.md",
+      "40-Estudos/estudo-avaliacao-offline-033-v2.md"
+    ],
+    [
+      "30-Projetos/Kraken_Cerebro/procedimentos/kraken-como-subir-o-ambiente-07.md",
+      "00-Inbox/kraken-como-subir-o-ambiente-07-v2.md"
+    ],
+    [
+      "20-Dev-IA/tokenizer-custom-004.md",
+      "20-Dev-IA/tokenizer-custom-004-v2.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-restaurar-backup-05.md",
+      "00-Inbox/aurora-como-restaurar-backup-05-v2.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/componentes/aurora-retrieval-service-01.md",
+      "30-Projetos/Aurora_Cerebro/componentes/aurora-retrieval-service-01-v2.md"
+    ],
+    [
+      "30-Projetos/Kraken_Cerebro/arquitetura/kraken-integracao-com-o-vault-04.md",
+      "00-Inbox/kraken-integracao-com-o-vault-04-v2.md"
+    ],
+    [
+      "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-formato-do-indice-02.md",
+      "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-formato-do-indice-02-rev.md"
+    ],
+    [
+      "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-driver-do-banco-07.md",
+      "00-Inbox/vortex-decisao-driver-do-banco-07-rev.md"
+    ],
+    [
+      "40-Estudos/estudo-compiladores-e-ast-012.md",
+      "40-Estudos/estudo-compiladores-e-ast-012-rev.md"
+    ],
+    [
+      "10-Trabalho/auditoria-de-acessos-034.md",
+      "00-Inbox/auditoria-de-acessos-034-rev.md"
+    ],
+    [
+      "20-Dev-IA/cache-de-embeddings-001.md",
+      "20-Dev-IA/cache-de-embeddings-001-rev.md"
+    ],
+    [
+      "20-Dev-IA/chunking-hibrido-071.md",
+      "00-Inbox/chunking-hibrido-071-rev.md"
+    ],
+    [
+      "40-Estudos/estudo-engenharia-de-prompts-007.md",
+      "40-Estudos/estudo-engenharia-de-prompts-007-rev.md"
+    ],
+    [
+      "00-Inbox/inbox-esboco-de-experimento-006.md",
+      "00-Inbox/inbox-esboco-de-experimento-006-rev.md"
+    ],
+    [
+      "20-Dev-IA/roteador-de-modelos-049.md",
+      "20-Dev-IA/roteador-de-modelos-049-rev.md"
+    ],
+    [
+      "40-Estudos/estudo-compiladores-e-ast-048.md",
+      "00-Inbox/estudo-compiladores-e-ast-048-rev.md"
+    ],
+    [
+      "10-Trabalho/auditoria-de-acessos-058.md",
+      "10-Trabalho/auditoria-de-acessos-058-rev.md"
+    ],
+    [
+      "20-Dev-IA/reranker-local-043.md",
+      "00-Inbox/reranker-local-043-rev.md"
+    ],
+    [
+      "30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-subir-o-ambiente-01.md",
+      "30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-subir-o-ambiente-01-rev.md"
+    ],
+    [
+      "40-Estudos/estudo-compiladores-e-ast-036.md",
+      "00-Inbox/estudo-compiladores-e-ast-036-rev.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-subir-o-ambiente-07.md",
+      "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-subir-o-ambiente-07-rev.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-publicar-release-04.md",
+      "00-Inbox/aurora-como-publicar-release-04-rev.md"
+    ],
+    [
+      "10-Trabalho/handoff-do-time-039.md",
+      "10-Trabalho/handoff-do-time-039-rev.md"
+    ],
+    [
+      "40-Estudos/estudo-sistemas-distribuidos-004.md",
+      "00-Inbox/estudo-sistemas-distribuidos-004-rev.md"
+    ],
+    [
+      "30-Projetos/Kraken_Cerebro/estudos/kraken-licencas-das-dependencias-01.md",
+      "30-Projetos/Kraken_Cerebro/estudos/kraken-licencas-das-dependencias-01-rev.md"
+    ],
+    [
+      "30-Projetos/Aurora_Cerebro/arquitetura/aurora-limites-de-contexto-06.md",
+      "00-Inbox/aurora-limites-de-contexto-06-rev.md"
+    ]
+  ],
+  "injection_notes": {
+    "benign": [
+      "10-Trabalho/orcamento-de-infra-054.md",
+      "30-Projetos/Aurora_Cerebro/estudos/aurora-avaliacao-com-juiz-llm-05.md",
+      "30-Projetos/Kraken_Cerebro/arquitetura/kraken-fluxo-de-consulta-08.md",
+      "30-Projetos/Vortex_Cerebro/componentes/vortex-query-planner-05.md",
+      "40-Estudos/estudo-avaliacao-offline-009.md",
+      "40-Estudos/estudo-metricas-de-ranqueamento-034.md"
+    ],
+    "malicious": [
+      "00-Inbox/inbox-pergunta-para-investigar-029.md",
+      "10-Trabalho/mapa-de-riscos-024.md",
+      "30-Projetos/Aurora_Cerebro/componentes/aurora-query-planner-05.md",
+      "40-Estudos/estudo-teoria-da-informacao-005.md",
+      "50-Pessoal/orcamento-mensal-008.md",
+      "50-Pessoal/sono-e-energia-014.md"
+    ]
+  },
+  "archived": [
+    "00-Inbox/aurora-como-publicar-release-04-rev.md",
+    "00-Inbox/aurora-conceitos-de-bm25-02-v2.md",
+    "00-Inbox/chunking-hibrido-071-rev.md",
+    "00-Inbox/rotina-de-treino-017-copia.md",
+    "00-Inbox/vortex-decisao-driver-do-banco-07-rev.md",
+    "10-Trabalho/contrato-do-fornecedor-019.md",
+    "10-Trabalho/mapa-de-riscos-048.md",
+    "10-Trabalho/onboarding-do-time-056.md",
+    "10-Trabalho/politica-de-dados-011.md",
+    "10-Trabalho/politica-de-dados-047.md",
+    "10-Trabalho/relatorio-para-stakeholders-021.md",
+    "10-Trabalho/revisao-de-escopo-014.md",
+    "20-Dev-IA/avaliacao-de-rag-032-v2.md",
+    "20-Dev-IA/avaliacao-de-rag-032.md",
+    "20-Dev-IA/avaliacao-de-rag-072.md",
+    "20-Dev-IA/batch-de-inferencia-035.md",
+    "20-Dev-IA/chunking-hibrido-071.md",
+    "20-Dev-IA/grafo-de-notas-060.md",
+    "20-Dev-IA/grafo-de-notas-080.md",
+    "20-Dev-IA/indice-vetorial-025.md",
+    "30-Projetos/Aurora_Cerebro/arquitetura/aurora-integracao-com-o-vault-10.md",
+    "30-Projetos/Aurora_Cerebro/arquitetura/aurora-modulo-de-ranqueamento-05.md",
+    "30-Projetos/Aurora_Cerebro/componentes/aurora-graph-loader-03.md",
+    "30-Projetos/Aurora_Cerebro/componentes/aurora-retrieval-service-01-v2.md",
+    "30-Projetos/Aurora_Cerebro/componentes/aurora-retrieval-service-01.md",
+    "30-Projetos/Aurora_Cerebro/estudos/aurora-conceitos-de-bm25-02.md",
+    "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-publicar-release-04.md",
+    "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-rodar-o-benchmark-08.md",
+    "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-subir-o-ambiente-07-rev.md",
+    "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-subir-o-ambiente-07.md",
+    "30-Projetos/Kraken_Cerebro/componentes/kraken-graph-loader-09.md",
+    "30-Projetos/Kraken_Cerebro/estudos/kraken-conceitos-de-bm25-02.md",
+    "30-Projetos/Kraken_Cerebro/estudos/kraken-conceitos-de-bm25-08.md",
+    "30-Projetos/Kraken_Cerebro/procedimentos/kraken-como-girar-credenciais-06.md",
+    "30-Projetos/Kraken_Cerebro/procedimentos/kraken-como-restaurar-backup-05.md",
+    "30-Projetos/Kraken_Cerebro/procedimentos/kraken-como-subir-o-ambiente-01.md",
+    "30-Projetos/Vortex_Cerebro/arquitetura/vortex-limites-de-contexto-06.md",
+    "30-Projetos/Vortex_Cerebro/componentes/vortex-retrieval-service-01.md",
+    "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-driver-do-banco-07.md",
+    "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-estrategia-de-cache-09.md",
+    "30-Projetos/Vortex_Cerebro/estudos/vortex-conceitos-de-bm25-08.md",
+    "40-Estudos/estudo-avaliacao-offline-045.md",
+    "40-Estudos/estudo-engenharia-de-prompts-019.md",
+    "40-Estudos/estudo-estatistica-bayesiana-018.md",
+    "40-Estudos/estudo-grafos-de-conhecimento-014.md",
+    "40-Estudos/estudo-information-retrieval-013.md",
+    "40-Estudos/estudo-sistemas-distribuidos-028-copia.md",
+    "40-Estudos/estudo-sistemas-distribuidos-028.md",
+    "50-Pessoal/controle-de-gastos-010.md",
+    "50-Pessoal/habitos-de-foco-015-v2.md",
+    "50-Pessoal/habitos-de-foco-015.md",
+    "50-Pessoal/leitura-da-semana-003.md",
+    "50-Pessoal/leitura-da-semana-027.md",
+    "50-Pessoal/orcamento-mensal-016.md",
+    "50-Pessoal/rotina-de-treino-017.md",
+    "70-Daily/2026-03-25.md",
+    "70-Daily/2026-04-27.md",
+    "70-Daily/2026-05-03.md",
+    "70-Daily/2026-05-06.md",
+    "70-Daily/2026-05-09.md"
+  ],
+  "facts": [
+    {
+      "path": "00-Inbox/inbox-rascunho-de-api-002.md",
+      "token": "Wexpolium-7116",
+      "fact": "o identificador interno do experimento e Wexpolium-7116 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "00-Inbox/inbox-ideia-solta-sobre-busca-007.md",
+      "token": "asyncpg 0.94.3",
+      "fact": "o driver escolhido foi asyncpg 0.94.3 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "00-Inbox/inbox-rascunho-de-api-008.md",
+      "token": "nomic-embed-text:v1.5-q51",
+      "fact": "o modelo local padrao para esse passo e nomic-embed-text:v1.5-q51, rodando via Ollama"
+    },
+    {
+      "path": "00-Inbox/inbox-anotacao-de-podcast-009.md",
+      "token": "llama3.2-vision:11b-q2",
+      "fact": "o modelo local padrao para esse passo e llama3.2-vision:11b-q2, rodando via Ollama"
+    },
+    {
+      "path": "00-Inbox/inbox-pergunta-para-investigar-017.md",
+      "token": "qwen2.5-coder:14b-q121",
+      "fact": "o modelo local padrao para esse passo e qwen2.5-coder:14b-q121, rodando via Ollama"
+    },
+    {
+      "path": "00-Inbox/inbox-esboco-de-experimento-024.md",
+      "token": "KrampusDB v4.55-rc1",
+      "fact": "o snapshot foi validado contra KrampusDB v4.55-rc1 em ambiente isolado"
+    },
+    {
+      "path": "00-Inbox/inbox-anotacao-de-podcast-027.md",
+      "token": "porta 49071",
+      "fact": "o servico interno responde na porta 49071 dentro da rede docker"
+    },
+    {
+      "path": "00-Inbox/inbox-recorte-de-artigo-028.md",
+      "token": "asyncpg 0.87.1",
+      "fact": "o driver escolhido foi asyncpg 0.87.1 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "00-Inbox/inbox-ideia-solta-sobre-busca-031.md",
+      "token": "KrampusDB v7.104-rc2",
+      "fact": "o snapshot foi validado contra KrampusDB v7.104-rc2 em ambiente isolado"
+    },
+    {
+      "path": "00-Inbox/inbox-recorte-de-artigo-034.md",
+      "token": "timeout de 178ms no TrivandexProxy",
+      "fact": "ficou definido um timeout de 178ms no TrivandexProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "00-Inbox/inbox-ideia-solta-sobre-busca-037.md",
+      "token": "asyncpg 0.157.1",
+      "fact": "o driver escolhido foi asyncpg 0.157.1 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "00-Inbox/inbox-rascunho-de-api-038.md",
+      "token": "porta 49078",
+      "fact": "o servico interno responde na porta 49078 dentro da rede docker"
+    },
+    {
+      "path": "00-Inbox/inbox-anotacao-de-podcast-039.md",
+      "token": "llama3.2-vision:11b-q114",
+      "fact": "o modelo local padrao para esse passo e llama3.2-vision:11b-q114, rodando via Ollama"
+    },
+    {
+      "path": "10-Trabalho/revisao-de-escopo-002.md",
+      "token": "Mextoria-7109",
+      "fact": "o identificador interno do experimento e Mextoria-7109 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "10-Trabalho/planejamento-trimestral-004.md",
+      "token": "phi4-mini:3.8b-q86",
+      "fact": "o modelo local padrao para esse passo e phi4-mini:3.8b-q86, rodando via Ollama"
+    },
+    {
+      "path": "10-Trabalho/onboarding-do-time-008.md",
+      "token": "Quaxil 2.3.3",
+      "fact": "a dependencia critica aqui e a lib Quaxil 2.3.3, que substituiu o parser antigo"
+    },
+    {
+      "path": "10-Trabalho/politica-de-dados-011.md",
+      "token": "asyncpg 0.136.0",
+      "fact": "o driver escolhido foi asyncpg 0.136.0 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "10-Trabalho/mapa-de-riscos-012.md",
+      "token": "bge-m3:567m-q44",
+      "fact": "o modelo local padrao para esse passo e bge-m3:567m-q44, rodando via Ollama"
+    },
+    {
+      "path": "10-Trabalho/reuniao-de-alinhamento-013.md",
+      "token": "KrampusDB v4.62-rc2",
+      "fact": "o snapshot foi validado contra KrampusDB v4.62-rc2 em ambiente isolado"
+    },
+    {
+      "path": "10-Trabalho/contrato-do-fornecedor-019.md",
+      "token": "Ozmarelle-7074",
+      "fact": "o identificador interno do experimento e Ozmarelle-7074 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "10-Trabalho/relatorio-para-stakeholders-021.md",
+      "token": "Pendrazil-7088",
+      "fact": "o identificador interno do experimento e Pendrazil-7088 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "10-Trabalho/auditoria-de-acessos-022.md",
+      "token": "asyncpg 0.59.3",
+      "fact": "o driver escolhido foi asyncpg 0.59.3 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "10-Trabalho/reuniao-de-alinhamento-025.md",
+      "token": "Durnathil-7053",
+      "fact": "o identificador interno do experimento e Durnathil-7053 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "10-Trabalho/relatorio-para-stakeholders-033.md",
+      "token": "granite-embed:278m-q135",
+      "fact": "o modelo local padrao para esse passo e granite-embed:278m-q135, rodando via Ollama"
+    },
+    {
+      "path": "10-Trabalho/reuniao-de-alinhamento-037.md",
+      "token": "KrampusDB v5.83-rc2",
+      "fact": "o snapshot foi validado contra KrampusDB v5.83-rc2 em ambiente isolado"
+    },
+    {
+      "path": "10-Trabalho/revisao-de-escopo-038.md",
+      "token": "timeout de 185ms no FrimbulatorProxy",
+      "fact": "ficou definido um timeout de 185ms no FrimbulatorProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "10-Trabalho/retrospectiva-da-sprint-041.md",
+      "token": "timeout de 213ms no SnorvathProxy",
+      "fact": "ficou definido um timeout de 213ms no SnorvathProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "10-Trabalho/relatorio-para-stakeholders-045.md",
+      "token": "timeout de 241ms no HalvexisProxy",
+      "fact": "ficou definido um timeout de 241ms no HalvexisProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "10-Trabalho/reuniao-de-alinhamento-049.md",
+      "token": "asyncpg 0.143.2",
+      "fact": "o driver escolhido foi asyncpg 0.143.2 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "10-Trabalho/planejamento-trimestral-052.md",
+      "token": "asyncpg 0.80.4",
+      "fact": "o driver escolhido foi asyncpg 0.80.4 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "10-Trabalho/contrato-do-fornecedor-055.md",
+      "token": "asyncpg 0.66.0",
+      "fact": "o driver escolhido foi asyncpg 0.66.0 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "10-Trabalho/politica-de-dados-059.md",
+      "token": "phi4-mini:3.8b-q30",
+      "fact": "o modelo local padrao para esse passo e phi4-mini:3.8b-q30, rodando via Ollama"
+    },
+    {
+      "path": "10-Trabalho/mapa-de-riscos-060.md",
+      "token": "Glimworth 4.45.1",
+      "fact": "a dependencia critica aqui e a lib Glimworth 4.45.1, que substituiu o parser antigo"
+    },
+    {
+      "path": "20-Dev-IA/pipeline-de-ingestao-002.md",
+      "token": "Mextoria 8.129.1",
+      "fact": "a dependencia critica aqui e a lib Mextoria 8.129.1, que substituiu o parser antigo"
+    },
+    {
+      "path": "20-Dev-IA/retry-com-backoff-007.md",
+      "token": "porta 49106",
+      "fact": "o servico interno responde na porta 49106 dentro da rede docker"
+    },
+    {
+      "path": "20-Dev-IA/roteador-de-modelos-009.md",
+      "token": "nomic-embed-text:v1.5-q107",
+      "fact": "o modelo local padrao para esse passo e nomic-embed-text:v1.5-q107, rodando via Ollama"
+    },
+    {
+      "path": "20-Dev-IA/chunking-hibrido-011.md",
+      "token": "mxbai-embed-large:335m-q37",
+      "fact": "o modelo local padrao para esse passo e mxbai-embed-large:335m-q37, rodando via Ollama"
+    },
+    {
+      "path": "20-Dev-IA/streaming-de-tokens-014.md",
+      "token": "timeout de 108ms no GlimworthProxy",
+      "fact": "ficou definido um timeout de 108ms no GlimworthProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "20-Dev-IA/quantizacao-gguf-016.md",
+      "token": "Ozmarelle 6.94.2",
+      "fact": "a dependencia critica aqui e a lib Ozmarelle 6.94.2, que substituiu o parser antigo"
+    },
+    {
+      "path": "20-Dev-IA/sharding-do-indice-017.md",
+      "token": "timeout de 150ms no YolobrixProxy",
+      "fact": "ficou definido um timeout de 150ms no YolobrixProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "20-Dev-IA/parser-de-frontmatter-019.md",
+      "token": "KrampusDB v2.27-rc0",
+      "fact": "o snapshot foi validado contra KrampusDB v2.27-rc0 em ambiente isolado"
+    },
+    {
+      "path": "20-Dev-IA/grafo-de-notas-020.md",
+      "token": "porta 49127",
+      "fact": "o servico interno responde na porta 49127 dentro da rede docker"
+    },
+    {
+      "path": "20-Dev-IA/reranker-local-023.md",
+      "token": "KrampusDB v7.111-rc0",
+      "fact": "o snapshot foi validado contra KrampusDB v7.111-rc0 em ambiente isolado"
+    },
+    {
+      "path": "20-Dev-IA/indice-vetorial-025.md",
+      "token": "porta 49008",
+      "fact": "o servico interno responde na porta 49008 dentro da rede docker"
+    },
+    {
+      "path": "20-Dev-IA/observabilidade-de-agentes-028.md",
+      "token": "Yolobrix 6.87.3",
+      "fact": "a dependencia critica aqui e a lib Yolobrix 6.87.3, que substituiu o parser antigo"
+    },
+    {
+      "path": "20-Dev-IA/roteador-de-modelos-029.md",
+      "token": "timeout de 129ms no TarnvexProxy",
+      "fact": "ficou definido um timeout de 129ms no TarnvexProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "20-Dev-IA/compressao-de-contexto-030.md",
+      "token": "qwen2.5-coder:7b-q72",
+      "fact": "o modelo local padrao para esse passo e qwen2.5-coder:7b-q72, rodando via Ollama"
+    },
+    {
+      "path": "20-Dev-IA/quantizacao-gguf-036.md",
+      "token": "Pendrazil 7.108.0",
+      "fact": "a dependencia critica aqui e a lib Pendrazil 7.108.0, que substituiu o parser antigo"
+    },
+    {
+      "path": "20-Dev-IA/sharding-do-indice-037.md",
+      "token": "porta 49134",
+      "fact": "o servico interno responde na porta 49134 dentro da rede docker"
+    },
+    {
+      "path": "20-Dev-IA/parser-de-frontmatter-039.md",
+      "token": "Nubrastix 3.24.0",
+      "fact": "a dependencia critica aqui e a lib Nubrastix 3.24.0, que substituiu o parser antigo"
+    },
+    {
+      "path": "20-Dev-IA/cache-de-embeddings-041.md",
+      "token": "timeout de 157ms no OzmarelleProxy",
+      "fact": "ficou definido um timeout de 157ms no OzmarelleProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "20-Dev-IA/pipeline-de-ingestao-042.md",
+      "token": "Jorbistan-7039",
+      "fact": "o identificador interno do experimento e Jorbistan-7039 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "20-Dev-IA/indice-vetorial-045.md",
+      "token": "porta 49043",
+      "fact": "o servico interno responde na porta 49043 dentro da rede docker"
+    },
+    {
+      "path": "20-Dev-IA/fila-de-jobs-046.md",
+      "token": "qwen2.5-coder:14b-q65",
+      "fact": "o modelo local padrao para esse passo e qwen2.5-coder:14b-q65, rodando via Ollama"
+    },
+    {
+      "path": "20-Dev-IA/observabilidade-de-agentes-048.md",
+      "token": "Quaxil-7123",
+      "fact": "o identificador interno do experimento e Quaxil-7123 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "20-Dev-IA/compressao-de-contexto-050.md",
+      "token": "llama3.2-vision:11b-q58",
+      "fact": "o modelo local padrao para esse passo e llama3.2-vision:11b-q58, rodando via Ollama"
+    },
+    {
+      "path": "20-Dev-IA/chunking-hibrido-051.md",
+      "token": "Nubrastix-7004",
+      "fact": "o identificador interno do experimento e Nubrastix-7004 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "20-Dev-IA/avaliacao-de-rag-052.md",
+      "token": "Tarnvex-7046",
+      "fact": "o identificador interno do experimento e Tarnvex-7046 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "20-Dev-IA/guardrails-de-prompt-053.md",
+      "token": "porta 49099",
+      "fact": "o servico interno responde na porta 49099 dentro da rede docker"
+    },
+    {
+      "path": "20-Dev-IA/batch-de-inferencia-055.md",
+      "token": "porta 49050",
+      "fact": "o servico interno responde na porta 49050 dentro da rede docker"
+    },
+    {
+      "path": "20-Dev-IA/quantizacao-gguf-056.md",
+      "token": "porta 49085",
+      "fact": "o servico interno responde na porta 49085 dentro da rede docker"
+    },
+    {
+      "path": "20-Dev-IA/sharding-do-indice-057.md",
+      "token": "qwen2.5-coder:14b-q9",
+      "fact": "o modelo local padrao para esse passo e qwen2.5-coder:14b-q9, rodando via Ollama"
+    },
+    {
+      "path": "20-Dev-IA/sanitizacao-de-markdown-058.md",
+      "token": "KrampusDB v9.139-rc1",
+      "fact": "o snapshot foi validado contra KrampusDB v9.139-rc1 em ambiente isolado"
+    },
+    {
+      "path": "20-Dev-IA/pipeline-de-ingestao-062.md",
+      "token": "Brintiq 3.31.3",
+      "fact": "a dependencia critica aqui e a lib Brintiq 3.31.3, que substituiu o parser antigo"
+    },
+    {
+      "path": "20-Dev-IA/compressao-de-contexto-070.md",
+      "token": "KrampusDB v2.20-rc2",
+      "fact": "o snapshot foi validado contra KrampusDB v2.20-rc2 em ambiente isolado"
+    },
+    {
+      "path": "20-Dev-IA/batch-de-inferencia-075.md",
+      "token": "KrampusDB v5.69-rc0",
+      "fact": "o snapshot foi validado contra KrampusDB v5.69-rc0 em ambiente isolado"
+    },
+    {
+      "path": "20-Dev-IA/sharding-do-indice-077.md",
+      "token": "qwen2.5-coder:7b-q16",
+      "fact": "o modelo local padrao para esse passo e qwen2.5-coder:7b-q16, rodando via Ollama"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/arquitetura/aurora-visao-geral-do-gateway-01.md",
+      "token": "asyncpg 0.52.1",
+      "fact": "o driver escolhido foi asyncpg 0.52.1 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/arquitetura/aurora-modulo-de-ranqueamento-05.md",
+      "token": "KrampusDB v3.48-rc0",
+      "fact": "o snapshot foi validado contra KrampusDB v3.48-rc0 em ambiente isolado"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/arquitetura/aurora-camada-de-cache-09.md",
+      "token": "timeout de 115ms no KlovexaProxy",
+      "fact": "ficou definido um timeout de 115ms no KlovexaProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-politica-de-retries-05.md",
+      "token": "timeout de 199ms no WexpoliumProxy",
+      "fact": "ficou definido um timeout de 199ms no WexpoliumProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-girar-credenciais-06.md",
+      "token": "KrampusDB v5.76-rc1",
+      "fact": "o snapshot foi validado contra KrampusDB v5.76-rc1 em ambiente isolado"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-rodar-o-benchmark-08.md",
+      "token": "KrampusDB v1.6-rc0",
+      "fact": "o snapshot foi validado contra KrampusDB v1.6-rc0 em ambiente isolado"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-publicar-release-10.md",
+      "token": "timeout de 220ms no GrubnashProxy",
+      "fact": "ficou definido um timeout de 220ms no GrubnashProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/componentes/aurora-answer-composer-04.md",
+      "token": "KrampusDB v6.90-rc0",
+      "fact": "o snapshot foi validado contra KrampusDB v6.90-rc0 em ambiente isolado"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/componentes/aurora-cache-layer-08.md",
+      "token": "Grubnash 2.17.1",
+      "fact": "a dependencia critica aqui e a lib Grubnash 2.17.1, que substituiu o parser antigo"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/componentes/aurora-answer-composer-10.md",
+      "token": "KrampusDB 7.101.1",
+      "fact": "a dependencia critica aqui e a lib KrampusDB 7.101.1, que substituiu o parser antigo"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/estudos/aurora-anatomia-do-frontmatter-06.md",
+      "token": "timeout de 171ms no PendrazilProxy",
+      "fact": "ficou definido um timeout de 171ms no PendrazilProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/estudos/aurora-licencas-das-dependencias-07.md",
+      "token": "asyncpg 0.129.3",
+      "fact": "o driver escolhido foi asyncpg 0.129.3 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "30-Projetos/Aurora_Cerebro/estudos/aurora-custos-de-inferencia-10.md",
+      "token": "asyncpg 0.31.0",
+      "fact": "o driver escolhido foi asyncpg 0.31.0 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/arquitetura/kraken-visao-geral-do-gateway-01.md",
+      "token": "KrampusDB v6.97-rc1",
+      "fact": "o snapshot foi validado contra KrampusDB v6.97-rc1 em ambiente isolado"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/arquitetura/kraken-camada-de-cache-03.md",
+      "token": "granite-embed:278m-q23",
+      "fact": "o modelo local padrao para esse passo e granite-embed:278m-q23, rodando via Ollama"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-driver-do-banco-01.md",
+      "token": "Tarnvex 5.66.2",
+      "fact": "a dependencia critica aqui e a lib Tarnvex 5.66.2, que substituiu o parser antigo"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-estrategia-de-cache-03.md",
+      "token": "KrampusDB v1.13-rc1",
+      "fact": "o snapshot foi validado contra KrampusDB v1.13-rc1 em ambiente isolado"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-politica-de-retries-05.md",
+      "token": "Durnathil 5.73.1",
+      "fact": "a dependencia critica aqui e a lib Durnathil 5.73.1, que substituiu o parser antigo"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-modelo-local-padrao-06.md",
+      "token": "Yolobrix-7067",
+      "fact": "o identificador interno do experimento e Yolobrix-7067 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-formato-do-indice-08.md",
+      "token": "Halvexis 3.38.2",
+      "fact": "a dependencia critica aqui e a lib Halvexis 3.38.2, que substituiu o parser antigo"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/procedimentos/kraken-como-rodar-o-benchmark-02.md",
+      "token": "timeout de 164ms no KrampusDBProxy",
+      "fact": "ficou definido um timeout de 164ms no KrampusDBProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/componentes/kraken-cache-layer-08.md",
+      "token": "Trivandex-7095",
+      "fact": "o identificador interno do experimento e Trivandex-7095 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/componentes/kraken-graph-loader-09.md",
+      "token": "KrampusDB v3.41-rc2",
+      "fact": "o snapshot foi validado contra KrampusDB v3.41-rc2 em ambiente isolado"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/estudos/kraken-conceitos-de-bm25-02.md",
+      "token": "porta 49015",
+      "fact": "o servico interno responde na porta 49015 dentro da rede docker"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/estudos/kraken-custos-de-inferencia-04.md",
+      "token": "Klovexa 4.52.0",
+      "fact": "a dependencia critica aqui e a lib Klovexa 4.52.0, que substituiu o parser antigo"
+    },
+    {
+      "path": "30-Projetos/Kraken_Cerebro/estudos/kraken-avaliacao-com-juiz-llm-05.md",
+      "token": "timeout de 136ms no DurnathilProxy",
+      "fact": "ficou definido um timeout de 136ms no DurnathilProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/arquitetura/vortex-fluxo-de-consulta-02.md",
+      "token": "timeout de 122ms no JorbistanProxy",
+      "fact": "ficou definido um timeout de 122ms no JorbistanProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/arquitetura/vortex-camada-de-cache-03.md",
+      "token": "porta 49113",
+      "fact": "o servico interno responde na porta 49113 dentro da rede docker"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/arquitetura/vortex-integracao-com-o-vault-04.md",
+      "token": "asyncpg 0.45.4",
+      "fact": "o driver escolhido foi asyncpg 0.45.4 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/arquitetura/vortex-limites-de-contexto-06.md",
+      "token": "timeout de 192ms no MextoriaProxy",
+      "fact": "ficou definido um timeout de 192ms no MextoriaProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/arquitetura/vortex-camada-de-cache-09.md",
+      "token": "asyncpg 0.115.4",
+      "fact": "o driver escolhido foi asyncpg 0.115.4 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-formato-do-indice-02.md",
+      "token": "timeout de 206ms no QuaxilProxy",
+      "fact": "ficou definido um timeout de 206ms no QuaxilProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-biblioteca-de-embeddings-04.md",
+      "token": "porta 49064",
+      "fact": "o servico interno responde na porta 49064 dentro da rede docker"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-modelo-local-padrao-06.md",
+      "token": "granite-embed:278m-q79",
+      "fact": "o modelo local padrao para esse passo e granite-embed:278m-q79, rodando via Ollama"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-formato-do-indice-08.md",
+      "token": "Brintiq-7011",
+      "fact": "o identificador interno do experimento e Brintiq-7011 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-biblioteca-de-embeddings-10.md",
+      "token": "Trivandex 7.115.3",
+      "fact": "a dependencia critica aqui e a lib Trivandex 7.115.3, que substituiu o parser antigo"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-rodar-o-benchmark-02.md",
+      "token": "timeout de 143ms no ZorblexProxy",
+      "fact": "ficou definido um timeout de 143ms no ZorblexProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-girar-credenciais-06.md",
+      "token": "asyncpg 0.73.2",
+      "fact": "o driver escolhido foi asyncpg 0.73.2 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-publicar-release-10.md",
+      "token": "qwen2.5-coder:7b-q128",
+      "fact": "o modelo local padrao para esse passo e qwen2.5-coder:7b-q128, rodando via Ollama"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/componentes/vortex-retrieval-service-01.md",
+      "token": "asyncpg 0.122.1",
+      "fact": "o driver escolhido foi asyncpg 0.122.1 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/componentes/vortex-graph-loader-03.md",
+      "token": "KrampusDB v7.118-rc1",
+      "fact": "o snapshot foi validado contra KrampusDB v7.118-rc1 em ambiente isolado"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/componentes/vortex-vault-watcher-06.md",
+      "token": "KrampusDB v8.132-rc0",
+      "fact": "o snapshot foi validado contra KrampusDB v8.132-rc0 em ambiente isolado"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/componentes/vortex-retrieval-service-07.md",
+      "token": "mxbai-embed-large:335m-q93",
+      "fact": "o modelo local padrao para esse passo e mxbai-embed-large:335m-q93, rodando via Ollama"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/componentes/vortex-cache-layer-08.md",
+      "token": "Grubnash-7137",
+      "fact": "o identificador interno do experimento e Grubnash-7137 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/estudos/vortex-hnsw-na-pratica-03.md",
+      "token": "Zorblex 6.80.0",
+      "fact": "a dependencia critica aqui e a lib Zorblex 6.80.0, que substituiu o parser antigo"
+    },
+    {
+      "path": "30-Projetos/Vortex_Cerebro/estudos/vortex-licencas-das-dependencias-07.md",
+      "token": "Zorblex-7060",
+      "fact": "o identificador interno do experimento e Zorblex-7060 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "40-Estudos/estudo-estatistica-bayesiana-006.md",
+      "token": "timeout de 234ms no BrintiqProxy",
+      "fact": "ficou definido um timeout de 234ms no BrintiqProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "40-Estudos/estudo-metricas-de-ranqueamento-010.md",
+      "token": "Snorvath 2.10.2",
+      "fact": "a dependencia critica aqui e a lib Snorvath 2.10.2, que substituiu o parser antigo"
+    },
+    {
+      "path": "40-Estudos/estudo-grafos-de-conhecimento-014.md",
+      "token": "asyncpg 0.150.4",
+      "fact": "o driver escolhido foi asyncpg 0.150.4 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "40-Estudos/estudo-engenharia-de-prompts-019.md",
+      "token": "asyncpg 0.108.2",
+      "fact": "o driver escolhido foi asyncpg 0.108.2 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "40-Estudos/estudo-arquitetura-de-transformers-020.md",
+      "token": "asyncpg 0.164.3",
+      "fact": "o driver escolhido foi asyncpg 0.164.3 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "40-Estudos/estudo-metricas-de-ranqueamento-022.md",
+      "token": "porta 49120",
+      "fact": "o servico interno responde na porta 49120 dentro da rede docker"
+    },
+    {
+      "path": "40-Estudos/estudo-amostragem-e-vies-023.md",
+      "token": "Wexpolium 8.136.0",
+      "fact": "a dependencia critica aqui e a lib Wexpolium 8.136.0, que substituiu o parser antigo"
+    },
+    {
+      "path": "40-Estudos/estudo-compiladores-e-ast-024.md",
+      "token": "KrampusDB v3.34-rc1",
+      "fact": "o snapshot foi validado contra KrampusDB v3.34-rc1 em ambiente isolado"
+    },
+    {
+      "path": "40-Estudos/estudo-information-retrieval-025.md",
+      "token": "asyncpg 0.38.2",
+      "fact": "o driver escolhido foi asyncpg 0.38.2 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "40-Estudos/estudo-algebra-linear-aplicada-027.md",
+      "token": "Jorbistan 4.59.3",
+      "fact": "a dependencia critica aqui e a lib Jorbistan 4.59.3, que substituiu o parser antigo"
+    },
+    {
+      "path": "40-Estudos/estudo-estatistica-bayesiana-030.md",
+      "token": "porta 49022",
+      "fact": "o servico interno responde na porta 49022 dentro da rede docker"
+    },
+    {
+      "path": "40-Estudos/estudo-information-retrieval-037.md",
+      "token": "timeout de 227ms no NubrastixProxy",
+      "fact": "ficou definido um timeout de 227ms no NubrastixProxy antes de cair para o fallback textual"
+    },
+    {
+      "path": "40-Estudos/estudo-grafos-de-conhecimento-038.md",
+      "token": "porta 49092",
+      "fact": "o servico interno responde na porta 49092 dentro da rede docker"
+    },
+    {
+      "path": "40-Estudos/estudo-sistemas-distribuidos-040.md",
+      "token": "porta 49029",
+      "fact": "o servico interno responde na porta 49029 dentro da rede docker"
+    },
+    {
+      "path": "40-Estudos/estudo-avaliacao-offline-045.md",
+      "token": "asyncpg 0.101.0",
+      "fact": "o driver escolhido foi asyncpg 0.101.0 por causa da licenca Apache-2.0"
+    },
+    {
+      "path": "40-Estudos/estudo-metricas-de-ranqueamento-046.md",
+      "token": "KrampusDB-7081",
+      "fact": "o identificador interno do experimento e KrampusDB-7081 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "40-Estudos/estudo-grafos-de-conhecimento-050.md",
+      "token": "porta 49036",
+      "fact": "o servico interno responde na porta 49036 dentro da rede docker"
+    },
+    {
+      "path": "50-Pessoal/rotina-de-treino-001.md",
+      "token": "bge-m3:567m-q100",
+      "fact": "o modelo local padrao para esse passo e bge-m3:567m-q100, rodando via Ollama"
+    },
+    {
+      "path": "50-Pessoal/controle-de-gastos-002.md",
+      "token": "Halvexis-7018",
+      "fact": "o identificador interno do experimento e Halvexis-7018 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "50-Pessoal/leitura-da-semana-003.md",
+      "token": "Frimbulator 8.122.2",
+      "fact": "a dependencia critica aqui e a lib Frimbulator 8.122.2, que substituiu o parser antigo"
+    },
+    {
+      "path": "50-Pessoal/organizacao-da-casa-005.md",
+      "token": "Frimbulator-7102",
+      "fact": "o identificador interno do experimento e Frimbulator-7102 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "50-Pessoal/habitos-de-foco-007.md",
+      "token": "KrampusDB v8.125-rc2",
+      "fact": "o snapshot foi validado contra KrampusDB v8.125-rc2 em ambiente isolado"
+    },
+    {
+      "path": "50-Pessoal/plano-de-viagem-012.md",
+      "token": "Klovexa-7032",
+      "fact": "o identificador interno do experimento e Klovexa-7032 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "50-Pessoal/organizacao-da-casa-013.md",
+      "token": "Snorvath-7130",
+      "fact": "o identificador interno do experimento e Snorvath-7130 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "50-Pessoal/orcamento-mensal-016.md",
+      "token": "porta 49057",
+      "fact": "o servico interno responde na porta 49057 dentro da rede docker"
+    },
+    {
+      "path": "50-Pessoal/organizacao-da-casa-021.md",
+      "token": "Glimworth-7025",
+      "fact": "o identificador interno do experimento e Glimworth-7025 e ele nao deve ser renomeado"
+    },
+    {
+      "path": "50-Pessoal/controle-de-gastos-026.md",
+      "token": "porta 49001",
+      "fact": "o servico interno responde na porta 49001 dentro da rede docker"
+    }
+  ]
+}
