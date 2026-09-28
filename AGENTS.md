@@ -5,23 +5,24 @@ Aider, Gemini CLI...). Gêmeo de `CLAUDE.md`: **ao alterar um, altere o outro.**
 
 ```text
 Projeto:
-C:\Users\fonse\Projetos_AI\Memory_Gateway
+<PROJECT_ROOT>            # o diretório onde este repositório foi clonado
 
-Cérebro:
-C:\Users\fonse\Cérebro_AI
-
-Especificação:
-C:\Users\fonse\Cérebro_AI\30-Projetos\Memory_Gateway\memory-gateway-benchmark-prompt.md
+Vault (memória de longo prazo, opcional):
+$MEMORY_GATEWAY_VAULT     # ver .env.example; padrão = <PROJECT_ROOT>/data/synthetic_vault
 ```
+
+> Este projeto **não depende de nenhum caminho pessoal**. O vault é configurável por
+> `MEMORY_GATEWAY_VAULT` (ou `--vault`), e um corpus de exemplo acompanha o repositório
+> em `data/synthetic_vault`, então um clone novo roda sem configuração alguma.
 
 ## Regras obrigatórias
 
-1. **Leia a especificação antes de implementar.** Ela é a referência principal;
-   em conflito, ela vence este arquivo e o `CLAUDE.md`.
-2. **Consulte o Cérebro** quando precisar de contexto histórico ou decisões existentes
+1. **Leia a documentação antes de implementar.** `README.md` e `docs/` são a referência;
+   em conflito, eles vencem este arquivo e o `CLAUDE.md`.
+2. **Consulte o vault** quando precisar de contexto histórico ou decisões existentes
    (busca por termo específico, frontmatter antes do corpo, 3–5 notas no máximo).
    Não substitua decisão documentada por suposição. Não achou? Diga.
-3. **O Cérebro é READ ONLY.** Nunca criar, editar, mover, renomear ou apagar nada nele.
+3. **O vault é READ ONLY.** Nunca criar, editar, mover, renomear ou apagar nada nele.
    Banco, logs, cache e `graphify-out` ficam no projeto.
 4. **Crie/modifique arquivos somente dentro do diretório do projeto.**
 5. **Não invente APIs**, endpoints, comandos ou parâmetros.

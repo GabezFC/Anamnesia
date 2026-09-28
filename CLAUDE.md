@@ -7,12 +7,14 @@ Guia operacional para Claude Code (e agentes compatíveis). Gêmeo de `AGENTS.md
 
 | O quê | Caminho | Acesso |
 | --- | --- | --- |
-| Projeto (código, config, testes, banco, logs, cache, frontend) | `C:\Users\fonse\Projetos_AI\Memory_Gateway` | leitura e escrita |
-| Cérebro / vault Obsidian (fonte de conhecimento) | `C:\Users\fonse\Cérebro_AI` | **READ ONLY** |
-| Especificação principal | `C:\Users\fonse\Cérebro_AI\30-Projetos\Memory_Gateway\memory-gateway-benchmark-prompt.md` | leitura |
+| Projeto (código, config, testes, banco, logs, cache, frontend) | `<PROJECT_ROOT>` (onde o repo foi clonado) | leitura e escrita |
+| Vault Obsidian (fonte de conhecimento) | `$MEMORY_GATEWAY_VAULT`, padrão `<PROJECT_ROOT>/data/synthetic_vault` | **READ ONLY** |
+| Documentação principal | `README.md`, `docs/` | leitura |
 
-Em conflito, a especificação vence este arquivo. Leia a seção relevante dela antes
-de implementar qualquer fase (§117 lista a ordem das fases).
+> O projeto **não depende de nenhum caminho pessoal**: o vault vem de
+> `MEMORY_GATEWAY_VAULT` / `--vault`, com fallback no corpus de exemplo versionado.
+
+Em conflito, o `README.md` vence este arquivo.
 
 ## Objetivo
 
@@ -48,9 +50,9 @@ Hermes/Claude Code/Codex/OpenCode = consumidores | LLM = síntese | SQLite = mé
   ou depender dele; o Gateway funciona com Claude Code fechado.
 - Nomes neutros: `ModelContextBuilder`, nunca `ClaudeContextBuilder`.
 
-## Regra READ ONLY do Cérebro
+## Regra READ ONLY do vault
 
-- Nunca criar, modificar, mover, renomear ou apagar nada em `C:\Users\fonse\Cérebro_AI`.
+- Nunca criar, modificar, mover, renomear ou apagar nada no vault configurado.
 - No código: todo acesso ao vault passa por `app/services/obsidian.py`, que valida
   caminho (dentro do vault configurado) e operação (`READ_ONLY_OPERATIONS`).
   Não expor escrita em MCP/REST/CLI.

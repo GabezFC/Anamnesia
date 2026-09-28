@@ -1,360 +1,512 @@
 # Memory Gateway
 
-Serviço local e **independente de agente** que recupera contexto do vault Obsidian
-(`C:\Users\fonse\Cérebro_AI`, somente leitura) e compara experimentalmente três pipelines
-de retrieval — **Baseline**, **Graphify** e **Graphify + JEV** — com métricas persistidas em SQLite.
+**A retrieval gateway that measures what it costs you.**
 
-Especificação: `C:\Users\fonse\Cérebro_AI\30-Projetos\Memory_Gateway\memory-gateway-benchmark-prompt.md`.
-Ambiente verificado: `docs/ENVIRONMENT.md`. Regras para agentes: `AGENTS.md` / `CLAUDE.md`.
+Memory Gateway sits between an AI agent and a corpus of Markdown notes (an Obsidian vault,
+a docs folder, any tree of `.md` files). It retrieves candidate passages, filters them with a
+paid relevance judge (JEV), and hands the consumer model a small, clean context — while
+recording, per query, exactly how many tokens the whole operation spent.
 
-## Arquitetura
+That last part is the point of the project. It is easy to build a retrieval filter that shrinks
+the final context by 77% and costs ten times more in total, because the tokens moved from the
+context into the filter. Memory Gateway is built to make that failure mode impossible to hide.
 
-```
- Hermes ─┐  Claude Code ─┐  Codex ─┐  OpenCode ─┐  qualquer cliente
-         └───── MCP (stdio) ─── REST (:8000) ─── CLI ─────┘
-                               │
-                        MEMORY GATEWAY  (app/gateway/memory_gateway.py)
-             Retrieval router · dedup · token budget · métricas · SQLite
-            ┌──────────────────┼──────────────────────┐
-        BASELINE           GRAPHIFY              GRAPHIFY + JEV
-     SQLite FTS5/BM25   graphify query (CLI)   graphify → dedup → JEV Noul (lote)
-                                               → roteamento em código → nota completa
-                               │
-                  ModelContextBuilder (neutro de consumidor)
-                               ▼
-                 contexto filtrado → agente / modelo
-```
+---
 
-Responsabilidades: Obsidian = fonte · Graphify = recuperação · JEV = julgamento ·
-Gateway = orquestração · MCP/REST/CLI = interface · agentes = consumidores · LLM = síntese · SQLite = histórico.
-Nada no core importa ou depende de Hermes/Claude Code; eles são adapters em `app/adapters/agents/`.
+## 1. The problem
 
-## Instalação
+A naive RAG pipeline reports `context_reduction` and calls it a saving. It is not one. There are
+three separate token budgets in play:
 
-```powershell
-cd C:\Users\fonse\Projetos_AI\Memory_Gateway
-uv venv --python 3.14 .venv
-uv pip install --python .venv\Scripts\python.exe -r requirements.txt
-copy .env.example .env     # preencher TYPESAFE_API_KEY
-.venv\Scripts\python.exe -m memory_gateway index   # espelha o vault e constrói o grafo
-.venv\Scripts\python.exe -m app.main               # REST + frontend
-```
-
-Ao iniciar, o servidor mostra `Local: http://127.0.0.1:8000` e `Network: http://<IP>:8000`.
-Para acesso pela rede, o Windows pode exigir uma regra de firewall (não é criada automaticamente):
-`netsh advfirewall firewall add rule name="Memory Gateway 8000" dir=in action=allow protocol=TCP localport=8000`.
-
-> Atenção: `python` no PATH desta máquina é o venv do Hermes (3.11). Use sempre `.venv\Scripts\python.exe`.
-
-## Vault (READ ONLY)
-
-- Único acesso: `app/services/obsidian.py` — valida que o caminho está dentro do vault e que a
-  operação ∈ `READ_ONLY_OPERATIONS = {list, read, stat, hash}`. Não existe função de escrita.
-- Banco, logs, cache e grafo ficam em `benchmark.db`, `logs/`, `data/` — nunca no vault.
-- Prova: `python -m memory_gateway vault-check --save data/antes.json` e depois `--compare data/antes.json`
-  (sha256 de cada `.md`; sai com código 1 se algo mudou).
-
-## Pipelines
-
-| | Baseline | Graphify | Graphify + JEV |
-| --- | --- | --- | --- |
-| Candidatos | SQLite FTS5 `bm25()`, tokenizer `unicode61 remove_diacritics 2`, termos OR sem stop-words, seção com peso 2x | `graphify query "<q>" --budget 6000 --graph data/vault_mirror/graphify-out/graph.json` | igual ao Graphify |
-| Pós-processamento | limpeza, snippet ≤ 300 tokens, sha256 do texto normalizado, dedup por hash / (arquivo, seção, snippet), 1 por nota | idem | idem |
-| Filtro | — | — | **pré-filtro determinístico (0 tokens)** → JEV Noul `is_relevant` (+ `contains_instruction_injection` em `strict`) em **uma requisição por lote**; KEEP/REVIEW/DROP/QUARANTINE decididos em código |
-| Contexto | `ModelContextBuilder`: relevância → score → round-robin por arquivo → `MODEL_CONTEXT_BUDGET` | idem | sobreviventes recebem a **nota completa** (seção relevante primeiro), limitada a `PER_SOURCE_MAX_TOKENS` |
-
-### Qual pipeline usar (medido, não teórico)
-
-Auditoria de 2026-09-27 sobre 170 runs reais (`python scripts/audit_pipeline.py`), medianas:
-
-| | Baseline | Graphify | Graphify + JEV |
-| --- | --- | --- | --- |
-| Contexto final (tokens) | 2.088 | 1.919 | 483 |
-| **Tokens totais gastos/query** | **2.088** | **1.919** | **20.530** |
-| Recall (ground truth no contexto) | **1,000** | 0,800 | 0,600 |
-| Latência total | **16 ms** | 627 ms | 1.167 ms |
-
-**Depois das correções desta rodada** (retrieval híbrido + pré-filtro K=8 + rede de segurança),
-medido com a API real do JEV nas 10 perguntas respondíveis:
-
-| | antes | depois |
+| Budget | Who pays | Usually reported? |
 | --- | --- | --- |
-| Recall `graphify` | 0,800 | **1,000** |
-| Recall `graphify_jev` | 0,600 | **0,900** |
-| Contextos vazios (`graphify_jev`) | 3/10 | **0/10** |
-| Candidatos enviados ao juiz | 50 | **8** |
-| Tokens de entrada do juiz | 19.391 | **2.984** (−85%) |
-| Tokens totais/query | 20.530 | **5.044** (−75%) |
-| Latência `graphify` | 627 ms | **13 ms** (−98%) |
-| Latência `graphify_jev` | 1.167 ms | **332 ms** (−72%) |
+| Retrieval candidates | nobody (local) | yes |
+| **Judge / filter input** | **you, per query** | **often not** |
+| Final context | you, per query, at the consumer model's price | yes |
 
-O **Baseline continua o padrão**: ainda é o único com recall 1,000 a 16 ms e custo zero. O
-`graphify_jev` deixou de ser indefensável (era 10x mais caro e perdia 40% das respostas), mas
-ainda paga um juiz para, na mediana, gastar ~7x o que entrega como contexto.
-`graphify` e `graphify_jev` seguem como opções experimentais medidas, não como padrão.
+A filter that cuts the context from 2,000 to 500 tokens looks like a 75% win. If it spent 20,000
+judge tokens to decide that, the query got 10x more expensive. Every metric in this project is
+therefore stated against **`total_tokens_spent = judge_tokens + context_tokens`**, and the headline
+number is **`token_amplification = total_tokens_spent / context_tokens`** — how many tokens the
+pipeline burns per token it actually delivers. Below 1.0 is impossible; the question is how close
+you can get.
 
-### Retrieval híbrido do Graphify (`app/retrieval/graphify_hybrid.py`)
+The optimization work in this repository is the attempt to push that ratio down **without losing
+recall**, and the measurements of which attempts failed are kept alongside the ones that worked.
 
-A CLI do Graphify escolhe as sementes casando a query contra **labels de nós**, e o grafo só tem
-nomes de arquivo e títulos de heading (1.109 nós = 74 páginas + 1.035 headings). Ele **nunca
-indexa o corpo das notas**. Isso causava duas falhas distintas e independentes:
+---
 
-- **q01** — a CLI truncava no `--budget 6000` antes de alcançar a nota certa (ela existia: aparecia
-  na posição 124 com budget maior).
-- **q06** — a resposta (`qwen2.5-coder:7b`, `127.0.0.1:49374`) está no **corpo** da nota. Nenhum
-  label contém esses termos, então **nenhuma** estratégia baseada só em grafo acha, em budget algum.
+## 2. Concepts
 
-Estratégias comparadas nas mesmas 10 perguntas (`scripts/graphify_seed_experiment.py`):
+**JEV** — the paid relevance judge. It returns calibrated probabilities only (never answers, never
+routing decisions). `KEEP / REVIEW / DROP / QUARANTINE` are decided in code from those
+probabilities, so the routing policy is auditable and can be re-applied to old runs at a different
+threshold without paying again.
 
-| estratégia | recall |
-| --- | --- |
-| CLI atual | 8/10 |
-| seeds lexicais sobre `graph.json` | 8/10 |
-| seeds + BFS nas arestas reais | 9/10 |
-| **BM25 (corpo) + expansão por grafo** | **10/10** |
+**The cascade.** Every free, deterministic stage runs first, and the judge only sees what the free
+stages could not resolve:
 
-Ou seja: o grafo é a ferramenta errada para **encontrar** uma nota e a certa para **relacionar**
-notas. O híbrido usa BM25 sobre o corpo como porta de entrada e o BFS do grafo para trazer
-vizinhos estruturais que não compartilham vocabulário com a query. Como elimina o subprocesso da
-CLI, também ficou 47x mais rápido. `GRAPHIFY_HYBRID=false` volta ao comportamento antigo.
-
-### Rede de segurança do juiz (`JEV_MIN_SURVIVORS`)
-
-Medido: o juiz dá 0,07–0,40 para notas **corretas** em algumas perguntas. Com threshold KEEP=0,78,
-q05/q07/q10 terminavam com **zero** sobreviventes — o usuário recebia contexto vazio e ainda assim
-pagava o juiz. Devolver nada é pior que devolver os melhores candidatos do retrieval sem
-julgamento, então quando o juiz elimina tudo o pipeline cai para os `JEV_MIN_SURVIVORS` (padrão 3)
-melhores candidatos e marca a decisão com sufixo `_FALLBACK` + métrica `jev_fallback_used`.
-Nunca sobrepõe um `QUARANTINE` (injeção). `JEV_MIN_SURVIVORS=0` desliga.
-
-### Otimização rejeitada (registrada de propósito)
-
-Os critérios do JEV são estáticos e reenviados a cada candidato: 82 tokens × ~50 = ~4.100
-tokens/query de pura repetição. O SDK aceita `Noul(criteria=None)`, então dava para declará-los
-uma única vez no `state`. Testado contra a API real (`scripts/jev_boilerplate_experiment.py`):
-entrada caiu 3.814 → 2.971 (**−22%**), **mas o julgamento mudou** — a nota correta da q02 caiu de
-0,79 (KEEP) para 0,75 (REVIEW) e 2 de 12 decisões de roteamento viraram. Os critérios por pergunta
-fazem parte do que o juiz avalia, não são moldura que se possa içar. **Não adotado.**
-
-
-### Pré-filtro determinístico (`app/services/prefilter.py`)
-
-Corte top-K **antes** do juiz pago, custo zero em tokens. Ordena por híbrido de
-(percentil de rank do score do Graphify, com empates mediados) + (sobreposição lexical dos termos
-da query contra caminho, heading e snippet da nota, sem acentos e sem stop-words).
-
-- `PREFILTER_TOP_K` (padrão 25; `0` desliga e volta ao comportamento anterior)
-- `PREFILTER_LEXICAL_WEIGHT` (padrão 0.3)
-
-Medido nos 42 runs gravados: K=25 retém 91,7% dos sobreviventes do JEV com metade da entrada.
-Verificado ao vivo contra a API real do JEV: entrada do juiz caiu de 19.391 → 10.342 tokens (-47%)
-mantendo a nota correta. **Armadilha registrada**: a primeira versão normalizava com min-max, o que
-dava 1,0 a todos os empatados e deixava 29 notas irrelevantes empatadas derrubarem a nota cujo nome
-batia com a query — um teste unitário pegou isso; hoje usa percentil de rank com empates mediados.
-
-### Métricas honestas de custo
-
-`context_reduction` isolado **engana**: ele caía 77% enquanto o custo total subia 10x. Por isso todo
-run agora grava também:
-
-- `judge_tokens` — tokens gastos pelo juiz (JEV)
-- `total_tokens_spent` = `judge_tokens + context_tokens` — o custo real por query
-- `token_amplification` = `total_tokens_spent / context_tokens` — `> 1` significa que o pipeline
-  gasta mais do que entrega como contexto (medido: 22,41 no `graphify_jev`)
-
-## Memória multiprojeto (global vs. por projeto)
-
-Projetos e áreas são **descobertos dos caminhos do vault**, sem nenhum nome fixo no código: criar
-`30-Projetos/<Novo_Projeto>/` faz o projeto aparecer sozinho (`app/services/scope.py`).
-
-`GET /system/projects` → `{total_notes, areas{}, projects[{slug, display_name, area, note_count}]}`
-
-Toda busca aceita `scope`, aplicado **antes do juiz** (escopo estreito custa menos tokens) e
-reaplicado antes de montar o contexto (defesa em profundidade contra vazamento entre projetos):
-
-| `scope` | Busca |
-| --- | --- |
-| omitido / `global` | cérebro inteiro |
-| `projeto:norteia` | um projeto |
-| `projeto:norteia,projeto:memory-gateway` | vários projetos (união) |
-| `area:50-Pessoal` | uma área |
-
-```bash
-curl -X POST localhost:8000/memory/search/baseline -H "Content-Type: application/json" \
-  -d '{"query":"decisao driver postgres","scope":"projeto:norteia"}'
+```
+  ALL CANDIDATES (BM25 body text + graph edges)
+        │  scope filter, exact dedup, per-note cap          free
+        ▼
+  deterministic hybrid ranking                              free
+        │  near-duplicate clustering (SimHash)              free
+        │  zero-evidence flagging (shadow only)             free
+        ▼
+  adaptive top-K selection                                  free
+        │  layered cache resolution (L1..L5)                free after first judgement
+        ▼
+  JEV relevance, in escalating waves                        PAID
+        │  early stopping between waves                     saves PAID work
+        │  progressive expansion, ambiguous minority only   PAID
+        │  gated injection screening, suspicious only       PAID
+        ▼
+  verdict propagation to near-duplicates                    free
+        ▼
+  survivors → full note text → consumer context budget
 ```
 
-Cada run grava `scope` e `documents_out_of_scope`. Convenção de layout em `PROJECT_AREAS`
-(`app/services/scope.py`): só subpastas de `30-Projetos/` são projetos — `50-Pessoal/perfil/` e
-`50-Pessoal/preferencias/` são pastas organizacionais, não projetos.
+**Near-duplicate clustering** — notes that are textually near-identical are judged once and the
+verdict is propagated to the cluster. Measured on 60 declared duplicate groups: pair precision
+1.0000, recall 0.9667, **zero false merges** at the chosen threshold of 0.88.
 
-### Graphify
+**Query-aware snippets** — instead of `content[:600]`, score each line by query-term coverage and
+keep the best contiguous window. A blind prefix cut removes the evidence and keeps the
+boilerplate, which lowers the judge's score: that is not a saving, it is a silent recall
+regression paid for with tokens.
 
-O Graphify 0.9.59 grava `graphify-out/` dentro do diretório analisado, então **não pode rodar no vault**
-(decisão já registrada no Cérebro: `decisao-graphify-out-fora-do-vault`). O Gateway mantém uma cópia
-somente-leitura dos `.md` em `data/vault_mirror/` e roda `graphify update` (só AST, sem LLM, ~3 s).
-A CLI não expõe score numérico; o `graph_score` vem da ordem da travessia BFS (sementes = 1,0; demais caem
-linearmente até 0,3). Um nó de heading sem corpo (ex.: o H1 da nota) é expandido com as seções seguintes.
+**Early stopping** — stop judging once the deterministic ranker's top candidate is confirmed
+relevant. This is what makes wave-based judging profitable at all (see §7).
 
-### JEV (TypeSafe `typesafe-sdk` 0.7.1, modelo `jev-1.13.0`)
+**Layered cache** — L1 exact, L2 normalized-term key, L3 query fingerprint (shadow), plus snippet
+and ranking caches. Keys are namespaced so a benchmark arm can never read another arm's work.
 
-- Estado mínimo: `state={"query"}`; cada candidato vai nas `instructions` do seu Noul com somente
-  `id, source, section, snippet, graph_score`.
-- **Lotes adaptativos**: enche o lote até `JEV_CONTEXT_BUDGET` (padrão 48k; limite documentado: 64k por request)
-  usando uma estimativa determinística com fator de segurança 1,35 (medido contra `usage.input_tokens` real).
-- Modos: `performance` (só relevância, padrão) e `strict` (relevância + injection **na mesma requisição**).
-- Thresholds centralizados (`config/jev.py`): KEEP ≥ 0,78; REVIEW ≥ 0,55; DROP < 0,55; QUARANTINE se injection ≥ 0,80.
-  `JEV_REVIEW_ACTION=keep` (padrão) ou `drop`. `JEV_FAILURE_MODE=fail_open|fail_closed`.
-- `JEV_SECOND_PASS` (só REVIEW) e `JEV_CONTRADICTION_CHECK` preparados, desligados por padrão. `Choice`/`Score` não são usados.
-- Retry: `RetryPolicy` oficial do SDK (429/5xx, backoff). O SDK 0.7.1 não expõe a contagem de retries → `retry_count = null`.
-- Versões registradas por run: `jev_model` pedido, `jev_model_resolved` (resposta da API), `jev_sdk_version`,
-  `jev_prompt_version`, `jev_config_version`.
-- Cache (`jev_cache` no SQLite, chave = hash(query, candidate_id, content_hash, jev_model, prompt_version, mode)):
-  ligado em `PROFILE=production`, **sempre desligado** em benchmark (`cache_enabled=false` gravado no run).
+---
 
-## Interfaces
+## 3. Requirements
 
-### MCP (preferencial para agentes)
+- **Python 3.14** (`requirements.txt` versions are pinned and verified against it)
+- A **JEV / TypeSafe API key** — only needed for the pipelines that use the paid judge. The
+  baseline pipeline, the whole test suite and the free-stage validator run without any key.
+- Optional: [`graphify`](https://pypi.org/project/graphify/) CLI for graph extraction; the
+  repository ships a pre-built graph for the example corpus, so it is not required to run anything
+  here.
+- Optional: Ollama / vLLM / Anthropic / OpenAI credentials for end-to-end consumer benchmarks.
 
-`.venv\Scripts\python.exe -m app.mcp.server` (stdio, SDK `mcp` 2.2 `MCPServer`). Ferramentas, todas só leitura:
+---
+
+## 4. Installation
+
+```bash
+git clone https://github.com/GabezFC/Memory_Gateway.git
+cd Memory_Gateway
+
+python -m venv .venv
+# Linux / macOS:
+source .venv/bin/activate
+# Windows:
+.venv\Scripts\activate
+
+pip install -r requirements.txt
+cp .env.example .env          # Windows: copy .env.example .env
+```
+
+Then edit `.env`. Nothing in it is required to run the tests or the free-stage validator.
+
+---
+
+## 5. Configuration
+
+All configuration is environment-based; see `.env.example`, where every variable is documented.
+
+### The vault
+
+**The project has no hardcoded paths and works on any machine.** The corpus directory is resolved
+with this precedence:
+
+1. an explicit `--vault <path>` argument on any script that takes one
+2. `MEMORY_GATEWAY_VAULT` in your environment or `.env`
+3. `OBSIDIAN_VAULT_PATH` (legacy alias, still supported)
+4. **the bundled example corpus** at `data/synthetic_vault`
+
+Because of step 4, a fresh clone runs end to end with **zero configuration**. Absolute paths,
+relative paths and `~` all work:
+
+```bash
+MEMORY_GATEWAY_VAULT=./data/synthetic_vault
+MEMORY_GATEWAY_VAULT=/home/user/notes
+MEMORY_GATEWAY_VAULT=C:/Users/YourUser/Documents/MyVault
+```
+
+A path that does not exist fails immediately with a message telling you which variable to set —
+it never silently indexes an empty directory.
+
+### The example corpus
+
+`data/synthetic_vault` is **520 generated notes** with a machine-readable `MANIFEST.json`
+declaring ground truth: 60 duplicate groups, 12 prompt-injection notes (6 malicious, 6 benign
+decoys that merely *discuss* prompts), 60 archived notes and 140 planted facts. `benchmark/
+synthetic_questions.json` holds **120 questions** with `expected_sources`, including deliberately
+unanswerable ones so hallucination is measurable.
+
+This corpus is what makes the benchmark reproducible by a stranger. It contains no personal data.
+
+---
+
+## 6. Running
+
+```bash
+# REST API + dashboard on http://127.0.0.1:8000
+python -m app.main
+
+# one search from the CLI
+python -m memory_gateway search "your question" --pipeline graphify_jev --show-context
+
+# rebuild the mirror and graph for your own vault
+python -m memory_gateway index
+
+# prove the vault was never written to
+python -m memory_gateway vault-check --save before.json
+python -m memory_gateway vault-check --compare before.json   # exit 1 if any .md changed
+```
+
+### Tests
+
+```bash
+python -m pytest tests/ -q
+```
+
+No network, no API key, no paid calls — JEV, Graphify, the providers and the agents are all faked.
+
+### Free-stage validation (0 API calls)
+
+```bash
+python scripts/validate_free_stages.py
+```
+
+Validates every deterministic stage against the corpus manifest's ground truth: duplicate
+clustering precision/recall, cache-key behaviour across paraphrases, injection screening,
+retrieval recall@K, adaptive-K safety versus the real answer position, and the zero-evidence rule.
+Runs in seconds and costs nothing. **Run this before spending money on a benchmark.**
+
+### The optimization benchmark (spends real tokens)
+
+```bash
+python scripts/bench_optimizations.py \
+  --vault ./data/synthetic_vault \
+  --arms all \
+  --two-pass \
+  --out reports/opt_stack_v2.json
+```
+
+Use `--dry-run` to plan without calling the API, `--limit N` to cap questions, and `--arms
+baseline,full_stack` to run a subset.
+
+---
+
+## 7. Benchmark methodology
+
+Three properties make the numbers trustworthy, and each exists because its absence produced a
+wrong result that was believed for a while.
+
+**The baseline arm is frozen and always runs first.** `OptimizationConfig.baseline()` is never
+edited to look better; a new behaviour gets a new flag. Every other arm is compared against it on
+the same questions in the same order.
+
+**Cache isolation is per-arm by default.** The first run of this benchmark had the baseline
+reporting *zero* judge tokens on three questions and winning by 2x — it was reading judgements
+cached by an earlier smoke run. Comparing a warm arm against a cold one measures run order, not
+optimization. `--isolation arm` gives every arm its own namespace so its cost is attributable to
+its own mechanisms.
+
+**Cache arms are measured over two passes.** A cache's entire value is amortization, so pass 1 is
+cold (pays full price, populates) and pass 2 replays the questions including paraphrases. Both
+figures are reported; the headline is always the **cold** one. Reporting only the warm pass would
+be dishonest, reporting only the cold pass would claim caches are useless.
+
+**Recall is measured on the delivered context**, not on the candidate pool. A note the judge kept
+but the context builder dropped for budget reasons was not delivered. Any token saving that pushes
+a relevant note out of the context is counted as a recall loss, wherever it happened.
+
+---
+
+## 8. Results
+
+> **Status of every number below: measured on the 520-note synthetic corpus over 120 questions,
+> with the paid judge, after the correctness fixes described in §9.** Results from before those
+> fixes have been discarded, not re-labelled — see the warning at the end of this section.
+
+### Free stages (deterministic, 0 API calls, reproducible by anyone)
+
+| Stage | Result | Verdict |
+| --- | --- | --- |
+| Near-duplicate clustering | pair precision **1.0000**, recall 0.9667, 0 false merges | safe |
+| Injection screening | catches **6/6** malicious notes; flags 47.9% of ordinary notes | safe as a *gate*, unusable as a filter |
+| L3 query-fingerprint cache | 20/20 paraphrase pairs matched, 0 unexpected collisions | shadow only |
+| Adaptive-K plans vs. real answer position | **0** unsafe plans out of 120 | safe |
+| Zero-evidence rule | flags 48.8% of candidates — but **9 of them are ground truth** | **shadow only, never promoted** |
+
+The zero-evidence row is the one worth reading twice: a rule that drops 48.8% of candidates for
+free looks extremely attractive, and it would have silently destroyed recall on 9 questions. It is
+implemented, measured every run, and deliberately never allowed to serve.
+
+### Optimization stack (paid, 120 questions, cold pass = attributable cost)
+
+Each arm adds exactly one mechanism to the one above it, so a difference between consecutive rows
+is attributable to that mechanism. `judge` is the cold pass; `warm` is the same arm replayed with
+its cache populated. **`regr` is the number of questions whose recall got worse than baseline.**
+
+| arm | judge tokens | vs baseline | warm | context | total | amp | recall | req | regr |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `baseline` (frozen) | 257,533 | — | — | 57,936 | 315,469 | 5.45 | 0.900 | 120 | — |
+| `01_profiling_shadow` | 257,533 | +0.0% | — | 57,783 | 315,316 | 5.46 | 0.900 | 120 | **0** |
+| `02_near_dedup` | 257,375 | −0.1% | — | 57,966 | 315,341 | 5.44 | 0.900 | 120 | **0** |
+| `03_layered_cache` | 262,697 | +2.0% | **0** | 55,999 | 318,696 | 5.69 | 0.900 | 120 | **0** |
+| `04_adaptive_k_early_stop` | 237,926 | **−7.6%** | 71,011 | 56,955 | 294,881 | 5.18 | 0.900 | 154 | **0** |
+| `05_smart_snippet` | **237,237** | **−7.9%** | 71,685 | 56,672 | 293,909 | 5.19 | 0.900 | 153 | **0** |
+| `06_progressive` | 243,193 | −5.6% | 77,641 | 56,629 | 299,822 | 5.29 | 0.900 | 160 | **0** |
+| `07_strict_gating` | 243,644 | −5.4% | 76,596 | 55,999 | 299,643 | 5.35 | 0.900 | 161 | **0** |
+| `full_stack` | 242,190 | −6.0% | 76,638 | 56,045 | 298,235 | 5.32 | 0.900 | 159 | **0** |
+
+**How to read this.**
+
+*The best arm saves 7.9% of judge tokens and zero recall.* Mean recall is 0.900 on every single
+arm — identical to the baseline — and no arm regressed a single question. Routing agreement with
+the baseline stays between 0.947 and 0.994.
+
+*Adding more mechanisms is not monotonically better.* The stack peaks at `05_smart_snippet` and
+then gets **worse**: progressive context and strict gating each add requests (153 → 160 → 161) and
+give the tokens back. They are kept in the codebase, measured every run, and are **not** part of
+the recommended configuration.
+
+*The cache dominates everything else, but only on repeat traffic.* The warm pass costs 71,011
+tokens against 237,926 cold — a **70% saving** — and `03_layered_cache`'s warm pass is literally
+**0** judge tokens. On first contact the same arm costs **+2.0%** (it pays to populate). A cache is
+worth exactly as much as your query repetition rate, and this benchmark reports both ends of that
+honestly instead of picking the flattering one.
+
+*Amplification barely moves* (5.45 → 5.18). This corpus answers most questions from one short note,
+so the context is small and the judge's fixed per-request cost dominates. The floor for one query
+is ~549 tokens, which is why a 7.9% judge saving only shifts the ratio slightly.
+
+**Leak invariant — the check that makes these numbers trustworthy:**
+
+| arm | candidates sent | routed | UNSELECTED | accounting closes |
+| --- | ---: | ---: | ---: | :---: |
+| `baseline` | 960 | 960 | 0 | ✅ |
+| `04_adaptive_k_early_stop` | 1,000 | 1,000 | **192** | ✅ |
+| `full_stack` | 1,000 | 1,000 | **194** | ✅ |
+
+The optimized arms deliberately refuse to pay for ~194 candidates, those candidates are now
+*visible* in the report, and context tokens stayed at **56,045 vs the baseline's 57,936**. Compare
+that with the contaminated run, where the same 194 candidates leaked into the context and pushed it
+to **117,196**. Every arm sums to exactly the number of candidates it sent — a benchmark that
+cannot prove this is not auditable.
+
+### The cost model, re-measured
+
+The previously recorded fit was `tokens ≈ 340 × requests + 209 × questions` with ~0.3% error.
+**That error figure does not reproduce on this run.** Measured against all nine arms:
+
+| arm | predicted | actual | error |
+| --- | ---: | ---: | ---: |
+| `baseline` | 236,633 | 257,533 | **+8.1%** |
+| `04_adaptive_k_early_stop` | 221,232 | 237,926 | **+7.0%** |
+| `full_stack` | 223,768 | 242,190 | **+7.6%** |
+
+The model **underestimates by 7–8% consistently**, so its *shape* holds (requests and questions are
+the right variables, and the relative cost of a request versus a question is unchanged) but its
+constants are fitted to a smaller sample than this one. The structural conclusions that depend only
+on the ratio — an extra request costs ~1.6 candidate-questions; stage-splitting is a bet on
+skipping later stages — are unaffected. The absolute constants should be re-fitted before being
+quoted as precise.
+
+### ⚠ Superseded results
+
+An earlier report (`reports/opt_stack_FINAL.json`) circulated a **−3.0%** headline for the full
+stack. **That number is invalid and must not be cited.** Two defects contaminated it:
+
+1. **Context leak.** Candidates the optimizer deliberately chose *not* to pay for were marked
+   `UNJUDGED` rather than `UNSELECTED`, and the default `fail_open` policy let them into the
+   delivered context. 194 such candidates accounted for 60,534 tokens — **51.7% of that arm's
+   entire context** — doubling context tokens (58,219 → 117,196) versus the baseline while the arm
+   reported a judge-token saving. The optimization was moving cost from the judge to the consumer
+   model and calling it a win.
+2. **Recall regression.** A snippet re-cut that saved nine tokens dropped the answer token on one
+   question, flipping the judge from 0.88 `KEEP` to 0.05 `DROP` and taking that question's recall
+   from 1.0 to 0.0.
+
+Both are fixed, and both now have regression tests that were **verified to fail when the fix is
+reverted** — a test that cannot detect the bug it names is decoration. The benchmark additionally
+enforces a leak invariant (`routing_accounts_for_all_candidates`) so the accounting must close on
+every future run. The dashboard labels results `Verified` / `Experimental` / `Invalid – superseded`
+so a discarded number cannot quietly return.
+
+---
+
+## 9. What was measured and rejected
+
+These are kept deliberately. A rejected optimization that is not written down gets re-implemented.
+
+**Hoisting the judge's static criteria.** The relevance criteria are re-sent with every candidate:
+82 tokens × ~50 candidates ≈ 4,100 tokens per query of pure repetition, and the SDK allows
+declaring them once in `state`. Tested against the real API: input fell 3,814 → 2,971 (**−22.1%**)
+— **and the judgement changed.** A ground-truth note moved 0.79 `KEEP` → 0.75 `REVIEW`, 2 of 12
+routing decisions flipped, mean |Δ| 0.08. The per-question criteria are part of what the judge
+evaluates, not framing that can be hoisted. **Not adopted.**
+
+**Adaptive-K without early stopping.** Waves alone cost **+20.0%** (308,937 vs 257,533 judge
+tokens): with no stop rule the escalation fired on 120/120 queries, so every query paid two
+requests to ask what one request could have carried. A request costs ~340 tokens ≈ 1.6 candidate
+questions. With early stopping enabled the same mechanism became a **−7.9%** saving.
+`OptimizationConfig.validate()` now *rejects* the combination outright.
+
+> This is the sharpest lesson in the project: **splitting work into stages is not a saving, it is
+> a bet that the later stages will be skipped.** Without the mechanism that skips them, it is a
+> loss.
+
+**A smaller first stage for progressive context.** Shrinking every candidate to 120 tokens up
+front, then paying an extra request to re-expand the one or two that landed near the threshold,
+measured as a net loss. Stage 1 now uses the normal budget; stage 2 exists only to buy *more*
+context for genuine ambiguity, never to undo a cut this same pipeline made.
+
+**Min-max normalization in the pre-filter.** Gave 1.0 to every tied candidate, letting 29
+irrelevant notes outrank the one whose name matched the query. Caught by a unit test; now uses
+rank percentile with tie mediation.
+
+### The cost model
+
+Least-squares fit over real requests on this corpus:
+
+```
+input_tokens ≈ 340 × REQUESTS + 209 × QUESTIONS        (residuals within ±136 on 1,800–2,600)
+```
+
+Three consequences drive every design decision in `app/services/jev.py`:
+
+1. An extra request costs ~1.6 candidate-questions, so waves must usually *not* escalate.
+2. Halving the candidate count does not halve the cost (8→4 candidates is −42%, not −50%).
+3. The floor for one query is ~549 tokens. Any amplification target must be stated against that
+   floor, not against zero.
+
+---
+
+## 10. Project structure
+
+```
+app/
+  main.py            FastAPI app (REST + dashboard)
+  gateway/           MemoryGateway: routing, context building, metrics, persistence
+  retrieval/         pipelines.py (frozen baseline) · pipelines_opt.py (the cascade)
+  services/          jev.py · snippet.py · near_dup.py · jev_cache.py · adaptive.py
+                     prefilter.py · injection_screen.py · query_fp.py · obsidian.py
+  api/ mcp/ cli/     REST routes · MCP stdio server · command line
+  adapters/agents/   consumer adapters (isolated; nothing in core depends on them)
+config/              retrieval.py · jev.py · optimization.py · pricing.py · benchmark.py
+scripts/             bench_optimizations.py · validate_free_stages.py · audit_pipeline.py
+                     gen_synthetic_corpus.py · calibrate_heuristics.py
+tests/               282 tests, no network, no keys
+data/synthetic_vault/  520-note example corpus + MANIFEST.json ground truth
+benchmark/           synthetic_questions.json (120 questions)
+frontend/            dashboard (vanilla ES modules, no build step)
+docs/                ENVIRONMENT.md · JEV_API.md
+```
+
+Two pipelines live side by side permanently: `pipelines.py` is the **frozen baseline** and
+`pipelines_opt.py` is the cascade. The baseline is never edited to improve a comparison.
+
+---
+
+## 11. Interfaces
+
+**MCP (preferred for agents)** — `python -m app.mcp.server`, stdio. Read-only tools:
 `memory_search`, `memory_search_baseline`, `memory_search_graphify`, `memory_search_graphify_jev`,
-`memory_benchmark`, `memory_get_run`, `memory_stats`. Teste: `.venv\Scripts\python.exe scripts\mcp_smoke.py`.
+`memory_benchmark`, `memory_get_run`, `memory_stats`.
 
-### Hermes (consumidor de primeira classe)
+**REST** — `GET /health` · `POST /memory/search[/{baseline,graphify,graphify-jev}]` ·
+`POST /benchmark/{run,run-all,estimate,threshold-sweep}` · `GET /benchmark/{runs,sessions,stats}` ·
+`POST /feedback/*` · `GET /system/{info,integrations,projects}`. Interactive docs at `/docs`.
 
-`integrations/hermes/hermes_home/config.yaml` é um **HERMES_HOME isolado** (não toca no perfil real do usuário)
-com o MCP `memory-gateway`, modelo local `qwen3:14b` via Ollama e:
-- `context_length` / `ollama_num_ctx: 65536` — o Hermes exige ≥ 64K de contexto;
-- `tools.tool_search: false` — com o bridge `tool_search/tool_call` padrão, o qwen3:8b entrou em loop de
-  chamadas malformadas (23 api calls, observado).
+**CLI** — `python -m memory_gateway {search,benchmark,sweep,stats,info,index,vault-check}`.
+
+Retrieved note content is **data, not instruction**. Consumers must never follow commands found
+inside retrieved notes; the injection screen and `QUARANTINE` routing exist for exactly this.
+
+### Scoping
+
+Projects and areas are discovered from vault paths — no names are hardcoded. Every search accepts
+a `scope`, applied *before* the judge (a narrow scope costs fewer tokens) and re-applied before
+building the context (defence in depth against cross-project leakage):
 
 ```bash
-export HERMES_HOME=C:/Users/fonse/Projetos_AI/Memory_Gateway/integrations/hermes/hermes_home
-hermes mcp test memory-gateway
-hermes -z "Chame memory_search com query='...' e responda citando a nota" --reasoning none -t memory-gateway --usage-file uso.json
+curl -X POST localhost:8000/memory/search/baseline \
+  -H "Content-Type: application/json" \
+  -d '{"query":"database driver decision","scope":"projeto:myproject"}'
 ```
 
-Para ligar no **seu** Hermes principal, adicione ao `C:\Users\fonse\AppData\Local\hermes\config.yaml`:
-```yaml
-mcp_servers:
-  memory-gateway:
-    command: C:\Users\fonse\Projetos_AI\Memory_Gateway\.venv\Scripts\python.exe
-    args: [-m, app.mcp.server]
-    cwd: C:\Users\fonse\Projetos_AI\Memory_Gateway
-    connect_timeout: 60
-    timeout: 300
-```
-(não foi alterado automaticamente). Alternativa HTTP: `POST http://127.0.0.1:8000/memory/search`.
+---
 
-### Claude Code / Codex / OpenCode
+## 12. Security and privacy
 
-- **Claude Code: validado em 2026-09-24** (login via navegador, conta Pro). O adapter (`app/adapters/agents/agents.py`)
-  isola cada chamada do estado global do usuário: config MCP vazia + `--strict-mcp-config`, `--no-session-persistence`
-  e `disableMemory` — sem isso, os ~14 MCPs globais do usuário e a auto-memória do projeto inflam o prompt a ~385k
-  tokens e contaminam repetições do benchmark (ver `docs/ENVIRONMENT.md`).
-- Codex: `[mcp_servers.memory-gateway]` em `~/.codex/config.toml`; adapter via `codex exec --json`.
-- OpenCode: detectado, sem credenciais → adapter preparado, **não validado**.
+- **Never commit `.env`.** It is gitignored; `.env.example` ships with fictional placeholders.
+- **The vault is read-only in code, not by convention.** All access goes through
+  `app/services/obsidian.py`, which validates that the path is inside the configured vault and
+  that the operation is in `READ_ONLY_OPERATIONS = {list, read, stat, hash}`. There is no write
+  function. `vault-check` proves it by hashing every `.md` before and after.
+- **Nothing derived from a private vault is published.** `data/`, `logs/`, `reports/`,
+  `benchmark.db` and `benchmark/questions.json` are all gitignored. Only the synthetic corpus and
+  `benchmark/questions.example.json` are versioned.
+- **Do not publish your own vault or its benchmark dataset.** A question file built from a real
+  vault contains real names, business decisions and note paths.
+- API keys are read from the environment only and are never logged, echoed, or persisted into
+  `benchmark.db`.
 
-### REST
+---
 
-`GET /health` · `POST /memory/search` · `POST /memory/search/{baseline,graphify,graphify-jev}` ·
-`POST /benchmark/run` · `POST /benchmark/run-all` · `POST /benchmark/estimate` · `GET /benchmark/jobs/{id}` ·
-`POST /benchmark/threshold-sweep` · `GET /benchmark/runs` · `GET /benchmark/runs/{run_id}` · `GET /benchmark/sessions` ·
-`GET /benchmark/stats` · `POST /feedback/false-negative` · `POST /feedback/label` · `POST /feedback/evaluation` ·
-`GET /system/info` · `GET /system/integrations`. Docs interativas: `/docs`.
+## 13. Limitations
 
-### CLI
+- **The paid pipeline is not the default for a reason.** On this corpus the baseline retriever
+  still delivers excellent recall at zero token cost and millisecond latency. `graphify_jev` is
+  worth its price when precision matters more than cost, not universally.
+- **Results are measured on a synthetic corpus.** It was generated to have known ground truth, and
+  its duplicate/injection/fact distribution is deliberate rather than natural. Real vaults differ;
+  validate on your own corpus before trusting a number.
+- **Judge scores are not calibrated to your domain.** Measured here, the judge scores some
+  *correct* notes 0.07–0.40, which is why `JEV_MIN_SURVIVORS` (a safety net returning top
+  retrieval candidates when the judge eliminates everything) exists at all.
+- **The injection screen over-flags.** 47.9% of ordinary notes trip it. It is safe as a gate that
+  decides who gets a paid injection question; it would be destructive as a filter.
+- **Graph retrieval alone cannot find body text.** The graph indexes labels (filenames, headings)
+  only, so answers living in a note's body are unreachable by graph traversal at any budget. This
+  is why retrieval is hybrid BM25 + graph rather than graph-only.
+- **`retry_count` is unavailable** — the SDK does not expose retry attempts. It is reported as
+  `null`, never estimated.
 
-```powershell
-.venv\Scripts\python.exe -m memory_gateway search "Como foi definida a arquitetura do Norteia?" [--pipeline baseline|graphify|graphify_jev] [--show-context] [--json]
-.venv\Scripts\python.exe -m memory_gateway benchmark                          # retrieval-only, 3 pipelines, dataset completo
-.venv\Scripts\python.exe -m memory_gateway benchmark --pipeline graphify_jev
-.venv\Scripts\python.exe -m memory_gateway benchmark --agent hermes --questions q02 q08    # end-to-end
-.venv\Scripts\python.exe -m memory_gateway benchmark --agent generic --provider ollama --model qwen3:8b
-.venv\Scripts\python.exe -m memory_gateway benchmark --dry-run --repetitions 3            # estimated_runs
-.venv\Scripts\python.exe -m memory_gateway sweep [--extended]
-.venv\Scripts\python.exe -m memory_gateway stats [--session <id>]
-.venv\Scripts\python.exe -m memory_gateway info | index | vault-check
-```
+Unknown values are reported as `null` throughout. Nothing is estimated and presented as measured.
 
-## Benchmark
+---
 
-- Unidade: pergunta + pipeline + agente + modelo + configuração. Dataset: `benchmark/questions.json`
-  (12 perguntas reais: projetos, decisões, programação, conceitos, ferramentas, erros, cruzamento, 2 sem resposta),
-  com `expected_sources` → métrica `expected_sources_found.recall` por run.
+## 14. Status
 
-> **Privacidade do dataset.** `benchmark/questions.json` é derivado do vault pessoal (nomes reais,
-> decisões de negócio, caminhos de notas privadas), então é **gitignored e nunca publicado**. O
-> repositório traz `benchmark/questions.example.json`: mesmo schema e mesmas categorias, conteúdo
-> sintético. O código usa o arquivo privado quando ele existe e cai no exemplo quando não existe,
-> então um clone novo roda sem configuração. Para apontar para outro dataset: `BENCHMARK_QUESTIONS`.
-> Um dataset útil precisa de perguntas com resposta conhecida no seu vault **e** perguntas
-> deliberadamente sem resposta (para medir alucinação) — veja o exemplo como modelo.
-- **Retrieval-only** (sem geração) e **end-to-end** (retrieval + JEV + geração por UM consumidor por vez).
-  Dentro de um consumidor, prompt/modelo/parâmetros são idênticos; só o retrieval muda. Prompt único neutro:
-  `app/gateway/context_builder.py::CONSUMER_PROMPT_TEMPLATE`.
-- Ordem dos pipelines aleatória por pergunta (seed registrada), warm-up fora das estatísticas,
-  repetições 1/3/5/10 com mean/median/p95/min/max/std, cache desligado.
-- Consumidores não são misturados automaticamente: você escolhe quais participam.
-- Threshold sweep: o JEV é chamado **uma vez** por pergunta e o roteamento é reaplicado em código para cada limiar.
-
-### Tokens e custos
-
-Separados em: `candidate_tokens_before_filter`, `context_tokens`, `jev_input_tokens`/`jev_output_tokens` (reais, da API),
-`model_input_tokens`/`model_output_tokens` (reportados pelo provedor), `agent_tokens` (total do agente, com system prompt
-e ferramentas) e `agent_overhead_tokens`. Preços apenas verificados (`config/pricing.py`): JEV US$ 0,042/Mtok de entrada,
-saída gratuita; modelos locais = 0. Preço ou token desconhecido → `null` ("unavailable"), nunca estimado.
-`break_even()` reporta overhead do JEV, economia de contexto, `net_cost_change` e `net_latency_change` — sem veredito.
-
-### Auditoria determinística do pipeline (0 tokens de LLM)
-
-```powershell
-.venv\Scripts\python.exe scripts\audit_pipeline.py          # tabela legível
-.venv\Scripts\python.exe scripts\audit_pipeline.py --json    # para automação
-```
-
-Lê `benchmark.db` em modo somente-leitura e regenera o funil completo por pipeline: candidatos
-recuperados → removidos por dedup → tokens de candidato → enviados ao juiz → tokens do juiz →
-mantidos/descartados → sobreviventes → **contexto final**, mais latência por etapa, custo,
-eficiência e duplicação. É a forma barata de reauditar o sistema sem gastar um único token de
-modelo — rode isso antes de tirar qualquer conclusão sobre performance.
-
-Ao ler a saída: `context_reduction` alto **não** significa economia. Compare sempre com
-`total_tokens_spent` e `token_amplification`.
-
-### Feedback humano
-
-No frontend (Histórico → run): **Mark as False Negative** em candidatos descartados, avaliação 1–5
-(accuracy, completeness, groundedness, citation_quality) e rótulos de retrieval. `false_negative_rate` = marcados / descartados.
-
-## Testes
-
-```powershell
-.venv\Scripts\python.exe -m pytest tests -q
-```
-Sem rede e sem chaves: fakes para JEV, Graphify, providers e Hermes. Cobre dedup, token budget, roteamento por threshold,
-parsing/lotes do JEV, seleção de pipeline, proteção read-only, schema MCP, endpoints REST, métricas e custos.
-
-## Estrutura
-
-```
-app/          main.py · config.py · api/ · mcp/ · cli/ · gateway/ · retrieval/ · services/ · adapters/ · benchmark/ · database/ · schemas/
-config/       retrieval.py · jev.py · agents.py · pricing.py · benchmark.py
-benchmark/    questions.json
-frontend/     index.html · app.js · style.css
-integrations/ hermes/hermes_home/config.yaml
-memory_gateway/  entrypoint da CLI
-tests/ · scripts/ · docs/ · logs/ · data/ · benchmark.db
-```
-
-## Troubleshooting
-
-| Sintoma | Causa / solução |
+| Area | Status |
 | --- | --- |
-| `ModuleNotFoundError: typesafe_sdk` | usando o `python` do Hermes; use `.venv\Scripts\python.exe` |
-| Graphify sem resultados | `python -m memory_gateway index` para reconstruir o espelho e o grafo |
-| Hermes: "context window of 40,960 … minimum 64,000" | usar o HERMES_HOME isolado **sem** `-m` (o `-m` descarta o override de contexto) |
-| Hermes só "internal reasoning", sem resposta | qwen3:8b; use qwen3:14b (default do HERMES_HOME isolado) com `--reasoning none` |
-| JEV 429/529 | o SDK faz retry com backoff; contadores em `metrics.jev.rate_limit_count/overload_count` |
-| Acesso pela rede não abre | regra de firewall acima |
-| Qwen3 via Ollama direto gasta tokens pensando | o adapter envia `reasoning_effort: "none"` |
+| Test suite (282 tests) | **Verified** — passing, no network, no keys |
+| Free-stage validation | **Verified** — reproducible by anyone, 0 API calls |
+| Near-dedup, cache keys, injection gate, adaptive-K safety | **Verified** against corpus ground truth |
+| Optimization stack cost/recall (§8) | **Verified** — 120 questions, paid judge, leak invariant closes on every arm |
+| Context-leak fix (`UNSELECTED`) | **Verified** — 194 skipped candidates accounted for, context 56,045 vs 117,196 contaminated |
+| Recall-regression fix (`fit_or_keep`) | **Verified** — 0 regressed questions across all 9 arms |
+| Cost-model constants (340 / 209) | **Experimental** — shape holds, constants underestimate by 7–8% on this sample |
+| Zero-evidence drop rule | **Shadow only** — measured unsafe (flags 9 ground-truth notes), never promoted |
+| L3 cache promotion | **Shadow only** — awaiting a false-positive rate that justifies serving it |
+| Cache hit rate in production | **Not yet validated** — benchmark measures cold/warm, not real repetition rate |
+| Real-vault validation | **Not yet validated** — integration/robustness only; never mixed with synthetic numbers |
+| Consumer end-to-end benchmark | **Experimental** |
+| OpenCode adapter | **Not validated** — no credentials available |
+
+---
+
+## 15. License
+
+MIT — see [`LICENSE`](LICENSE).
