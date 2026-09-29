@@ -6,6 +6,14 @@ from typing import Any, Literal
 
 PipelineName = Literal["baseline", "graphify", "graphify_jev", "graphify_jev_opt"]
 PIPELINES: tuple[str, ...] = ("baseline", "graphify", "graphify_jev", "graphify_jev_opt")
+# Pipelines that call the paid judge (JEV): they alone carry judge tokens, judge cost and JEV
+# metadata. Centralized here so app/gateway/memory_gateway.py and app/benchmark/runner.py agree.
+JEV_PIPELINES: tuple[str, ...] = ("graphify_jev", "graphify_jev_opt")
+# Public default when an interface needs ONE concrete pipeline (not "auto"/MOL routing) and the
+# caller did not choose one — e.g. a single-pipeline benchmark run or a legacy default value.
+# `graphify_jev` stays the frozen reference pipeline; it is never the default (§1.3 da proposta
+# 2026-09-28-arquitetura).
+DEFAULT_EXPLICIT_PIPELINE = "graphify_jev_opt"
 UNAVAILABLE = None  # metrics a platform does not expose are stored as null, never estimated (§43, §103)
 
 

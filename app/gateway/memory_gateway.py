@@ -26,16 +26,13 @@ from app.gateway.optimizer import MemoryOptimizer
 from app.retrieval.baseline import BaselineIndex
 from app.retrieval.graphify_hybrid import GraphIndex
 from app.retrieval.pipelines import PIPELINE_FUNCS
-from app.schemas.models import PIPELINES, MemoryResult
+from app.schemas.models import JEV_PIPELINES, PIPELINES, MemoryResult
 from app.services.graphify import GraphifyService
 from app.services.jev import JevService
 from app.services.metrics import get_logger, jsonl
 from app.services.obsidian import ObsidianVault
 from app.services.pricing import cost_usd
 from app.services.scope import Scope, discover, parse_scope
-
-# Pipelines that call the paid judge: they alone carry judge tokens, judge cost and JEV metadata.
-JEV_PIPELINES = ("graphify_jev", "graphify_jev_opt")
 
 
 class MemoryGateway:
@@ -46,8 +43,13 @@ class MemoryGateway:
         self.retrieval_cfg = retrieval_cfg or RetrievalConfig()
         self.jev_cfg = jev_cfg or JevConfig()
         self.bench_cfg = bench_cfg or BenchmarkConfig()
-        # Token optimizations (§32). Default is the frozen baseline: every flag off.
-        self.opt_cfg = opt_cfg or OptimizationConfig()
+        # Token optimizations (§32) for the `graphify_jev_opt` cascade only — every other pipeline
+        # ignores this. Default is `default_cascade()` (§1.3): an interface that never configures
+        # this explicitly still gets the calibrated cascade, not a silent no-op. The frozen
+        # `OptimizationConfig.baseline()` reference stays reachable by passing it explicitly (e.g.
+        # a benchmark arm), and `graphify_jev` (not this pipeline) remains the frozen comparison
+        # point regardless of what this default is.
+        self.opt_cfg = opt_cfg or OptimizationConfig.default_cascade()
         # Automatic Memory Optimization Layer: runs inside EVERY search() (app/gateway/optimizer.py).
         self.optimizer = MemoryOptimizer(optimizer_cfg or OptimizerConfig())
         # Cache isolation handle. "" in production; a benchmark sets it so its arms cannot read

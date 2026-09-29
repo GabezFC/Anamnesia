@@ -14,6 +14,8 @@ import argparse
 import json
 import sys
 
+from app.schemas.models import PIPELINES
+
 
 def _gw():
     from app.gateway.memory_gateway import MemoryGateway
@@ -59,7 +61,7 @@ def cmd_benchmark(a):
     if a.questions:
         qs = [q for q in qs if q["id"] in set(a.questions)]
     consumers = [{"agent": a.agent, "provider": a.provider, "model": a.model}] if a.agent else []
-    pipelines = a.pipeline or ["baseline", "graphify", "graphify_jev"]
+    pipelines = a.pipeline or list(PIPELINES)
     plan = estimate_plan(len(qs), pipelines, consumers, a.repetitions)
     print(f"plano: {plan}", file=sys.stderr)
     if a.dry_run:
@@ -151,7 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("search")
     s.add_argument("query")
-    s.add_argument("--pipeline", default="auto", choices=["auto", "baseline", "graphify", "graphify_jev"])
+    s.add_argument("--pipeline", default="auto", choices=["auto", *PIPELINES])
     s.add_argument("--max-results", type=int, default=10)
     s.add_argument("--jev-mode", choices=["performance", "strict"])
     s.add_argument("--threshold", type=float)
@@ -159,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_search)
     b = sub.add_parser("benchmark")
-    b.add_argument("--pipeline", action="append", choices=["baseline", "graphify", "graphify_jev"])
+    b.add_argument("--pipeline", action="append", choices=list(PIPELINES))
     b.add_argument("--questions", nargs="*")
     b.add_argument("--agent", choices=["hermes", "claude_code", "codex", "opencode", "generic"])
     b.add_argument("--provider")

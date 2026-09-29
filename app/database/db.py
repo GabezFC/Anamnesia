@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from app.schemas.models import DEFAULT_EXPLICIT_PIPELINE
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   session_id TEXT PRIMARY KEY, created_at REAL, kind TEXT, config_json TEXT, notes TEXT
@@ -145,7 +147,7 @@ class Database:
                     ev.get("pipeline"), ev.get("accuracy"), ev.get("completeness"), ev.get("groundedness"),
                     ev.get("citation_quality"), ev.get("notes")))
 
-    def false_negative_rate(self, pipeline: str = "graphify_jev") -> dict:
+    def false_negative_rate(self, pipeline: str = DEFAULT_EXPLICIT_PIPELINE) -> dict:
         dropped = self.query("SELECT COUNT(*) n FROM candidates c JOIN runs r ON r.run_id=c.run_id"
                              " WHERE r.pipeline=? AND c.decision IN ('DROP','QUARANTINE')", (pipeline,))[0]["n"]
         fn = self.query("SELECT COUNT(*) n FROM false_negatives WHERE pipeline=?", (pipeline,))[0]["n"]
