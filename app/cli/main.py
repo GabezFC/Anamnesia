@@ -6,6 +6,7 @@
   python -m memory_gateway stats
   python -m memory_gateway info
   python -m memory_gateway vault-check [--save FILE | --compare FILE]
+  python -m memory_gateway vault-lint [--vault PATH] [--json]
   python -m memory_gateway index
 """
 from __future__ import annotations
@@ -15,6 +16,7 @@ import json
 import sys
 
 from app.schemas.models import PIPELINES
+from app.services.vault_lint import MAX_NOTE_CHARS as MAX_NOTE_CHARS_LITERAL
 
 
 def _gw():
@@ -144,6 +146,19 @@ def cmd_vault_check(a):
         sys.exit(0 if ok else 1)
 
 
+def cmd_vault_lint(a):
+    from config.retrieval import resolve_vault_path, validate_vault_path
+    from app.services.vault_lint import MAX_NOTE_CHARS, lint
+    try:
+        vault = validate_vault_path(resolve_vault_path(a.vault))
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        sys.exit(str(exc))
+    report = lint(vault, max_note_chars=a.max_note_chars or MAX_NOTE_CHARS)
+    if not _print(report.to_dict(), a.json):
+        print(report.render())
+    sys.exit(0 if report.total == 0 else 1)
+
+
 def cmd_index(a):
     print(json.dumps(_gw().warm(), ensure_ascii=False, indent=2, default=str))
 
@@ -187,6 +202,11 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--compare")
     v.set_defaults(fn=cmd_vault_check)
     sub.add_parser("index").set_defaults(fn=cmd_index)
+    vl = sub.add_parser("vault-lint", help="lint determinístico READ-ONLY do vault (saída 1 se houver itens)")
+    vl.add_argument("--vault", help="caminho do vault (default: vault configurado no projeto)")
+    vl.add_argument("--max-note-chars", type=int, help=f"limite de tamanho de nota (default {MAX_NOTE_CHARS_LITERAL})")
+    vl.add_argument("--json", action="store_true")
+    vl.set_defaults(fn=cmd_vault_lint)
     return p
 
 

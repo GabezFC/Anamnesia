@@ -45,16 +45,20 @@ class ObsidianVault:
         return self.root.is_dir()
 
     # -- read operations ----------------------------------------------------
-    def list_markdown(self) -> list[str]:
+    def list_all(self) -> list[str]:
+        """Every non-hidden file, any extension. Read-only, same walk as `list_markdown`."""
         self._guard("list")
         out: list[str] = []
         for dirpath, dirnames, filenames in os.walk(self.root):
             dirnames[:] = [d for d in dirnames if d not in self.excluded_dirs and not d.startswith(".")]
             for fn in filenames:
-                if fn.lower().endswith(".md"):
-                    rel = Path(dirpath, fn).relative_to(self.root).as_posix()
-                    out.append(rel)
+                if fn.startswith("."):
+                    continue
+                out.append(Path(dirpath, fn).relative_to(self.root).as_posix())
         return sorted(out)
+
+    def list_markdown(self) -> list[str]:
+        return [rel for rel in self.list_all() if rel.lower().endswith(".md")]
 
     def read(self, rel_path: str) -> str:
         p = self._guard("read", Path(rel_path))
