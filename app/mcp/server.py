@@ -31,6 +31,7 @@ from mcp.server.mcpserver import MCPServer  # noqa: E402
 
 from app.benchmark.runner import BenchmarkRunner, load_questions  # noqa: E402
 from app.benchmark.statistics import aggregate_stats  # noqa: E402
+from app.schemas.models import PIPELINES  # noqa: E402
 from config import env_str  # noqa: E402
 
 logging.getLogger().handlers.clear()  # stdout is the MCP channel; never print to it
@@ -47,7 +48,7 @@ server = MCPServer(
     version="0.2.0",
 )
 _gateway = None
-PipelineT = Literal["auto", "baseline", "graphify", "graphify_jev"]
+PipelineT = Literal[("auto",) + PIPELINES]
 COMPACT_METRICS = ("pipeline", "context_tokens", "total_tokens_spent", "total_latency_ms",
                    "result_cache_hit", "error")
 
@@ -83,7 +84,8 @@ def _search(query: str, pipeline: str, max_results: int, scope: str | None = Non
 def memory_search(query: str, pipeline: PipelineT = "auto", max_results: int = 10,
                   scope: str | None = None) -> dict:
     """Recupera contexto relevante da memória Obsidian do usuário para a pergunta `query`.
-    pipeline: auto (padrão, otimizado), baseline, graphify ou graphify_jev (juiz pago).
+    pipeline: auto (padrão, otimizado), baseline, graphify, graphify_jev_opt (juiz pago com
+    otimizações) ou graphify_jev (juiz pago, referência congelada).
     scope: opcional, ex. "projeto:<slug>" ou "area:<Area>"."""
     return _search(query, pipeline, max_results, scope)
 

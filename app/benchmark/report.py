@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from app.benchmark.statistics import describe
+from app.schemas.models import PIPELINES
 from app.services.pricing import break_even
 
 ROWS = [("Latency ms (median)", "total_latency_ms"), ("Retrieval ms", "retrieval_latency_ms"),
@@ -11,7 +12,7 @@ ROWS = [("Latency ms (median)", "total_latency_ms"), ("Retrieval ms", "retrieval
         ("Model input tokens", "model_input_tokens"), ("Model output tokens", "model_output_tokens"),
         ("Agent total tokens", "agent_tokens"), ("Generation ms", "generation_latency_ms"),
         ("Total cost USD", "total_cost")]
-PIPES = ("baseline", "graphify", "graphify_jev")
+PIPES = PIPELINES
 
 
 def _fmt(v):

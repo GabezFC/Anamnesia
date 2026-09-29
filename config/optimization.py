@@ -147,6 +147,27 @@ class OptimizationConfig:
                    progressive_context=True, strict_gating=True, query_profiling=True,
                    record_shadow_metrics=True)
 
+    @classmethod
+    def default_cascade(cls) -> "OptimizationConfig":
+        """Config `graphify_jev_opt` uses when an interface (REST/MCP/CLI/benchmark) calls it
+        without an explicit `OptimizationConfig` (§1.3/§5.2 da proposta 2026-09-28). Every flag
+        turned on here was independently calibrated and measured to be a net win (see the
+        per-field comments above); the two flags this method leaves off stay off for the same
+        reason `all_on()` leaves them off:
+
+          - zero_evidence_drop: `validate()` VETOES this unconditionally — measured to flag 9
+            ground-truth notes out of 1,419 candidates.
+          - cache_promote_l3: requires L3 to have been measured in shadow mode first (§12); it is
+            a promotion decision, not a default.
+
+        Identical to `all_on()` today. Kept as a separate name because the two names answer
+        different questions — `all_on()` is "every safe stage, for measurement/sweeps";
+        `default_cascade()` is "what production serves when nobody configured anything" — and
+        they are free to diverge later without moving `OptimizationConfig.baseline()`, which stays
+        frozen (§27) regardless of what this method returns.
+        """
+        return cls.all_on()
+
     def with_(self, **kw) -> "OptimizationConfig":
         return replace(self, **kw)
 

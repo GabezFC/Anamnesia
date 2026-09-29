@@ -706,6 +706,28 @@ def test_all_on_keeps_risky_flags_in_shadow():
     assert a.zero_evidence_shadow is True and a.cache_l3_shadow is True
 
 
+def test_default_cascade_has_the_calibrated_flags_on():
+    """§1.3 da proposta 2026-09-28: this is what graphify_jev_opt uses when no interface
+    configures it explicitly, so it must actually turn the measured-safe stages on."""
+    d = OptimizationConfig.default_cascade()
+    assert d.enabled is True
+    for flag in ("near_dedup", "adaptive_k", "early_stopping", "layered_cache", "smart_snippet",
+                 "progressive_context", "strict_gating", "query_profiling"):
+        assert getattr(d, flag) is True, flag
+    # same two risky mechanisms as all_on(): never served without more measurement
+    assert d.zero_evidence_drop is False
+    assert d.cache_promote_l3 is False
+
+
+def test_default_cascade_does_not_change_baseline():
+    """default_cascade() is a new named config; baseline() must stay the frozen every-flag-off
+    reference regardless of what default_cascade() returns."""
+    b = OptimizationConfig.baseline()
+    OptimizationConfig.default_cascade()
+    assert b.enabled is False
+    assert b.active_flags() == []
+
+
 def test_with_is_non_mutating():
     b = OptimizationConfig.baseline()
     c = b.with_(near_dedup=True)

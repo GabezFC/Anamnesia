@@ -19,7 +19,7 @@ from typing import Any, Callable
 from config.benchmark import ALLOWED_REPETITIONS, SWEEP_THRESHOLDS
 from app.gateway.context_builder import render_prompt
 from app.gateway.token_budget import estimate_tokens
-from app.schemas.models import PIPELINES
+from app.schemas.models import JEV_PIPELINES, PIPELINES
 from app.services.metrics import jsonl
 from app.services.pricing import add_costs, break_even, cost_usd
 
@@ -34,7 +34,8 @@ def estimate_plan(n_questions: int, pipelines: list[str], consumers: list[dict],
     """§82: runs (and JEV cost when a previous average exists) before executing."""
     n_consumers = max(1, len(consumers))
     runs = n_questions * len(pipelines) * n_consumers * repetitions
-    jev_runs = n_questions * n_consumers * repetitions * (1 if "graphify_jev" in pipelines else 0)
+    jev_pipelines_requested = sum(1 for p in pipelines if p in JEV_PIPELINES)
+    jev_runs = n_questions * n_consumers * repetitions * jev_pipelines_requested
     est_cost = None
     if avg_jev_tokens is not None:
         est_cost = cost_usd(int(avg_jev_tokens * jev_runs), 0, "jev-1.13.0")

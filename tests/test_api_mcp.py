@@ -77,7 +77,7 @@ def test_health(client):
     assert r.json() == {"status": "ok", "vault_exists": True}
 
 
-@pytest.mark.parametrize("pipeline", ["baseline", "graphify", "graphify_jev"])
+@pytest.mark.parametrize("pipeline", ["baseline", "graphify", "graphify_jev", "graphify_jev_opt"])
 def test_memory_search_pipelines(client, pipeline):
     r = client.post("/memory/search", json={"query": "stack backend FastAPI", "pipeline": pipeline})
     assert r.status_code == 200, r.text
@@ -101,6 +101,26 @@ def test_graphify_jev_filters_irrelevant(client):
 def test_invalid_pipeline_422(client):
     r = client.post("/memory/search", json={"query": "x", "pipeline": "nope"})
     assert r.status_code == 422
+
+
+def test_graphify_jev_opt_uses_default_cascade_without_explicit_config(client):
+    """§1.3: an interface that never builds an OptimizationConfig itself must still get the
+    calibrated cascade, not a silent fallback to the frozen graphify_jev behaviour."""
+    body = client.post("/memory/search", json={"query": "stack", "pipeline": "graphify_jev_opt"}).json()
+    assert body["pipeline"] == "graphify_jev_opt"
+    assert body["metrics"]["opt_flags"], "expected OptimizationConfig.default_cascade() flags to be active"
+
+
+def test_benchmark_run_all_uses_every_pipeline_by_default(client):
+    body = client.post("/benchmark/run-all", json={"questions": ["stack backend"], "repetitions": 1,
+                                                    "warmup": False}).json()
+    assert body["config"]["pipelines"] == ["baseline", "graphify", "graphify_jev", "graphify_jev_opt"]
+
+
+def test_benchmark_run_defaults_to_graphify_jev_opt(client):
+    body = client.post("/benchmark/run", json={"questions": ["stack backend"], "repetitions": 1,
+                                                "warmup": False}).json()
+    assert body["config"]["pipelines"] == ["graphify_jev_opt"]
 
 
 def test_get_run_after_search(client):
@@ -171,6 +191,7 @@ def test_mcp_minimal_toolset_is_default(monkeypatch, _restore_mcp_module):
     assert {t.name for t in tools} == EXPECTED_TOOLS_MINIMAL
     props = _schema(tools[0])["properties"]
     assert props["pipeline"].get("default") == "auto"
+    assert props["pipeline"].get("enum") == ["auto", "baseline", "graphify", "graphify_jev", "graphify_jev_opt"]
     assert "scope" in props
 
 

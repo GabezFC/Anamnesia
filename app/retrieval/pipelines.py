@@ -12,7 +12,7 @@ from typing import Any
 
 from app.gateway.token_budget import estimate_tokens
 from app.retrieval.graphify_hybrid import hybrid_search
-from app.schemas.models import Candidate
+from app.schemas.models import PIPELINES, Candidate
 from app.services.dedup import deduplicate, preprocess
 from app.services.jev import QUARANTINE
 from app.services.obsidian import split_sections
@@ -181,3 +181,6 @@ def _optimized(gw, query: str, max_results: int, jev=None):
 
 
 PIPELINE_FUNCS["graphify_jev_opt"] = _optimized
+
+assert set(PIPELINE_FUNCS) == set(PIPELINES), (
+    "PIPELINE_FUNCS must register exactly the pipelines in app.schemas.models.PIPELINES")

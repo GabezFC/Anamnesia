@@ -13,11 +13,12 @@ from app.adapters.registry import detect_all
 from app.benchmark.evaluator import validate_evaluation, validate_label
 from app.benchmark.runner import BenchmarkRunner, estimate_plan, load_questions
 from app.benchmark.statistics import aggregate_stats
+from app.schemas.models import DEFAULT_EXPLICIT_PIPELINE, PIPELINES
 
 router = APIRouter()
 _state: dict = {"gateway": None, "jobs": {}}
-Pipeline = Literal["auto", "baseline", "graphify", "graphify_jev"]
-BenchPipeline = Literal["baseline", "graphify", "graphify_jev"]
+Pipeline = Literal[("auto",) + PIPELINES]
+BenchPipeline = Literal[PIPELINES]
 
 
 def gw():
@@ -146,12 +147,12 @@ def _run_benchmark(req: BenchmarkRequest, pipelines):
 
 @router.post("/benchmark/run")
 def benchmark_run(req: BenchmarkRequest):
-    return _run_benchmark(req, req.pipelines or ["graphify_jev"])
+    return _run_benchmark(req, req.pipelines or [DEFAULT_EXPLICIT_PIPELINE])
 
 
 @router.post("/benchmark/run-all")
 def benchmark_run_all(req: BenchmarkRequest):
-    return _run_benchmark(req, ["baseline", "graphify", "graphify_jev"])
+    return _run_benchmark(req, list(PIPELINES))
 
 
 @router.post("/benchmark/estimate")
@@ -162,7 +163,7 @@ def benchmark_estimate(req: BenchmarkRequest):
     toks = [json.loads(r["metrics_json"]).get("jev_input_tokens") for r in rows if r["metrics_json"]]
     toks = [t for t in toks if t]
     avg = sum(toks) / len(toks) if toks else None
-    return estimate_plan(len(_questions(req)), req.pipelines or ["baseline", "graphify", "graphify_jev"],
+    return estimate_plan(len(_questions(req)), req.pipelines or list(PIPELINES),
                          [c.model_dump() for c in req.consumers], req.repetitions, avg_jev_tokens=avg)
 
 
