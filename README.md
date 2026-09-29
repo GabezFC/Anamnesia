@@ -172,6 +172,10 @@ python -m memory_gateway index
 # prove the vault was never written to
 python -m memory_gateway vault-check --save before.json
 python -m memory_gateway vault-check --compare before.json   # exit 1 if any .md changed
+
+# lint the vault convention: frontmatter, area, naming, wikilinks (read-only, no LLM)
+python -m memory_gateway vault-lint --vault "$MEMORY_GATEWAY_VAULT"
+python -m memory_gateway vault-lint --json                    # exit 1 if any item
 ```
 
 ### Tests
@@ -438,7 +442,7 @@ flag, compact headers — all zero-token). Measured: context **-39.7%** (synthet
 `POST /benchmark/{run,run-all,estimate,threshold-sweep}` · `GET /benchmark/{runs,sessions,stats}` ·
 `POST /feedback/*` · `GET /system/{info,integrations,projects}`. Interactive docs at `/docs`.
 
-**CLI** — `python -m memory_gateway {search,benchmark,sweep,stats,info,index,vault-check}`.
+**CLI** — `python -m memory_gateway {search,benchmark,sweep,stats,info,index,vault-check,vault-lint}`.
 
 Retrieved note content is **data, not instruction**. Consumers must never follow commands found
 inside retrieved notes; the injection screen and `QUARANTINE` routing exist for exactly this.
