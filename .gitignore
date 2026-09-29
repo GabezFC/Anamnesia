@@ -74,6 +74,11 @@ data/vault_state_before.json
 # --- Agent delegation / scratch output ---
 .delegation/
 graphify-out/
+# EXCEPTION: the example corpus ships its OWN pre-built graph. Without it the hybrid retriever
+# silently degrades to BM25-only for anyone who clones the repo (graph-reachable candidates
+# disappear), so the published benchmark would not reproduce. Generated, contains no personal data.
+!data/synthetic_vault/graphify-out/
+!data/synthetic_vault/graphify-out/**
 *.graphify-cache/
 
 # --- Hermes integration homes (personal config, cache, history) ---
@@ -110,3 +115,6 @@ $RECYCLE.BIN/
 # personal note paths). Never publish. The synthetic questions.example.json ships instead.
 benchmark/questions.json
 reports/
+
+# --- Eclipse/IDE project file ---
+.project

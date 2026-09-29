@@ -16,7 +16,8 @@ from app.benchmark.statistics import aggregate_stats
 
 router = APIRouter()
 _state: dict = {"gateway": None, "jobs": {}}
-Pipeline = Literal["baseline", "graphify", "graphify_jev"]
+Pipeline = Literal["auto", "baseline", "graphify", "graphify_jev"]
+BenchPipeline = Literal["baseline", "graphify", "graphify_jev"]
 
 
 def gw():
@@ -27,7 +28,8 @@ def gw():
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
-    pipeline: Pipeline = "graphify_jev"
+    # "auto" = Memory Optimization Layer routing (cheapest pipeline measured to hold recall).
+    pipeline: Pipeline = "auto"
     max_results: int = Field(10, ge=1, le=50)
     jev_mode: Literal["performance", "strict"] | None = None
     threshold: float | None = Field(None, ge=0, le=1)
@@ -48,7 +50,7 @@ class ConsumerSpec(BaseModel):
 class BenchmarkRequest(BaseModel):
     question_ids: list[str] | None = None
     questions: list[str] | None = None  # ad-hoc questions
-    pipelines: list[Pipeline] | None = None
+    pipelines: list[BenchPipeline] | None = None
     consumers: list[ConsumerSpec] = []
     repetitions: Literal[1, 3, 5, 10] = 1
     warmup: bool = True

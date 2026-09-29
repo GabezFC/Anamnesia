@@ -45,10 +45,13 @@ $MEMORY_GATEWAY_VAULT     # ver .env.example; padrão = <PROJECT_ROOT>/data/synt
 
 ## Como consumir o Gateway (para agentes)
 
-- **MCP (preferido):** servidor stdio `python -m app.mcp.server` — ferramentas
-  `memory_search`, `memory_search_baseline`, `memory_search_graphify`,
+- **MCP (preferido):** servidor stdio `python -m app.mcp.server` — por padrão **uma** ferramenta,
+  `memory_search(query, pipeline="auto", max_results, scope)`, resposta compacta.
+  `MG_MCP_TOOLSET=full` reexpõe `memory_search_baseline`, `memory_search_graphify`,
   `memory_search_graphify_jev`, `memory_benchmark`, `memory_get_run`, `memory_stats`.
   Somente leitura.
+- **Otimização automática:** toda busca passa pela Memory Optimization Layer
+  (`app/gateway/optimizer.py`, zero token). Guia: `docs/OPTIMIZATION_LAYER.md`.
 - **REST:** `http://127.0.0.1:8000` (`/health`, `/memory/search`, `/benchmark/*`, `/system/info`).
 - **CLI:** `python -m memory_gateway search "pergunta"`.
 

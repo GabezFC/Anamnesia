@@ -128,6 +128,8 @@ def test_false_negative_feedback(client):
 
 
 # -- MCP ------------------------------------------------------------------------
+# Default toolset is "minimal" (one tool: every tool schema is re-sent to the model on every turn).
+EXPECTED_TOOLS_MINIMAL = {"memory_search"}
 EXPECTED_TOOLS = {"memory_search", "memory_search_baseline", "memory_search_graphify",
                   "memory_search_graphify_jev", "memory_benchmark", "memory_get_run", "memory_stats"}
 
@@ -140,8 +142,40 @@ def _schema(tool):
     raise AssertionError(f"tool {tool} has no input schema")
 
 
-def test_mcp_tools_schema():
+def _load_server(monkeypatch, toolset: str):
+    import importlib
+
+    monkeypatch.setenv("MG_MCP_TOOLSET", toolset)
     from app.mcp import server as mod
+    return importlib.reload(mod)
+
+
+@pytest.fixture(autouse=False)
+def _restore_mcp_module():
+    yield
+    import importlib
+    import os
+
+    os.environ.pop("MG_MCP_TOOLSET", None)
+    from app.mcp import server as mod
+    importlib.reload(mod)
+
+
+def test_mcp_minimal_toolset_is_default(monkeypatch, _restore_mcp_module):
+    monkeypatch.delenv("MG_MCP_TOOLSET", raising=False)
+    import importlib
+
+    from app.mcp import server as mod
+    mod = importlib.reload(mod)
+    tools = asyncio.run(mod.server.list_tools())
+    assert {t.name for t in tools} == EXPECTED_TOOLS_MINIMAL
+    props = _schema(tools[0])["properties"]
+    assert props["pipeline"].get("default") == "auto"
+    assert "scope" in props
+
+
+def test_mcp_tools_schema(monkeypatch, _restore_mcp_module):
+    mod = _load_server(monkeypatch, "full")
     tools = asyncio.run(mod.server.list_tools())
     names = {t.name for t in tools}
     assert names == EXPECTED_TOOLS

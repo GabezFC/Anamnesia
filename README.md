@@ -160,8 +160,11 @@ This corpus is what makes the benchmark reproducible by a stranger. It contains 
 # REST API + dashboard on http://127.0.0.1:8000
 python -m app.main
 
-# one search from the CLI
-python -m memory_gateway search "your question" --pipeline graphify_jev --show-context
+# one search from the CLI (pipeline defaults to "auto" = optimization layer)
+python -m memory_gateway search "your question" --show-context
+
+# before/after benchmark of the optimization layer (0 API calls)
+python scripts/bench_optimizer.py
 
 # rebuild the mirror and graph for your own vault
 python -m memory_gateway index
@@ -420,8 +423,15 @@ Two pipelines live side by side permanently: `pipelines.py` is the **frozen base
 
 ## 11. Interfaces
 
-**MCP (preferred for agents)** — `python -m app.mcp.server`, stdio. Read-only tools:
-`memory_search`, `memory_search_baseline`, `memory_search_graphify`, `memory_search_graphify_jev`,
+Every interface defaults to `pipeline="auto"`: the **Memory Optimization Layer** runs on every
+search (routing, result cache, index freshness, adaptive cut, near-duplicate collapse, injection
+flag, compact headers — all zero-token). Measured: context **-39.7%** (synthetic, 520 notes) and
+**-24.2%** (real vault) with recall unchanged. See [`docs/OPTIMIZATION_LAYER.md`](docs/OPTIMIZATION_LAYER.md).
+
+**MCP (preferred for agents)** — `python -m app.mcp.server`, stdio. Default toolset is **one tool**,
+`memory_search(query, pipeline="auto", max_results, scope)` with a compact response (schemas cost
+183 instead of 775 tokens per turn). `MG_MCP_TOOLSET=full` restores the read-only legacy set:
+`memory_search_baseline`, `memory_search_graphify`, `memory_search_graphify_jev`,
 `memory_benchmark`, `memory_get_run`, `memory_stats`.
 
 **REST** — `GET /health` · `POST /memory/search[/{baseline,graphify,graphify-jev}]` ·

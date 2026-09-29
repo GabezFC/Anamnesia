@@ -61,6 +61,25 @@ class ObsidianVault:
         with open(p, "r", encoding="utf-8", errors="replace") as fh:  # read-only mode
             return fh.read()
 
+    def fingerprint(self) -> tuple:
+        """Cheap change detector: (count, total bytes, newest mtime, hash of the path list).
+
+        Stat only — no file content is read. Used by the optimization layer to decide when the
+        lexical index is stale (measured: ~8 ms for 90 notes, ~33 ms for 520 on NTFS). The path
+        hash catches renames/moves, which keep count, size and mtime unchanged.
+        """
+        self._guard("stat")
+        n = size = 0
+        newest = 0.0
+        paths = hashlib.sha256()
+        for rel in self.list_markdown():
+            st = os.stat(self.root / rel)
+            n += 1
+            size += st.st_size
+            newest = max(newest, st.st_mtime)
+            paths.update(rel.encode("utf-8") + b"\n")
+        return (n, size, round(newest, 3), paths.hexdigest()[:16])
+
     def state_hash(self) -> dict[str, str]:
         """sha256 per markdown file — used to prove nothing was modified (§110)."""
         self._guard("hash")

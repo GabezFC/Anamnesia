@@ -1,6 +1,6 @@
 """CLI (§7). Usable without any agent connected.
 
-  python -m memory_gateway search "pergunta" [--pipeline graphify_jev] [--json]
+  python -m memory_gateway search "pergunta" [--pipeline auto] [--json]
   python -m memory_gateway benchmark [--pipeline P ...] [--agent hermes --provider P --model M] [--repetitions N]
   python -m memory_gateway sweep
   python -m memory_gateway stats
@@ -151,7 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("search")
     s.add_argument("query")
-    s.add_argument("--pipeline", default="graphify_jev", choices=["baseline", "graphify", "graphify_jev"])
+    s.add_argument("--pipeline", default="auto", choices=["auto", "baseline", "graphify", "graphify_jev"])
     s.add_argument("--max-results", type=int, default=10)
     s.add_argument("--jev-mode", choices=["performance", "strict"])
     s.add_argument("--threshold", type=float)

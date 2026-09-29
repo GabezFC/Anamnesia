@@ -26,6 +26,12 @@ três pipelines de retrieval, com métricas persistidas em SQLite:
 - `graphify_jev` — Graphify → dedup → JEV (Noul em lote) → roteamento em código
   (KEEP/REVIEW/DROP/QUARANTINE) → nota completa só dos sobreviventes → `ModelContextBuilder`.
 
+**Memory Optimization Layer (obrigatória, automática):** toda chamada de `MemoryGateway.search()`
+passa por `app/gateway/optimizer.py` (roteamento `auto`, cache de resultado, frescor do índice,
+corte adaptativo, quase-duplicatas, flag de injeção, headers compactos — zero token). Padrão das
+interfaces: `pipeline="auto"`. Nenhuma interface nova pode contornar `search()`. Novas etapas seguem
+as regras de `docs/OPTIMIZATION_LAYER.md` (flag, sweep, `scripts/bench_optimizer.py` nos 2 corpora).
+
 Interfaces: MCP (principal para agentes), REST (FastAPI, `0.0.0.0:8000`), CLI
 (`python -m memory_gateway ...`). Entrada do sistema: `python -m app.main`.
 

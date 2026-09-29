@@ -18,9 +18,11 @@ from typing import Any
 from config.benchmark import BenchmarkConfig
 from config.jev import JevConfig
 from config.optimization import OptimizationConfig
+from config.optimizer import OptimizerConfig
 from config.retrieval import RetrievalConfig
 from app.database.db import Database
 from app.gateway.context_builder import ModelContextBuilder
+from app.gateway.optimizer import MemoryOptimizer
 from app.retrieval.baseline import BaselineIndex
 from app.retrieval.graphify_hybrid import GraphIndex
 from app.retrieval.pipelines import PIPELINE_FUNCS
@@ -40,12 +42,14 @@ class MemoryGateway:
     def __init__(self, retrieval_cfg: RetrievalConfig | None = None, jev_cfg: JevConfig | None = None,
                  bench_cfg: BenchmarkConfig | None = None, db: Database | None = None,
                  jev_backend=None, graphify_service: GraphifyService | None = None,
-                 opt_cfg: OptimizationConfig | None = None):
+                 opt_cfg: OptimizationConfig | None = None, optimizer_cfg: OptimizerConfig | None = None):
         self.retrieval_cfg = retrieval_cfg or RetrievalConfig()
         self.jev_cfg = jev_cfg or JevConfig()
         self.bench_cfg = bench_cfg or BenchmarkConfig()
         # Token optimizations (§32). Default is the frozen baseline: every flag off.
         self.opt_cfg = opt_cfg or OptimizationConfig()
+        # Automatic Memory Optimization Layer: runs inside EVERY search() (app/gateway/optimizer.py).
+        self.optimizer = MemoryOptimizer(optimizer_cfg or OptimizerConfig())
         # Cache isolation handle. "" in production; a benchmark sets it so its arms cannot read
         # judgements cached by a previous run (see app/services/jev.py cache_key).
         self.cache_namespace = ""
@@ -95,7 +99,20 @@ class MemoryGateway:
     def warm(self) -> dict:
         t0 = time.perf_counter()
         self.baseline.build()
-        g = self.graphify.build()
+        # Graphify is OPTIONAL for serving: the default route (auto -> baseline) needs only the
+        # lexical index. A missing binary or a failed `graphify update` used to raise here and take
+        # the whole MCP server down with it — a single point of failure for a stage that is not on
+        # the default path. Now it is recorded and the graph pipelines degrade (hybrid falls back
+        # to the last graph.json, or to BM25 seeds only).
+        try:
+            g = self.graphify.build()
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("graphify build failed, continuing without it: %s", exc)
+            g = {"error": f"{type(exc).__name__}: {str(exc)[:200]}"}
+        try:  # anchor the freshness check to the index we just built
+            self.optimizer.mark_built(self.vault.fingerprint())
+        except Exception:  # noqa: BLE001
+            pass
         return {"baseline_sections": self.baseline.sections_indexed, "graphify": g,
                 "warm_ms": round((time.perf_counter() - t0) * 1000, 1)}
 
@@ -110,16 +127,19 @@ class MemoryGateway:
         return jev.evaluate(query, candidates)
 
     def build_context(self, candidates, full_texts=None, budget: int | None = None):
+        oc = self.optimizer.cfg
         b = ModelContextBuilder(budget or self.retrieval_cfg.model_context_budget,
-                                self.retrieval_cfg.per_source_max_tokens)
+                                self.retrieval_cfg.per_source_max_tokens,
+                                compact_headers=oc.enabled and oc.compact_headers,
+                                section_max_chars=oc.header_section_max_chars)
         return b.build(candidates, full_texts)
 
-    def search(self, query: str, pipeline: str = "graphify_jev", max_results: int = 10,
+    def search(self, query: str, pipeline: str = "auto", max_results: int = 10,
                jev_overrides: dict[str, Any] | None = None, context_budget: int | None = None,
                persist: bool = True, run_meta: dict[str, Any] | None = None,
                scope: str | None = None) -> MemoryResult:
-        if pipeline not in PIPELINES:
-            raise ValueError(f"pipeline inválido: {pipeline}. Use um de {PIPELINES}")
+        if pipeline != "auto" and pipeline not in PIPELINES:
+            raise ValueError(f"pipeline inválido: {pipeline}. Use um de {('auto',) + PIPELINES}")
         max_results = max(1, min(int(max_results), 50))
         query = query.strip()
         if not query:
@@ -130,6 +150,24 @@ class MemoryGateway:
         parsed_scope = parse_scope(scope)
         t0 = time.perf_counter()
         error = None
+
+        # -- MEMORY OPTIMIZATION LAYER: pre-retrieval (freshness, analysis, routing, cache) ------
+        opt = self.optimizer
+        pre: dict[str, Any] = {}
+        try:
+            pre.update(opt.ensure_fresh(self))
+        except Exception as exc:  # noqa: BLE001 — a failed freshness check never blocks a search
+            pre["optimizer_errors"] = [f"freshness:{type(exc).__name__}"]
+        plan = opt.plan(query, pipeline)
+        pipeline = plan.pipeline
+        cache_on = self.bench_cfg.cache_enabled
+        ckey = opt.cache_key(plan, max_results, parsed_scope.label(), context_budget, jev_overrides) \
+            if cache_on else None
+        if ckey is not None:
+            hit = opt.cache.get(ckey)
+            if hit is not None:
+                return self._from_cache(hit, query, run_id, plan, pre, t0, jcfg, meta, persist)
+
         try:
             # Pipelines read gw.active_scope to drop out-of-scope candidates before the judge.
             self.active_scope = parsed_scope
@@ -153,6 +191,8 @@ class MemoryGateway:
                 m["scope_leaked_blocked"] = len(cands) - len(kept)
             cands = kept
         m["scope"] = parsed_scope.label()
+        # -- MEMORY OPTIMIZATION LAYER: post-retrieval (adaptive cut, near-dup, security flag) ---
+        cands, post = opt.post_filter(cands, plan)
         context, sources, ctx_tokens = self.build_context(cands, full, context_budget)
         t1 = time.perf_counter()
 
@@ -186,12 +226,45 @@ class MemoryGateway:
             "jev_mode": jcfg.mode if is_jev else None,
             "threshold": jcfg.relevance_threshold if is_jev else None,
         })
+        m.update(self._optimizer_metrics(plan, pre, post, cache_hit=False))
         if error:
             m["error"] = error
         result = MemoryResult(query=query, pipeline=pipeline, context=context, sources=sources, metrics=m,
                               run_id=run_id, candidates=cands)
+        if ckey is not None and not error and sources:
+            opt.cache.put(ckey, (context, list(sources), list(cands), dict(m)))
         if persist:
             self._persist(result, jcfg, meta, error, all_judged)
+        return result
+
+    def _optimizer_metrics(self, plan, pre: dict, post: dict, cache_hit: bool) -> dict:
+        out = {
+            "optimizer_enabled": self.optimizer.cfg.enabled,
+            "optimizer_version": self.optimizer.cfg.version,
+            "pipeline_requested": plan.requested,
+            "route_reason": plan.reason,
+            "query_complexity": plan.profile.complexity if plan.profile else None,
+            "result_cache_hit": cache_hit,
+            **pre, **post,
+        }
+        errs = list(pre.get("optimizer_errors", [])) + list(post.get("optimizer_errors", []))
+        if errs:
+            out["optimizer_errors"] = errs
+        return out
+
+    def _from_cache(self, hit, query, run_id, plan, pre, t0, jcfg, meta, persist) -> MemoryResult:
+        """Serve an identical earlier result: no retrieval, no judge, no context build."""
+        context, sources, cands, cached_m = hit
+        m = dict(cached_m)
+        m.update(self._optimizer_metrics(plan, pre, {}, cache_hit=True))
+        m.update({"total_latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+                  "retrieval_latency_ms": 0.0, "judge_tokens": 0, "jev_tokens": 0, "jev_cost": 0.0,
+                  "total_tokens_spent": m.get("context_tokens", 0)})
+        m.pop("error", None)
+        result = MemoryResult(query=query, pipeline=plan.pipeline, context=context, sources=list(sources),
+                              metrics=m, run_id=run_id, candidates=list(cands))
+        if persist:
+            self._persist(result, jcfg, meta, None, None)
         return result
 
     def _persist(self, r: MemoryResult, jcfg: JevConfig, meta: dict, error: str | None, all_judged=None) -> None:
@@ -204,7 +277,7 @@ class MemoryGateway:
             "mode": meta.get("mode", "retrieval"), "repetition": meta.get("repetition", 0),
             "warmup": int(bool(meta.get("warmup"))), "order_index": meta.get("order_index"),
             "threshold": r.metrics.get("threshold"), "jev_mode": r.metrics.get("jev_mode"),
-            "jev_model": jcfg.model if r.pipeline == "graphify_jev" else None,
+            "jev_model": jcfg.model if r.pipeline in JEV_PIPELINES else None,
             "cache_enabled": int(self.bench_cfg.cache_enabled),
             "config_json": {"jev": asdict(jcfg), "retrieval": {k: str(v) for k, v in asdict(self.retrieval_cfg).items()}},
             "metrics_json": r.metrics, "sources_json": [s.to_dict() for s in r.sources],
@@ -232,4 +305,7 @@ class MemoryGateway:
             "jev_sdk": sdk_version(), "jev_model": self.jev_cfg.model, "jev_mode": self.jev_cfg.mode,
             "cache_enabled": self.bench_cfg.cache_enabled, "profile": self.bench_cfg.profile,
             "db": self.db.path, "integrations": detect_all(),
+            "optimizer": {"enabled": self.optimizer.cfg.enabled, "version": self.optimizer.cfg.version,
+                          "result_cache": self.optimizer.cache.stats(),
+                          "index_rebuilds": self.optimizer.index_rebuilds},
         }

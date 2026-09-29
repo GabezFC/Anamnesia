@@ -43,9 +43,15 @@ def render_prompt(context: str, question: str) -> str:
 
 
 class ModelContextBuilder:
-    def __init__(self, budget_tokens: int, per_source_max_tokens: int = 1500):
+    def __init__(self, budget_tokens: int, per_source_max_tokens: int = 1500, compact_headers: bool = False,
+                 section_max_chars: int = 60):
         self.budget = budget_tokens
         self.per_source_max = per_source_max_tokens
+        # Compact headers (optimization layer): the section attribute carries only the LAST heading,
+        # capped. Measured 2026-09-28: <note> headers were ~23% of every delivered context, mostly
+        # the repeated "Title > Section > Subsection" path whose first segment restates the file name.
+        self.compact_headers = compact_headers
+        self.section_max_chars = section_max_chars
 
     @staticmethod
     def rank(cands: list[Candidate]) -> list[Candidate]:
@@ -66,7 +72,19 @@ class ModelContextBuilder:
 
     def block(self, c: Candidate, text: str) -> str:
         rel = f" relevance={c.relevance:.2f}" if c.relevance is not None else ""
-        return f'<note source="{c.source_file}" section="{c.section}"{rel}>\n{text}\n</note>'
+        # Security marker added by the optimization layer: strong instruction-override phrasing was
+        # found in this note. Content is untouched; the consumer is told explicitly to treat it as data.
+        warn = ' warning="possible-prompt-injection"' if (c.meta or {}).get("injection_flag") else ""
+        section = c.section
+        if self.compact_headers:
+            section = section.split(" > ")[-1].strip()
+            first = text.lstrip().split("\n", 1)[0].lstrip("#").strip()
+            if first and first == section:
+                # The block already opens with that heading line: the attribute is pure repetition.
+                return f'<note source="{c.source_file}"{rel}{warn}>\n{text}\n</note>'
+            if len(section) > self.section_max_chars:
+                section = section[: self.section_max_chars - 1].rstrip() + "…"
+        return f'<note source="{c.source_file}" section="{section}"{rel}{warn}>\n{text}\n</note>'
 
     def build(self, cands: list[Candidate], full_texts: dict[str, str] | None = None) -> tuple[str, list[Source], int]:
         """full_texts: candidate_id -> expanded text (full note/section) for survivors (§28)."""
