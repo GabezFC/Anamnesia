@@ -582,3 +582,22 @@ pre.block {
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* ---------------------------------------------------------------- setup page (§3, §5.4) */
+.form-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); margin-top: var(--s3); }
+.form-field {
+  display: flex; flex-direction: column; gap: var(--s1); font-size: var(--fs-sm); color: var(--text-2);
+  flex: 1 1 220px; min-width: 160px;
+}
+.form-field select, .form-field input { width: 100%; }
+.form-row button { flex: 0 0 auto; align-self: flex-end; }
+.switch-label { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-sm); white-space: nowrap; }
+.stage-pros-cons {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s4);
+  padding: var(--s2) 0 var(--s3); font-size: var(--fs-sm); color: var(--text-1);
+}
+.stage-pros-cons ul { margin: var(--s1) 0 0; padding-left: var(--s5); }
+.stage-pros-cons li { margin-bottom: var(--s1); }
+table.data tr.row-detail td { background: var(--bg-1); white-space: normal; border-bottom: 1px solid var(--line-0); }
+.rejected-list { margin: 0; padding-left: var(--s5); color: var(--text-1); font-size: var(--fs-sm); }
+.rejected-list li { margin-bottom: var(--s2); }

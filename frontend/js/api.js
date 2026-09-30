@@ -6,6 +6,10 @@
 //   /openapi.json (FastAPI, for the app version)
 // The POST routes (/memory/search*, /benchmark/run*, /benchmark/threshold-sweep, /feedback/*)
 // exist in the API but are deliberately NOT called: this is a read-only observability UI.
+//
+// The ONE exception is the /config/* group (§3, §5.4 da proposta 2026-09-28): the Configuração
+// (setup) page is the single writer in this whole frontend, and every write it makes goes through
+// apiWrite() below, which attaches the local write-protection token (app/services/security.py).
 const cache = new Map();
 
 /** HTTP error carrying the status and the FastAPI `detail` when present. */
@@ -19,10 +23,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(path, body) {
-  const opt = body
-    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-    : {};
+async function request(path, opt) {
   let r;
   try {
     r = await fetch(path, opt);
@@ -43,6 +44,34 @@ export async function api(path, body) {
   } catch (e) {
     throw new ApiError(r.status, 'invalid JSON', path, e && e.message ? e.message : 'resposta não é JSON');
   }
+}
+
+export async function api(path, body) {
+  const opt = body
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    : {};
+  return request(path, opt);
+}
+
+let tokenPromise = null;
+/** GET /config/token is loopback-only (require_localhost): it only ever succeeds when this
+ * dashboard is itself being served from 127.0.0.1/::1, which is exactly the caller the write path
+ * below exists for. Fetched once per page load and reused for every subsequent write. */
+function getLocalToken() {
+  if (!tokenPromise) tokenPromise = api('/config/token').then((r) => r.token)
+    .catch((e) => { tokenPromise = null; throw e; });
+  return tokenPromise;
+}
+
+/** POST with the local write-protection token attached (app/services/security.py, §5.4). Used
+ * ONLY by the Configuração (setup) page — every other page/function in this file stays read-only. */
+export async function apiWrite(path, body) {
+  const token = await getLocalToken();
+  return request(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-MG-Token': token },
+    body: JSON.stringify(body ?? {}),
+  });
 }
 
 /** Memoised GET (per page load). A rejected promise is evicted so a retry can succeed. */
@@ -79,3 +108,13 @@ export async function getRunDetails(ids, concurrency = 6) {
   }
   return out.filter(Boolean);
 }
+
+/* ---- /config/* (Configuração / setup page only, §3, §5.4) -------------- */
+// Never cached: each of these must reflect the state that was just written, not a page-load memo.
+export const getModelKeys = () => api('/config/model-keys');
+export const setModelKey = (keyName, value) => apiWrite('/config/model-key', { key_name: keyName, value });
+export const setVaultPath = (path) => apiWrite('/config/vault-path', { path });
+export const getVerdictFlag = () => api('/config/verdict');
+export const setVerdictFlag = (enabled) => apiWrite('/config/verdict', { enabled });
+export const getOptionalStages = () => api('/config/optional-stages');
+export const setOptionalStages = (stages) => apiWrite('/config/optional-stages', { stages });

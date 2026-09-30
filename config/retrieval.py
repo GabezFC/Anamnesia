@@ -42,6 +42,31 @@ def validate_vault_path(path: Path) -> Path:
     return p
 
 
+def validate_vault_path_for_runtime(path: Path, db_path: str | Path | None = None) -> Path:
+    """`validate_vault_path` plus the two extra guards the interactive config page (§3) needs.
+
+    Reuses the exact rules `MemoryGateway.__init__` already enforces (app/gateway/memory_gateway.py:
+    benchmark.db must not end up inside the vault) and adds the repo-as-vault case, which the
+    gateway never had to check because the bundled example corpus can never equal the repo root.
+    A vault switch made through the config page must reject both BEFORE anything is persisted or
+    a running gateway is rebuilt against a broken path.
+    """
+    p = validate_vault_path(path).resolve()
+    # Reject the repo root itself, or any ancestor of it (which would make the vault CONTAIN the
+    # whole repo -- code, .env, .git). A vault living INSIDE the repo (e.g. the bundled
+    # data/synthetic_vault) is fine and is the shipped default, so this must not reject descendants.
+    if p == PROJECT_ROOT or p in PROJECT_ROOT.parents:
+        raise PermissionError(f"O vault não pode ser o próprio repositório do Memory Gateway (ou um "
+                              f"diretório que o contém): {p}")
+    if db_path is None:
+        from config.benchmark import BenchmarkConfig  # local import: avoids a module-load-order cycle
+        db_path = BenchmarkConfig().db_path
+    db = Path(db_path).resolve()
+    if p in db.parents:
+        raise PermissionError(f"benchmark.db ({db}) não pode ficar dentro do vault ({p}) (§58)")
+    return p
+
+
 @dataclass
 class RetrievalConfig:
     vault_path: Path = field(default_factory=resolve_vault_path)

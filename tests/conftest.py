@@ -1,6 +1,7 @@
 """Shared fixtures. Tests never touch the network, TypeSafe API, graphify binary or the real vault."""
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -103,3 +104,40 @@ def _no_project_logs(tmp_path, monkeypatch):
         monkeypatch.setattr(mg, "jsonl", lambda *a, **k: None)
     except Exception:  # noqa: BLE001
         pass
+
+
+@pytest.fixture(autouse=True)
+def _isolated_local_files(tmp_path, monkeypatch):
+    """A test run must never touch the real repo `.env` or `config/local_settings.json` (§5.4, §3):
+    both are written by the security/config code under test, and both are real developer files.
+    """
+    import app.services.security as security
+    import config.local_settings as local_settings_mod
+    import config.optimizer as optimizer_mod
+
+    settings_path = tmp_path / "local_settings.json"
+    monkeypatch.setattr(security, "ENV_PATH", tmp_path / ".env")
+    monkeypatch.setattr(local_settings_mod, "LOCAL_SETTINGS_PATH", settings_path)
+    # config/optimizer.py keeps its OWN copy of this constant (see its module docstring); both must
+    # point at the same throwaway file or a test could read the developer's real settings file.
+    monkeypatch.setattr(optimizer_mod, "LOCAL_SETTINGS_PATH", settings_path)
+
+    # /config/vault-path and /config/model-key (app/api/routes.py) mutate these with a raw
+    # `os.environ[...] = ...` -- intentionally: that IS how "aplica em runtime" works (§3), so it
+    # cannot go through monkeypatch.setenv. But that also means monkeypatch.delenv(key,
+    # raising=False) is USELESS here when the key is already absent: monkeypatch only undoes
+    # changes IT made, so a key it never touched (because it was already absent) is not registered
+    # for restoration, and the endpoint's later raw write leaks into every test that runs after
+    # this one in the same process (observed: it silently broke unrelated vault-check/scope tests,
+    # AND wrote the leaked value into the real repo .env before ENV_PATH was patched above).
+    # Snapshot + force-restore by hand instead, regardless of what monkeypatch did or didn't touch.
+    watched = ("MEMORY_GATEWAY_VAULT", "OBSIDIAN_VAULT_PATH", "MG_LOCAL_TOKEN") + security.MODEL_KEY_ENV_VARS
+    before = {k: os.environ.get(k) for k in watched}
+    for k in watched:
+        os.environ.pop(k, None)
+    yield
+    for k, v in before.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v

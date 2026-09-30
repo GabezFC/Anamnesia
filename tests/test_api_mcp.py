@@ -53,6 +53,7 @@ class FakeGraphify:
 def client(tiny_vault, tmp_path):
     from app.api import routes
     from app.gateway.memory_gateway import MemoryGateway
+    from app.services.security import get_or_create_local_token
 
     rcfg = RetrievalConfig(vault_path=tiny_vault, data_dir=tmp_path / "data")
     bcfg = BenchmarkConfig(db_path=str(tmp_path / "b.db"), profile="benchmark")
@@ -65,7 +66,12 @@ def client(tiny_vault, tmp_path):
     old = routes._state["gateway"]
     routes._state["gateway"] = gw
     try:
-        yield TestClient(app)
+        # `client=("127.0.0.1", ...)` makes request.client.host loopback, matching what a real
+        # localhost dashboard looks like to require_local_write (§5.4); the token is attached so
+        # write endpoints (feedback, benchmark run) behave like an authorized local caller.
+        token = get_or_create_local_token()
+        tc = TestClient(app, client=("127.0.0.1", 51234), headers={"X-MG-Token": token})
+        yield tc
     finally:
         routes._state["gateway"] = old
         gw.db.conn.close() if hasattr(gw.db, "conn") else None

@@ -16,6 +16,7 @@ import {
   renderHistory, mountHistory, renderProjects, renderMemory, renderAgents, renderModels,
 } from './pages-data.js';
 import { renderConfig, renderResults } from './pages-config.js';
+import { mountSetup, renderSetup } from './pages-setup.js';
 
 const NAV = [
   ['dashboard', 'Dashboard', '◎'], ['benchmarks', 'Benchmarks', '⇄'], ['pipeline', 'Pipeline', '⇉'],
@@ -23,13 +24,13 @@ const NAV = [
   ['results', 'Resultados', '✓'],
   ['projects', 'Projetos', '▣'], ['memory', 'Memória', '❖'], ['agents', 'Agentes', '◈'],
   ['models', 'Modelos', '◐'],
-  ['history', 'Histórico', '↻'], ['config', 'Configuração', '⚙'],
+  ['history', 'Histórico', '↻'], ['config', 'Configuração', '⚙'], ['setup', 'Setup', '⚒'],
 ];
 const NAV_GROUPS = [
   ['Observabilidade', 0, 6],
   ['Evidência', 6, 7],
   ['Entidades', 7, 11],
-  ['Sistema', 11, 13],
+  ['Sistema', 11, 14],
 ];
 
 const PAGES = {
@@ -91,6 +92,11 @@ const PAGES = {
     title: 'Configuração',
     sub: 'Configuração ativa, pipeline selecionado, flags de otimização, dataset e estado das runs.',
     render: renderConfig, needs: ['core', 'system', 'questions', 'latestRun'],
+  },
+  setup: {
+    title: 'Configuração (setup)',
+    sub: 'Conectar chave de modelo, apontar o vault, ligar o veredito e os estágios opcionais — tudo aplicado em runtime (§3, §5.4).',
+    render: renderSetup, mount: mountSetup, needs: [],
   },
 };
 
