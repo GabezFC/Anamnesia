@@ -1,0 +1,24 @@
+# Optional retrieval stages (proposta 2026-09-28 §1.4/§5.5, app/retrieval/optional_stages.py).
+# NONE of these are installed in this branch's venv or exercised beyond their "dependency missing"
+# skip path (tests/test_optional_stages.py) -- versions below are NOT verified against this
+# project the way requirements.txt's are (see CLAUDE.md "Não inventar APIs": inspecionar -> versão
+# -> documentação -> teste manual -> implementar -> testar). Pin and verify before installing.
+#
+# Each stage is OFF by default (config/optimization.py OptionalStagesConfig) and is skipped with a
+# single log warning, never an error, when its section below is not installed.
+
+# [compress] -- llmlingua2, provence
+# llmlingua2: LLMLingua-2 prompt compression, MIT license.
+# llmlingua
+# provence: naver/provence-reranker-debertav3-v1 -- LICENSE CC BY-NC-ND 4.0, SOMENTE USO
+# PESSOAL/NÃO COMERCIAL (config/optional_stages_catalog.py). Needs transformers with
+# trust_remote_code=True for this specific model.
+# transformers
+
+# [rerank] -- bge_reranker_v2_m3, mxbai_rerank_base_v2
+# bge_reranker_v2_m3: BAAI/bge-reranker-v2-m3 cross-encoder, MIT license. Either backend works;
+# sentence-transformers is the smaller install.
+# sentence-transformers
+# FlagEmbedding
+# mxbai_rerank_base_v2: mixedbread-ai/mxbai-rerank-base-v2, Apache 2.0 license.
+# mxbai-rerank

@@ -1,4 +1,6 @@
 # Python >= 3.14 (venv: uv venv --python 3.14 .venv). Versions verified 2026-09-24.
+# Runtime only. Dev/test tools -> requirements-dev.txt. Optional retrieval stages (§1.4/§5.5,
+# app/retrieval/optional_stages.py) -> requirements-optional.txt (none of them are runtime deps).
 typesafe-sdk==0.7.1
 fastapi==0.141.1
 uvicorn[standard]==0.53.0
@@ -8,5 +10,4 @@ python-dotenv==1.2.3
 pydantic==2.13.5
 anthropic==1.8.0
 openai==3.19.2
-pytest==9.1.1
 # External CLIs (not pip): graphify 0.9.59, hermes 0.20.5, ollama 0.34.2

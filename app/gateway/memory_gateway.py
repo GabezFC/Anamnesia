@@ -17,7 +17,7 @@ from typing import Any
 
 from config.benchmark import BenchmarkConfig
 from config.jev import JevConfig
-from config.optimization import OptimizationConfig
+from config.optimization import OptimizationConfig, OptionalStagesConfig
 from config.optimizer import OptimizerConfig
 from config.retrieval import RetrievalConfig
 from app.database.db import Database
@@ -25,6 +25,7 @@ from app.gateway.context_builder import ModelContextBuilder
 from app.gateway.optimizer import MemoryOptimizer
 from app.retrieval.baseline import BaselineIndex
 from app.retrieval.graphify_hybrid import GraphIndex
+from app.retrieval.optional_stages import apply_optional_stages
 from app.retrieval.pipelines import PIPELINE_FUNCS
 from app.schemas.models import JEV_PIPELINES, PIPELINES, MemoryResult
 from app.services.graphify import GraphifyService
@@ -45,7 +46,8 @@ class MemoryGateway:
     def __init__(self, retrieval_cfg: RetrievalConfig | None = None, jev_cfg: JevConfig | None = None,
                  bench_cfg: BenchmarkConfig | None = None, db: Database | None = None,
                  jev_backend=None, graphify_service: GraphifyService | None = None,
-                 opt_cfg: OptimizationConfig | None = None, optimizer_cfg: OptimizerConfig | None = None):
+                 opt_cfg: OptimizationConfig | None = None, optimizer_cfg: OptimizerConfig | None = None,
+                 optional_stages_cfg: OptionalStagesConfig | None = None):
         self.retrieval_cfg = retrieval_cfg or RetrievalConfig()
         self.jev_cfg = jev_cfg or JevConfig()
         self.bench_cfg = bench_cfg or BenchmarkConfig()
@@ -56,6 +58,10 @@ class MemoryGateway:
         # a benchmark arm), and `graphify_jev` (not this pipeline) remains the frozen comparison
         # point regardless of what this default is.
         self.opt_cfg = opt_cfg or OptimizationConfig.default_cascade()
+        # Optional retrieval stages (§1.4/§5.5) — off by default, resolved against
+        # config/local_settings.json on every search() so a frontend toggle needs no restart.
+        # Applies to every pipeline except graphify_jev (frozen). See app/retrieval/optional_stages.py.
+        self.optional_stages_cfg = optional_stages_cfg or OptionalStagesConfig()
         # Automatic Memory Optimization Layer: runs inside EVERY search() (app/gateway/optimizer.py).
         self.optimizer = MemoryOptimizer(optimizer_cfg or OptimizerConfig())
         # Cache isolation handle. "" in production; a benchmark sets it so its arms cannot read
@@ -201,6 +207,15 @@ class MemoryGateway:
         m["scope"] = parsed_scope.label()
         # -- MEMORY OPTIMIZATION LAYER: post-retrieval (adaptive cut, near-dup, security flag) ---
         cands, post = opt.post_filter(cands, plan)
+        # -- OPTIONAL STAGES (§1.4/§5.5): reranking/compression/dedup/spotlighting, all off by
+        # default. Never runs on graphify_jev (frozen reference pipeline).
+        if pipeline != "graphify_jev":
+            osc = self.optional_stages_cfg.resolved()
+            if osc.active_flags():
+                try:
+                    m.update(apply_optional_stages(query, cands, full, osc))
+                except Exception as exc:  # noqa: BLE001 — an optional stage must never break search
+                    m["optional_stages_errors"] = [f"{type(exc).__name__}: {exc}"]
         context, sources, ctx_tokens = self.build_context(cands, full, context_budget)
         t1 = time.perf_counter()
 

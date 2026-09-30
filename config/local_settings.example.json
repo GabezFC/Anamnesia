@@ -1,3 +1,11 @@
 {
-  "verdict_enabled": false
+  "verdict_enabled": false,
+  "optional_stages": {
+    "sentence_dedup_mmr": false,
+    "spotlight_nonce": false,
+    "bge_reranker_v2_m3": false,
+    "mxbai_rerank_base_v2": false,
+    "llmlingua2": false,
+    "provence": false
+  }
 }

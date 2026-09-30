@@ -114,6 +114,11 @@ cp .env.example .env          # Windows: copy .env.example .env
 
 Then edit `.env`. Nothing in it is required to run the tests or the free-stage validator.
 
+To run the test suite, install dev tooling on top: `pip install -r requirements-dev.txt` (adds
+`pytest`; `requirements.txt` alone is the minimal runtime install). Optional retrieval stages
+(compression/reranking, §1.4 — off by default, see `app/retrieval/optional_stages.py`) have their
+own heavier dependencies in `requirements-optional.txt`; none are required for the default pipelines.
+
 ---
 
 ## 5. Configuration

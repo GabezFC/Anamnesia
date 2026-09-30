@@ -12,7 +12,7 @@ RULES THIS FILE ENFORCES
 """
 from dataclasses import dataclass, field, replace
 
-from config import env_bool, env_float, env_int
+from config import env_bool, env_float, env_int, env_str
 
 # Bump when the MEANING of a flag changes (part of benchmark identity, not of the cache key).
 OPTIMIZATION_VERSION = "opt-v1"
@@ -220,6 +220,103 @@ class OptimizationConfig:
                       "layered_cache", "cache_promote_l3", "cache_ranking", "cache_snippets",
                       "smart_snippet", "progressive_context", "strict_gating", "query_profiling")
         return [k for k in mechanisms if getattr(self, k) is True]
+
+    def to_dict(self) -> dict:
+        return dict(self.__dict__)
+
+
+# Bump when the MEANING of an optional-stage flag changes.
+OPTIONAL_STAGES_VERSION = "stages-v1"
+
+# Every name here must exist as a bool field below AND as a key in app.retrieval.optional_stages
+# .STAGE_ORDER; app/retrieval/optional_stages.py asserts the two stay in sync.
+OPTIONAL_STAGE_NAMES = ("llmlingua2", "provence", "bge_reranker_v2_m3", "mxbai_rerank_base_v2",
+                        "sentence_dedup_mmr", "spotlight_nonce")
+
+
+@dataclass
+class OptionalStagesConfig:
+    """Feature flags for the optional retrieval stages evaluated in §1.4/§5.5 of the 2026-09-28
+    proposal (`memory-gateway-token-optimization-audit.md` §13: LLMLingua-2, Provence,
+    bge-reranker-v2-m3, mxbai-rerank-base-v2 as "experimentar"; sentence-dedup+MMR and
+    spotlighting as no-model techniques from the same audit, §27 items 3 and 8).
+
+    Independent of `OptimizationConfig` above (that one is the graphify_jev_opt cascade only,
+    §1.3). These stages run for every pipeline EXCEPT `graphify_jev` (frozen reference — see
+    app/retrieval/pipelines.py run_graphify_jev, never touched by this file), after candidate
+    selection and before ModelContextBuilder (app/gateway/memory_gateway.py search()).
+
+    Every flag is OFF by default (importing/running the project is unchanged). A stage whose
+    dependency is not installed is skipped with ONE warning log line and
+    `optional_stage_skipped:<name>` in the run metrics — never an exception (see
+    app/retrieval/optional_stages.py).
+
+    Rejected candidates (OmniRoute, RECOMP/Selective Context, GPTCache/RedisVL) have NO flag here
+    on purpose — see config/optional_stages_catalog.py `selectable=False` entries for why.
+    """
+    # -- compression (shrinks a candidate's text) ------------------------------------------------
+    llmlingua2: bool = field(default_factory=lambda: env_bool("OPT_STAGE_LLMLINGUA2", False))
+    # naver/provence-reranker-debertav3-v1 -- LICENSE CC BY-NC-ND 4.0: personal / non-commercial
+    # use only. Never enable this flag in a commercial deployment (config/optional_stages_catalog.py).
+    provence: bool = field(default_factory=lambda: env_bool("OPT_STAGE_PROVENCE", False))
+
+    # -- reranking (reorders candidates before the context budget cuts the tail) -----------------
+    bge_reranker_v2_m3: bool = field(default_factory=lambda: env_bool("OPT_STAGE_BGE_RERANKER_V2_M3", False))
+    mxbai_rerank_base_v2: bool = field(
+        default_factory=lambda: env_bool("OPT_STAGE_MXBAI_RERANK_BASE_V2", False))
+
+    # -- no model, deterministic, local -----------------------------------------------------------
+    sentence_dedup_mmr: bool = field(default_factory=lambda: env_bool("OPT_STAGE_SENTENCE_DEDUP_MMR", False))
+    # Jaccard similarity (word 3-shingles) above which two sentences are considered the same idea.
+    # Reuses the near-duplicate threshold family calibrated in OptimizationConfig.near_dedup (0.88)
+    # but one notch lower: sentence-level text is much shorter than a whole note, so the same wording
+    # shift produces a bigger Jaccard swing (see app/services/near_dup.py module docstring, the
+    # short-note-vs-long-note example). Not independently calibrated yet -- see
+    # scripts/measure_optional_stages.py for the measurement this shipped with.
+    sentence_dedup_mmr_threshold: float = field(
+        default_factory=lambda: env_float("OPT_STAGE_SENTENCE_DEDUP_MMR_THRESHOLD", 0.85))
+    # MMR trade-off inside a duplicate cluster: weight on relevance-to-query vs (1-lambda) weight on
+    # redundancy-with-the-rest-of-the-cluster. 0.5 = no prior bias; see
+    # app/retrieval/optional_stages.py sentence_dedup_mmr().
+    sentence_dedup_mmr_lambda: float = field(
+        default_factory=lambda: env_float("OPT_STAGE_SENTENCE_DEDUP_MMR_LAMBDA", 0.5))
+
+    spotlight_nonce: bool = field(default_factory=lambda: env_bool("OPT_STAGE_SPOTLIGHT_NONCE", False))
+    # "hash" (default): nonce = sha256(content + local secret)[:12] -- deterministic, so identical
+    # content always produces identical bytes (keeps the consumer's prompt cache AND this project's
+    # own ResultCache, app/gateway/optimizer.py, working). "random": a fresh nonce every request --
+    # stronger anti-injection signal (a note author cannot predict tomorrow's delimiter) but the
+    # emitted context is byte-different every call, which defeats both caches. See
+    # app/retrieval/optional_stages.py spotlight_nonce() docstring for the full trade-off.
+    spotlight_nonce_mode: str = field(default_factory=lambda: env_str("OPT_STAGE_SPOTLIGHT_NONCE_MODE", "hash"))
+    # Local secret mixed into the "hash" nonce. Empty by default (no secret configured yet); an
+    # empty secret still produces a deterministic, content-derived nonce, it is just predictable by
+    # anyone who can read the note content -- set OPT_STAGE_SPOTLIGHT_NONCE_SECRET to change that.
+    spotlight_nonce_secret: str = field(
+        default_factory=lambda: env_str("OPT_STAGE_SPOTLIGHT_NONCE_SECRET", ""))
+
+    version: str = OPTIONAL_STAGES_VERSION
+
+    def with_(self, **kw) -> "OptionalStagesConfig":
+        return replace(self, **kw)
+
+    def active_flags(self) -> list[str]:
+        return [n for n in OPTIONAL_STAGE_NAMES if getattr(self, n) is True]
+
+    def resolved(self) -> "OptionalStagesConfig":
+        """Apply `config/local_settings.json` {"optional_stages": {"<name>": bool}} overrides so
+        the frontend configuration page (proposta §1.4/§3) can toggle a stage without an env var
+        or a restart. Only recognised stage names with an actual bool value override; the local
+        file always wins over the env-derived default, same rule as
+        config/optimizer.py verdict_enabled_default().
+        """
+        from config.local_settings import get_optional_stages
+
+        overrides = get_optional_stages()
+        if not overrides:
+            return self
+        kw = {k: v for k, v in overrides.items() if k in OPTIONAL_STAGE_NAMES}
+        return self.with_(**kw) if kw else self
 
     def to_dict(self) -> dict:
         return dict(self.__dict__)
