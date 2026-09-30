@@ -95,7 +95,10 @@ const PAGES = {
 };
 
 /** UI state persisted across navigation (toggles). */
-const state = { pipeline: 'graphify_jev_opt', tokenView: 'total', costView: 'total', histSeries: 'tokens' };
+const state = {
+  pipeline: 'graphify_jev_opt', tokenView: 'total', costView: 'total',
+  histSeries: 'tokens', histAgg: 'day', histScale: 'linear',
+};
 const ctx = {
   runs: [], sessions: [], stats: null, details: [], systemInfo: null, questions: [],
   projects: null, health: null, latestRunDetail: null, state, api: API,
