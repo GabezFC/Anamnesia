@@ -8,6 +8,7 @@
   python -m memory_gateway vault-check [--save FILE | --compare FILE]
   python -m memory_gateway vault-lint [--vault PATH] [--json]
   python -m memory_gateway index
+  python -m memory_gateway db-prune --keep-days N [--keep-sessions s1,s2] [--dry-run] [--vacuum]
 """
 from __future__ import annotations
 
@@ -163,6 +164,25 @@ def cmd_index(a):
     print(json.dumps(_gw().warm(), ensure_ascii=False, indent=2, default=str))
 
 
+def cmd_db_prune(a):
+    """§5.3: delete old runs (and their candidates) to keep benchmark.db small.
+
+    --keep-days is required (no silent default retention window). Sessions listed in
+    --keep-sessions are never deleted, regardless of age.
+    """
+    from app.database.db import Database
+    from config.benchmark import BenchmarkConfig
+
+    bc = BenchmarkConfig()
+    db = Database(bc.db_path, compress_context=bc.db_compress_context)
+    keep_sessions = [s.strip() for s in a.keep_sessions.split(",") if s.strip()] if a.keep_sessions else []
+    result = db.prune(a.keep_days, keep_sessions, dry_run=a.dry_run)
+    if a.vacuum and not a.dry_run:
+        db.vacuum()
+        result["vacuumed"] = True
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="memory_gateway", description="Memory Gateway CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -202,6 +222,12 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--compare")
     v.set_defaults(fn=cmd_vault_check)
     sub.add_parser("index").set_defaults(fn=cmd_index)
+    dp = sub.add_parser("db-prune", help="remove runs antigas de benchmark.db (nunca as sessões protegidas)")
+    dp.add_argument("--keep-days", type=int, required=True, help="idade máxima (dias) das runs mantidas")
+    dp.add_argument("--keep-sessions", help="session_ids (separados por vírgula) que nunca são apagados")
+    dp.add_argument("--dry-run", action="store_true", help="só conta quantas runs seriam apagadas")
+    dp.add_argument("--vacuum", action="store_true", help="roda VACUUM após apagar (ignora com --dry-run)")
+    dp.set_defaults(fn=cmd_db_prune)
     vl = sub.add_parser("vault-lint", help="lint determinístico READ-ONLY do vault (saída 1 se houver itens)")
     vl.add_argument("--vault", help="caminho do vault (default: vault configurado no projeto)")
     vl.add_argument("--max-note-chars", type=int, help=f"limite de tamanho de nota (default {MAX_NOTE_CHARS_LITERAL})")

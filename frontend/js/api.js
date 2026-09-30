@@ -68,6 +68,43 @@ export const getQuestions = () => cached('questions', () => api('/benchmark/ques
 export const getProjects = () => cached('projects', () => api('/system/projects'));
 export const getOpenApi = () => cached('openapi', () => api('/openapi.json'));
 
+/**
+ * Server-side paginated + filtered runs fetch (§4, §5.1). Deliberately NOT routed through
+ * `cached()`: callers of this one want fresh data (manual refresh button, auto-refresh timer),
+ * not a memoised-per-page-load value. Reads the total match count from the `X-Total-Count`
+ * response header — GET /benchmark/runs keeps returning a bare array for `getRuns()` above, so
+ * that caller is untouched; this is an additive way to get real pagination.
+ */
+export async function getRunsPage({
+  limit = 100, offset = 0, sessionId, agent, q, since, adhocOnly, full,
+} = {}) {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (sessionId) params.set('session_id', sessionId);
+  if (agent) params.set('agent', agent);
+  if (q) params.set('q', q);
+  if (since) params.set('since', String(since));
+  if (adhocOnly) params.set('adhoc_only', '1');
+  if (full) params.set('full', '1');
+  const path = `/benchmark/runs?${params.toString()}`;
+  let r;
+  try {
+    r = await fetch(path);
+  } catch (e) {
+    throw new ApiError(0, 'network error', path, e && e.message ? e.message : 'fetch falhou');
+  }
+  if (!r.ok) {
+    let detail = null;
+    try {
+      const j = await r.json();
+      detail = typeof j?.detail === 'string' ? j.detail : JSON.stringify(j?.detail ?? j);
+    } catch { /* body was not JSON */ }
+    throw new ApiError(r.status, r.statusText, path, detail);
+  }
+  const runs = await r.json();
+  const total = Number(r.headers.get('X-Total-Count'));
+  return { runs: Array.isArray(runs) ? runs : [], total: Number.isFinite(total) ? total : runs.length };
+}
+
 /** Fetch run details in bounded-concurrency batches (needed for sources/candidates). */
 export async function getRunDetails(ids, concurrency = 6) {
   const out = [];

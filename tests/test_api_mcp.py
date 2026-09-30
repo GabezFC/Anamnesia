@@ -123,6 +123,65 @@ def test_benchmark_run_defaults_to_graphify_jev_opt(client):
     assert body["config"]["pipelines"] == ["graphify_jev_opt"]
 
 
+def test_memory_search_accepts_optional_client(client):
+    """§5.1: client/caller is optional, recorded in metrics_json, exposed in the run list."""
+    body = client.post("/memory/search", json={"query": "stack", "pipeline": "baseline",
+                                                "client": "claude_code"}).json()
+    assert body["metrics"]["client"] == "claude_code"
+    run = client.get(f"/benchmark/runs/{body['run_id']}").json()
+    assert run["metrics"]["client"] == "claude_code"
+
+
+def test_memory_search_client_defaults_to_none(client):
+    body = client.post("/memory/search", json={"query": "stack", "pipeline": "baseline"}).json()
+    assert body["metrics"]["client"] is None
+
+
+def test_benchmark_runs_is_a_bare_list_for_backward_compatibility(client):
+    client.post("/memory/search", json={"query": "stack", "pipeline": "baseline"})
+    r = client.get("/benchmark/runs")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+    assert "X-Total-Count" in r.headers
+    assert int(r.headers["X-Total-Count"]) >= 1
+
+
+def test_benchmark_runs_pagination_and_filters(client):
+    for q in ("stack backend", "graphify pipeline", "vault leitura"):
+        client.post("/memory/search", json={"query": q, "pipeline": "baseline", "client": "hermes"})
+    total = int(client.get("/benchmark/runs").headers["X-Total-Count"])
+    assert total >= 3
+    page1 = client.get("/benchmark/runs?limit=1&offset=0").json()
+    page2 = client.get("/benchmark/runs?limit=1&offset=1").json()
+    assert len(page1) == 1 and len(page2) == 1
+    assert page1[0]["run_id"] != page2[0]["run_id"]
+
+    by_agent = client.get("/benchmark/runs?agent=rest").json()
+    assert by_agent and all(r["agent"] == "rest" for r in by_agent)
+
+    by_q = client.get("/benchmark/runs?q=graphify").json()
+    assert any("graphify" in r["query"] for r in by_q)
+    assert all("graphify" in r["query"] for r in by_q)
+
+
+def test_benchmark_runs_adhoc_only_and_full(client):
+    body = client.post("/memory/search", json={"query": "stack", "pipeline": "baseline"}).json()
+    adhoc = client.get("/benchmark/runs?adhoc_only=true").json()
+    assert any(r["run_id"] == body["run_id"] for r in adhoc)
+    lean = client.get("/benchmark/runs?limit=1").json()[0]
+    assert "context" not in lean
+    full = client.get("/benchmark/runs?limit=1&full=true").json()[0]
+    assert "context" in full
+
+
+def test_benchmark_runs_query_literal_is_persisted(client):
+    """§4: the literal question text (MCP/REST/CLI) must appear, unmodified, in the run list."""
+    literal = "Qual é a decisão sobre stack backend?"
+    client.post("/memory/search", json={"query": literal, "pipeline": "baseline"})
+    rows = client.get("/benchmark/runs?q=decisão").json()
+    assert any(r["query"] == literal for r in rows)
+
+
 def test_get_run_after_search(client):
     body = client.post("/memory/search", json={"query": "stack", "pipeline": "baseline"}).json()
     run_id = body["run_id"]
@@ -193,6 +252,7 @@ def test_mcp_minimal_toolset_is_default(monkeypatch, _restore_mcp_module):
     assert props["pipeline"].get("default") == "auto"
     assert props["pipeline"].get("enum") == ["auto", "baseline", "graphify", "graphify_jev", "graphify_jev_opt"]
     assert "scope" in props
+    assert "client" in props  # §5.1: optional caller identity (hermes/claude_code/codex/opencode)
 
 
 def test_mcp_tools_schema(monkeypatch, _restore_mcp_module):

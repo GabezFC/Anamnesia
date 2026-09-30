@@ -13,7 +13,7 @@ import {
   renderTokens, mountTokens, renderLatency, mountLatency, renderCosts, mountCosts,
 } from './pages-core.js';
 import {
-  renderHistory, mountHistory, renderProjects, renderMemory, renderAgents, renderModels,
+  renderHistory, mountHistory, unmountHistory, renderProjects, renderMemory, renderAgents, renderModels,
 } from './pages-data.js';
 import { renderConfig, renderResults } from './pages-config.js';
 
@@ -85,7 +85,7 @@ const PAGES = {
   },
   history: {
     title: 'Histórico', sub: 'Séries temporais por sessão e run, ordenadas por created_at.',
-    render: renderHistory, mount: mountHistory, needs: ['core'],
+    render: renderHistory, mount: mountHistory, unmount: unmountHistory, needs: ['core'],
   },
   config: {
     title: 'Configuração',
@@ -212,6 +212,7 @@ async function ensure(needs) {
 
 /* ---------------------------------------------------------------- render */
 let rendering = 0;
+let activePage = null;
 async function navigate() {
   const id = route();
   const known = Boolean(PAGES[id]);
@@ -224,6 +225,11 @@ async function navigate() {
   $('#page-sub').textContent = page.sub;
   document.body.classList.remove('nav-open');
   $('#hamburger')?.setAttribute('aria-expanded', 'false');
+
+  // A page that owns a timer (e.g. History's auto-refresh) must stop it before its DOM is
+  // replaced, or the interval keeps firing against a detached node.
+  if (activePage !== page) activePage?.unmount?.();
+  activePage = page;
 
   const body = $('#page-body');
   destroyCharts(body);
