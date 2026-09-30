@@ -1,10 +1,13 @@
 """SQLite persistence (§58). Database lives in the project (benchmark.db), never in the vault."""
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import sqlite3
 import threading
 import time
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +25,8 @@ CREATE TABLE IF NOT EXISTS runs (
   context TEXT, answer TEXT, error TEXT
 );
 CREATE INDEX IF NOT EXISTS runs_session ON runs(session_id);
+CREATE INDEX IF NOT EXISTS runs_created ON runs(created_at);
+CREATE INDEX IF NOT EXISTS runs_pipeline_warmup ON runs(pipeline, warmup);
 CREATE TABLE IF NOT EXISTS candidates (
   run_id TEXT, candidate_id TEXT, source_file TEXT, section TEXT, score REAL,
   relevance REAL, injection REAL, decision TEXT, tokens INTEGER
@@ -43,18 +48,41 @@ CREATE TABLE IF NOT EXISTS evaluations (
   notes TEXT
 );
 CREATE TABLE IF NOT EXISTS jev_cache (key TEXT PRIMARY KEY, value TEXT, created_at REAL);
+CREATE TABLE IF NOT EXISTS configs (hash TEXT PRIMARY KEY, json TEXT);
 """
+# Columns added after the original schema shipped (§5.3). Added via ALTER TABLE, guarded by
+# PRAGMA table_info so existing databases migrate in place without losing data:
+#   config_hash       -> dedup key into `configs`; a row keeps EITHER config_json (old rows,
+#                        written before this migration) OR config_hash (new rows), never both.
+#   context_encoding  -> NULL/"" for plain text (old rows, or compression disabled), "zlib+b64"
+#                        when `context` holds base64(zlib(text)).
+RUNS_MIGRATED_COLUMNS = (("config_hash", "TEXT"), ("context_encoding", "TEXT"))
+
+LIST_COLUMNS = ("run_id, session_id, created_at, question_id, query, pipeline, agent, provider, model, mode,"
+                " repetition, warmup, threshold, jev_mode, error, metrics_json")
+FULL_EXTRA_COLUMNS = ", config_json, config_hash, sources_json, context, context_encoding, answer"
 
 
 class Database:
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, compress_context: bool = False):
         self.path = str(path)
+        # Whether NEW rows get their `context` column zlib-compressed (base64-encoded text, so the
+        # column stays TEXT). Reading never depends on this flag: `context_encoding` on each row
+        # says how that row was written, so toggling this setting is always retrocompatible.
+        self.compress_context = compress_context
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
+        self._migrate_columns()
+
+    def _migrate_columns(self) -> None:
+        existing = {r["name"] for r in self.query("PRAGMA table_info(runs)")}
+        for col, decl in RUNS_MIGRATED_COLUMNS:
+            if col not in existing:
+                self._exec(f"ALTER TABLE runs ADD COLUMN {col} {decl}")
 
     def _exec(self, sql: str, args: tuple = ()) -> sqlite3.Cursor:
         with self._lock:
@@ -71,14 +99,38 @@ class Database:
         self._exec("INSERT OR IGNORE INTO sessions VALUES (?,?,?,?,?)",
                    (session_id, time.time(), kind, json.dumps(config, default=str), notes))
 
+    def _dedup_config(self, row: dict[str, Any]) -> None:
+        """Replace `config_json` (near-identical across runs) with a hash into `configs` (§5.3)."""
+        cfg = row.get("config_json")
+        if cfg is None:
+            row["config_hash"] = None
+            return
+        cfg_str = cfg if isinstance(cfg, str) else json.dumps(cfg, default=str, ensure_ascii=False)
+        digest = hashlib.sha256(cfg_str.encode("utf-8")).hexdigest()
+        self._exec("INSERT OR IGNORE INTO configs (hash, json) VALUES (?,?)", (digest, cfg_str))
+        row["config_hash"] = digest
+        row["config_json"] = None
+
+    def _maybe_compress_context(self, row: dict[str, Any]) -> None:
+        ctx = row.get("context")
+        if self.compress_context and isinstance(ctx, str) and ctx:
+            row["context"] = base64.b64encode(zlib.compress(ctx.encode("utf-8"), 6)).decode("ascii")
+            row["context_encoding"] = "zlib+b64"
+        else:
+            row.setdefault("context_encoding", None)
+
     def save_run(self, row: dict[str, Any], candidates: list[dict] | None = None) -> None:
+        row = dict(row)
+        self._dedup_config(row)
+        self._maybe_compress_context(row)
         cols = ["run_id", "session_id", "created_at", "question_id", "query", "pipeline", "agent", "provider",
                 "model", "mode", "repetition", "warmup", "order_index", "threshold", "jev_mode", "jev_model",
-                "cache_enabled", "config_json", "metrics_json", "sources_json", "context", "answer", "error"]
+                "cache_enabled", "config_json", "config_hash", "metrics_json", "sources_json",
+                "context", "context_encoding", "answer", "error"]
         vals = []
         for c in cols:
             v = row.get(c)
-            if c.endswith("_json") and not isinstance(v, str):
+            if c.endswith("_json") and v is not None and not isinstance(v, str):
                 v = json.dumps(v, default=str, ensure_ascii=False)
             vals.append(v)
         self._exec(f"INSERT OR REPLACE INTO runs ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", tuple(vals))
@@ -91,9 +143,22 @@ class Database:
         self._exec("UPDATE runs SET answer=?, metrics_json=?, error=? WHERE run_id=?",
                    (answer, json.dumps(metrics, default=str, ensure_ascii=False), error, run_id))
 
-    @staticmethod
-    def _decode(r: dict) -> dict:
-        for k in ("config_json", "metrics_json", "sources_json"):
+    def _resolve_config(self, config_hash: str) -> dict | None:
+        rows = self.query("SELECT json FROM configs WHERE hash=?", (config_hash,))
+        return json.loads(rows[0]["json"]) if rows else None
+
+    def _decode(self, r: dict) -> dict:
+        encoding = r.pop("context_encoding", None)
+        if encoding == "zlib+b64" and r.get("context"):
+            r["context"] = zlib.decompress(base64.b64decode(r["context"])).decode("utf-8")
+        config_hash = r.pop("config_hash", None)
+        if r.get("config_json"):
+            r["config"] = json.loads(r.pop("config_json"))
+        else:
+            r.pop("config_json", None)
+            if config_hash:
+                r["config"] = self._resolve_config(config_hash)
+        for k in ("metrics_json", "sources_json"):
             if r.get(k):
                 r[k[:-5]] = json.loads(r.pop(k))
             else:
@@ -108,19 +173,111 @@ class Database:
         run["candidates"] = self.query("SELECT * FROM candidates WHERE run_id=?", (run_id,))
         return run
 
-    def list_runs(self, limit: int = 100, session_id: str | None = None) -> list[dict]:
-        sql = ("SELECT run_id, session_id, created_at, question_id, query, pipeline, agent, provider, model, mode,"
-               " repetition, warmup, threshold, jev_mode, error, metrics_json FROM runs")
-        args: tuple = ()
-        if session_id:
-            sql += " WHERE session_id=?"
-            args = (session_id,)
-        sql += " ORDER BY created_at DESC LIMIT ?"
-        return [self._decode(r) for r in self.query(sql, args + (limit,))]
+    @staticmethod
+    def _run_filters(session_id: str | None, agent: str | None, q: str | None, since: float | None,
+                      adhoc_only: bool) -> tuple[list[str], list[Any]]:
+        where: list[str] = []
+        args: list[Any] = []
+        # adhoc_only is its own tab (session_id == "adhoc"): it wins over an explicit session_id.
+        sid = "adhoc" if adhoc_only else session_id
+        if sid:
+            where.append("session_id=?")
+            args.append(sid)
+        if agent:
+            where.append("agent=?")
+            args.append(agent)
+        if since is not None:
+            where.append("created_at>=?")
+            args.append(since)
+        if q:
+            where.append("query LIKE ?")
+            args.append(f"%{q}%")
+        return where, args
+
+    def list_runs(self, limit: int = 100, offset: int = 0, session_id: str | None = None,
+                  agent: str | None = None, q: str | None = None, since: float | None = None,
+                  adhoc_only: bool = False, full: bool = False) -> list[dict]:
+        cols = LIST_COLUMNS + (FULL_EXTRA_COLUMNS if full else "")
+        sql = f"SELECT {cols} FROM runs"
+        where, args = self._run_filters(session_id, agent, q, since, adhoc_only)
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        return [self._decode(r) for r in self.query(sql, tuple(args) + (limit, offset))]
+
+    def count_runs(self, session_id: str | None = None, agent: str | None = None, q: str | None = None,
+                   since: float | None = None, adhoc_only: bool = False) -> int:
+        sql = "SELECT COUNT(*) n FROM runs"
+        where, args = self._run_filters(session_id, agent, q, since, adhoc_only)
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        return self.query(sql, tuple(args))[0]["n"]
 
     def list_sessions(self, limit: int = 50) -> list[dict]:
         return self.query("SELECT s.*, (SELECT COUNT(*) FROM runs r WHERE r.session_id=s.session_id) AS runs"
                           " FROM sessions s ORDER BY created_at DESC LIMIT ?", (limit,))
+
+    # maintenance (§5.3) -------------------------------------------------------
+    def prune(self, keep_days: int, keep_sessions: list[str] | None = None, dry_run: bool = False) -> dict:
+        """Delete runs (and their candidates) older than `keep_days`. Runs whose session_id is in
+        `keep_sessions` are never deleted, regardless of age."""
+        cutoff = time.time() - keep_days * 86400
+        keep = [s for s in (keep_sessions or []) if s]
+        where = "created_at < ?"
+        args: list[Any] = [cutoff]
+        if keep:
+            where += f" AND session_id NOT IN ({','.join('?' * len(keep))})"
+            args += keep
+        run_ids = [r["run_id"] for r in self.query(f"SELECT run_id FROM runs WHERE {where}", tuple(args))]
+        if dry_run:
+            return {"would_delete": len(run_ids), "cutoff": cutoff, "dry_run": True}
+        self._exec(f"DELETE FROM runs WHERE {where}", tuple(args))
+        if run_ids:
+            placeholders = ",".join("?" * len(run_ids))
+            self._exec(f"DELETE FROM candidates WHERE run_id IN ({placeholders})", tuple(run_ids))
+        return {"deleted": len(run_ids), "cutoff": cutoff, "dry_run": False}
+
+    def rewrite_legacy_rows(self, compress_context: bool = False, batch_size: int = 500) -> dict:
+        """One-off maintenance pass for a database that predates this migration (§5.3): dedups
+        `config_json` into `configs` and, if `compress_context`, zlib-compresses `context` for
+        rows that still have it inline. Idempotent (already-migrated rows never match the WHERE
+        clause again), so it is safe to run more than once. Not called automatically on open —
+        a 100+ MB database would make every startup slow; run it explicitly (e.g. from a
+        maintenance script) when adopting the new schema on an existing file.
+        """
+        configs_deduped = 0
+        context_compressed = 0
+        where = "config_json IS NOT NULL"
+        if compress_context:
+            where += " OR (context_encoding IS NULL AND context IS NOT NULL)"
+        while True:
+            rows = self.query(f"SELECT run_id, config_json, context, context_encoding FROM runs"
+                              f" WHERE {where} LIMIT ?", (batch_size,))
+            if not rows:
+                break
+            for r in rows:
+                updates: dict[str, Any] = {}
+                if r["config_json"] is not None:
+                    digest = hashlib.sha256(r["config_json"].encode("utf-8")).hexdigest()
+                    self._exec("INSERT OR IGNORE INTO configs (hash, json) VALUES (?,?)", (digest, r["config_json"]))
+                    updates["config_hash"] = digest
+                    updates["config_json"] = None
+                    configs_deduped += 1
+                if compress_context and r["context_encoding"] is None and r["context"]:
+                    updates["context"] = base64.b64encode(zlib.compress(r["context"].encode("utf-8"), 6)).decode("ascii")
+                    updates["context_encoding"] = "zlib+b64"
+                    context_compressed += 1
+                if updates:
+                    set_sql = ", ".join(f"{k}=?" for k in updates)
+                    self._exec(f"UPDATE runs SET {set_sql} WHERE run_id=?", (*updates.values(), r["run_id"]))
+            if len(rows) < batch_size:
+                break
+        return {"configs_deduped": configs_deduped, "context_compressed": context_compressed}
+
+    def vacuum(self) -> None:
+        with self._lock:
+            self.conn.commit()
+            self.conn.execute("VACUUM")
 
     # feedback ----------------------------------------------------------------
     def mark_false_negative(self, run_id: str, candidate_id: str) -> dict:

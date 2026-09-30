@@ -65,7 +65,7 @@ class MemoryGateway:
         self.vault = ObsidianVault(self.retrieval_cfg.vault_path, self.retrieval_cfg.excluded_dirs)
         if not self.vault.exists():
             raise FileNotFoundError(f"Vault não encontrado: {self.vault.root}")
-        self.db = db or Database(self.bench_cfg.db_path)
+        self.db = db or Database(self.bench_cfg.db_path, compress_context=self.bench_cfg.db_compress_context)
         db_path = Path(self.db.path).resolve()
         if self.vault.root in db_path.parents:
             raise PermissionError("benchmark.db não pode ficar dentro do vault (§58)")
@@ -234,6 +234,9 @@ class MemoryGateway:
             "cache_enabled": self.bench_cfg.cache_enabled,
             "jev_mode": jcfg.mode if is_jev else None,
             "threshold": jcfg.relevance_threshold if is_jev else None,
+            # Who actually called (Hermes, Claude Code, Codex…), distinct from `agent` (the
+            # interface: mcp/rest/cli). Optional, caller-supplied, never inferred (§5.1).
+            "client": meta.get("client"),
         })
         m.update(self._optimizer_metrics(plan, pre, post, cache_hit=False))
         if error:
@@ -272,7 +275,9 @@ class MemoryGateway:
         m.update(self._optimizer_metrics(plan, pre, {}, cache_hit=True))
         m.update({"total_latency_ms": round((time.perf_counter() - t0) * 1000, 1),
                   "retrieval_latency_ms": 0.0, "judge_tokens": 0, "jev_tokens": 0, "jev_cost": 0.0,
-                  "total_tokens_spent": m.get("context_tokens", 0)})
+                  "total_tokens_spent": m.get("context_tokens", 0),
+                  # A cache hit reuses an earlier run's context but the CALLER can differ.
+                  "client": meta.get("client")})
         m.pop("error", None)
         result = MemoryResult(query=query, pipeline=plan.pipeline, context=context, sources=list(sources),
                               metrics=m, run_id=run_id, candidates=list(cands))

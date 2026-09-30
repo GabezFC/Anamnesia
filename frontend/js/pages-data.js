@@ -9,7 +9,7 @@ import {
 } from './format.js';
 import {
   metricCard, panel, emptyState, notWiredState, notMeasuredState, table, segmented, kvTable,
-  callout, skeletonLines,
+  callout, skeletonLines, skeletonTable,
 } from './components.js';
 import { consumerRows } from './store.js';
 
@@ -51,25 +51,6 @@ export function renderHistory(ctx) {
     </tr>`;
   });
 
-  const runRows = rs.slice(0, 80).map((r) => {
-    const m = metricsOf(r);
-    const rec = recallOf(m);
-    return `<tr>
-      <td><button type="button" class="linkish mono" data-run="${esc(r.run_id)}">${esc(String(r.run_id).slice(0, 10))}</button></td>
-      <td class="muted">${fmtDate(r.created_at)}</td>
-      <td>${esc(PIPELINE_SHORT[r.pipeline] || r.pipeline || '—')}</td>
-      <td class="mono muted">${esc(armOf(r))}</td>
-      <td>${esc(r.question_id || String(r.query || '').slice(0, 40) || '—')}</td>
-      <td class="num">${fmtCompact(totalTokens(m))}</td>
-      <td class="num">${fmtCompact(num(get(m, 'context_tokens')))}</td>
-      <td class="num">${fmtMs(num(get(m, 'total_latency_ms')))}</td>
-      <td class="num">${rec === null ? '<span class="muted">n/m</span>' : fmtPct(rec, 0)}</td>
-      <td>${r.error
-    ? '<span class="pill err"><span class="dot"></span>erro</span>'
-    : '<span class="pill ok"><span class="dot"></span>ok</span>'}</td>
-    </tr>`;
-  });
-
   return `
     <div class="page-toolbar">
       <span class="muted">Série temporal:</span>
@@ -85,18 +66,175 @@ export function renderHistory(ctx) {
   ], sessionRows, { emptyDetail: 'GET /benchmark/sessions não retornou sessões' }),
   { sub: `${sessions.length} sessões · clique para detalhar`, prov: 'experimental' })}
     <div id="session-detail"></div>
-    ${panel('Runs recentes', table([
-    { label: 'Run' }, { label: 'Data' }, { label: 'Pipeline' }, { label: 'Braço' }, { label: 'Pergunta' },
-    { label: 'Tokens gastos', num: true, tipKey: 'total_tokens' },
-    { label: 'Contexto', num: true, tipKey: 'context_tokens' },
-    { label: 'Latência', num: true, tipKey: 'total_latency_ms' },
-    { label: 'Recall', num: true, tipKey: 'recall' }, { label: 'Status' },
-  ], runRows), { sub: `mostrando ${Math.min(80, rs.length)} de ${rs.length}`, prov: 'experimental' })}
+    ${panel('Runs recentes', `
+      <div class="page-toolbar runs-toolbar">
+        <div class="seg" role="tablist" data-hist-tab>
+          <button type="button" data-val="all" role="tab"
+            class="${histRunsState.tab === 'all' ? 'active' : ''}"
+            aria-selected="${histRunsState.tab === 'all'}">Todas</button>
+          <button type="button" data-val="adhoc" role="tab"
+            class="${histRunsState.tab === 'adhoc' ? 'active' : ''}"
+            aria-selected="${histRunsState.tab === 'adhoc'}">Chamadas reais (adhoc)</button>
+        </div>
+        <input type="search" data-hist-filter="agent" placeholder="agente (mcp/rest/cli)"
+          value="${esc(histRunsState.agent)}">
+        <input type="search" data-hist-filter="session" placeholder="session_id"
+          value="${esc(histRunsState.session)}">
+        <input type="search" data-hist-filter="q" placeholder="buscar na pergunta…"
+          value="${esc(histRunsState.q)}">
+        <button type="button" data-hist-refresh>Atualizar</button>
+        <label class="muted"><input type="checkbox" data-hist-autorefresh
+          ${histRunsState.autoRefresh ? 'checked' : ''}> auto-atualizar (10s)</label>
+      </div>
+      <div id="runs-recent-slot">${skeletonTable(8)}</div>
+    `, { sub: 'GET /benchmark/runs — paginado no servidor', prov: 'experimental' })}
     <div id="run-detail"></div>
   `;
 }
 
+/** Table-only UI state for the "Runs recentes" widget. Not part of ctx.state: it drives its own
+ * server fetch (getRunsPage), independent of the RUN_LIMIT=5000 preload used by every other page. */
+const histRunsState = {
+  tab: 'all', agent: '', session: '', q: '', offset: 0, limit: 50, autoRefresh: false,
+};
+let histRunsSeq = 0;
+let histRunsTimer = null;
+
+function runRowHtml(r) {
+  const m = metricsOf(r);
+  const rec = recallOf(m);
+  const client = get(m, 'client') || r.agent || '—';
+  return `<tr>
+      <td><button type="button" class="linkish mono" data-run="${esc(r.run_id)}">${esc(String(r.run_id).slice(0, 10))}</button></td>
+      <td class="muted">${fmtDate(r.created_at)}</td>
+      <td>${esc(PIPELINE_SHORT[r.pipeline] || r.pipeline || '—')}</td>
+      <td class="mono muted">${esc(armOf(r))}</td>
+      <td class="mono muted">${esc(client)}</td>
+      <td style="white-space:pre-wrap;word-break:break-word;max-width:360px">${esc(r.query || '—')}</td>
+      <td class="num">${fmtCompact(totalTokens(m))}</td>
+      <td class="num">${fmtCompact(num(get(m, 'context_tokens')))}</td>
+      <td class="num">${fmtMs(num(get(m, 'total_latency_ms')))}</td>
+      <td class="num">${rec === null ? '<span class="muted">n/m</span>' : fmtPct(rec, 0)}</td>
+      <td>${r.error
+    ? '<span class="pill err"><span class="dot"></span>erro</span>'
+    : '<span class="pill ok"><span class="dot"></span>ok</span>'}</td>
+    </tr>`;
+}
+
+function runsTableHtml(rows, total) {
+  const body = table([
+    { label: 'Run' }, { label: 'Data' }, { label: 'Pipeline' }, { label: 'Braço' }, { label: 'Cliente' },
+    { label: 'Pergunta completa' },
+    { label: 'Tokens gastos', num: true, tipKey: 'total_tokens' },
+    { label: 'Contexto', num: true, tipKey: 'context_tokens' },
+    { label: 'Latência', num: true, tipKey: 'total_latency_ms' },
+    { label: 'Recall', num: true, tipKey: 'recall' }, { label: 'Status' },
+  ], rows.map(runRowHtml), { emptyDetail: 'nenhuma run corresponde ao filtro atual' });
+  const { offset, limit } = histRunsState;
+  const from = total ? offset + 1 : 0;
+  const to = offset + rows.length;
+  return `${body}
+    <div class="runs-pager">
+      <span class="muted">mostrando ${from}–${to} de ${total}</span>
+      <button type="button" data-hist-page="-1" ${offset <= 0 ? 'disabled' : ''}>◀ anterior</button>
+      <button type="button" data-hist-page="1" ${to >= total ? 'disabled' : ''}>próxima ▶</button>
+    </div>`;
+}
+
+/** Fetches the current filter/tab/offset from the server and repaints only #runs-recent-slot
+ * (chart and sessions panel are untouched). Stale responses (an older request resolving after a
+ * newer one) are dropped via a monotonically increasing sequence number. */
+async function refreshRunsTable(root, ctx) {
+  const slot = root.querySelector('#runs-recent-slot');
+  if (!slot) return;
+  const seq = ++histRunsSeq;
+  try {
+    const { runs, total } = await ctx.api.getRunsPage({
+      limit: histRunsState.limit, offset: histRunsState.offset,
+      sessionId: histRunsState.session || undefined,
+      agent: histRunsState.agent || undefined,
+      q: histRunsState.q || undefined,
+      adhocOnly: histRunsState.tab === 'adhoc',
+    });
+    if (seq !== histRunsSeq) return;
+    slot.innerHTML = runsTableHtml(realRuns(runs), total);
+    bindRunsTableRowClicks(slot, root, ctx);
+    slot.querySelectorAll('[data-hist-page]').forEach((b) => {
+      b.addEventListener('click', () => {
+        histRunsState.offset = Math.max(0, histRunsState.offset + Number(b.dataset.histPage) * histRunsState.limit);
+        refreshRunsTable(root, ctx);
+      });
+    });
+  } catch (e) {
+    if (seq !== histRunsSeq) return;
+    slot.innerHTML = `<div class="state error"><div class="state-title">Não foi possível carregar as runs</div>
+      <code>${esc(e && e.message ? e.message : String(e))}</code></div>`;
+  }
+}
+
+function bindRunsTableRowClicks(slot, root, ctx) {
+  slot.querySelectorAll('[data-run]').forEach((a) => {
+    a.addEventListener('click', async () => {
+      const box = root.querySelector('#run-detail');
+      if (!box) return;
+      box.innerHTML = panel('Detalhe da run', skeletonLines(5));
+      try {
+        const d = await ctx.api.getRunDetail(a.dataset.run);
+        box.innerHTML = renderRunDetail(d);
+      } catch (e) {
+        box.innerHTML = panel('Detalhe da run',
+          `<div class="state error"><div class="state-title">Não foi possível carregar a run</div>
+            <code>${esc(e.message)}</code></div>`);
+      }
+      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+function bindRunsToolbar(root, ctx) {
+  root.querySelectorAll('[data-hist-tab] [data-val]').forEach((b) => {
+    b.addEventListener('click', () => {
+      if (histRunsState.tab === b.dataset.val) return;
+      histRunsState.tab = b.dataset.val;
+      histRunsState.offset = 0;
+      root.querySelectorAll('[data-hist-tab] [data-val]').forEach((x) => {
+        x.classList.toggle('active', x === b);
+        x.setAttribute('aria-selected', String(x === b));
+      });
+      refreshRunsTable(root, ctx);
+    });
+  });
+  let debounceTimer = null;
+  root.querySelectorAll('[data-hist-filter]').forEach((input) => {
+    input.addEventListener('input', () => {
+      histRunsState[input.dataset.histFilter] = input.value.trim();
+      histRunsState.offset = 0;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => refreshRunsTable(root, ctx), 300);
+    });
+  });
+  root.querySelector('[data-hist-refresh]')?.addEventListener('click', () => refreshRunsTable(root, ctx));
+  const auto = root.querySelector('[data-hist-autorefresh]');
+  auto?.addEventListener('change', () => {
+    histRunsState.autoRefresh = auto.checked;
+    setupAutoRefresh(root, ctx);
+  });
+}
+
+function setupAutoRefresh(root, ctx) {
+  clearInterval(histRunsTimer);
+  histRunsTimer = histRunsState.autoRefresh ? setInterval(() => refreshRunsTable(root, ctx), 10000) : null;
+}
+
+/** Called by the router before leaving the History page, so the auto-refresh timer never keeps
+ * firing against a detached DOM node (see app.js navigate()). */
+export function unmountHistory() {
+  clearInterval(histRunsTimer);
+  histRunsTimer = null;
+}
+
 export function mountHistory(root, ctx) {
+  unmountHistory();
   const rs = realRuns(ctx.runs);
   const key = HIST_SERIES[ctx.state.histSeries] ? ctx.state.histSeries : 'tokens';
   const [label, valFn, fmt, unit] = HIST_SERIES[key];
@@ -113,23 +251,9 @@ export function mountHistory(root, ctx) {
       emptyMsg: `nenhuma run carregada tem a métrica "${label}"`,
     });
   }
-  // run drill-down
-  root.querySelectorAll('[data-run]').forEach((a) => {
-    a.addEventListener('click', async () => {
-      const box = root.querySelector('#run-detail');
-      if (!box) return;
-      box.innerHTML = panel('Detalhe da run', skeletonLines(5));
-      try {
-        const d = await ctx.api.getRunDetail(a.dataset.run);
-        box.innerHTML = renderRunDetail(d);
-      } catch (e) {
-        box.innerHTML = panel('Detalhe da run',
-          `<div class="state error"><div class="state-title">Não foi possível carregar a run</div>
-            <code>${esc(e.message)}</code></div>`);
-      }
-      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  });
+  bindRunsToolbar(root, ctx);
+  refreshRunsTable(root, ctx);
+  setupAutoRefresh(root, ctx);
 }
 
 function renderRunDetail(d) {

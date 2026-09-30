@@ -6,7 +6,7 @@ import threading
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app.adapters.registry import detect_all
@@ -40,6 +40,9 @@ class SearchRequest(BaseModel):
     # Memory scoping (§14): "projeto:<slug>", comma-separated for several projects,
     # "area:<Area>", or omitted/"global" for the whole brain.
     scope: str | None = Field(None, max_length=500)
+    # Who actually called (Hermes, Claude Code, Codex…), distinct from the interface ("rest").
+    # Optional; recorded in metrics_json.client and surfaced in GET /benchmark/runs (§5.1).
+    client: str | None = Field(None, max_length=200)
 
 
 class ConsumerSpec(BaseModel):
@@ -79,7 +82,7 @@ def _search(req: SearchRequest, pipeline: str):
         r = gw().search(req.query, pipeline, req.max_results,
                         jev_overrides=_overrides(req.jev_mode, req.threshold, req.review_action),
                         context_budget=req.context_budget, scope=req.scope,
-                        run_meta={"kind": "api", "agent": "rest"})
+                        run_meta={"kind": "api", "agent": "rest", "client": req.client})
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     return r.to_dict(include_candidates=req.include_candidates)
@@ -181,8 +184,22 @@ def threshold_sweep(req: BenchmarkRequest):
 
 
 @router.get("/benchmark/runs")
-def benchmark_runs(limit: int = 100, session_id: str | None = None):
-    return gw().db.list_runs(limit, session_id)
+def benchmark_runs(response: Response, limit: int = 100, offset: int = 0, session_id: str | None = None,
+                   agent: str | None = None, q: str | None = None, since: float | None = None,
+                   adhoc_only: bool = False, full: bool = False):
+    """Server-side paginated/filtered run list (§4, §5.1).
+
+    Returns a bare list (never `{runs:[...]}`) so existing frontend callers that do
+    `Array.isArray(await api(...))` keep working unchanged. The total count that matches the
+    filters (ignoring limit/offset) is exposed via the `X-Total-Count` header for callers that
+    want real pagination instead of guessing from `len(page)`.
+    """
+    db = gw().db
+    rows = db.list_runs(limit=limit, offset=offset, session_id=session_id, agent=agent, q=q,
+                        since=since, adhoc_only=adhoc_only, full=full)
+    response.headers["X-Total-Count"] = str(db.count_runs(session_id=session_id, agent=agent, q=q,
+                                                           since=since, adhoc_only=adhoc_only))
+    return rows
 
 
 @router.get("/benchmark/runs/{run_id}")

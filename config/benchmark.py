@@ -36,6 +36,9 @@ class BenchmarkConfig:
     cache_enabled_env: bool = field(default_factory=lambda: env_bool("CACHE_ENABLED", True))
     questions_path: str = field(default_factory=lambda: env_str("BENCHMARK_QUESTIONS", _default_questions_path()))
     db_path: str = field(default_factory=lambda: env_str("DB_PATH", str(PROJECT_ROOT / "benchmark.db")))
+    # zlib-compress `runs.context` on write (§5.3). Off by default: existing tooling that reads the
+    # SQLite file directly (not through Database._decode) would see base64 instead of text.
+    db_compress_context: bool = field(default_factory=lambda: env_bool("DB_COMPRESS_CONTEXT", False))
     host: str = field(default_factory=lambda: env_str("HOST", "0.0.0.0"))
     port: int = field(default_factory=lambda: env_int("PORT", 8000))
     seed: int = field(default_factory=lambda: env_int("BENCHMARK_SEED", 42))
