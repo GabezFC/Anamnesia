@@ -1,8 +1,17 @@
 """Deterministic token estimation and budgeting (§13, §16, §29).
 
 We deliberately avoid provider tokenizers: estimates must be identical for every consumer model.
-Heuristic: max(chars/4, words*1.3) — conservative for Portuguese text with accents.
+Heuristic: max(chars/4, words*1.3) * PT_CALIBRATION_FACTOR.
 Real provider token counts (when exposed) are recorded separately as model/JEV tokens.
+
+PT CALIBRATION (§5.5 item 9): the raw max(chars/4, words*1.3) heuristic undercounts Portuguese text
+by 8-18% (documented in the vault note `memory-gateway-token-optimization-audit`) -- accented words
+split into more provider subword tokens than their ASCII character length suggests. `tiktoken` is
+not installed in this environment (checked: `import tiktoken` fails in .venv), so the factor below
+could not be freshly calibrated against real benchmark.db contexts; it is the midpoint of the
+documented 8-18% range, not a new measurement. Every run this estimator touches carries
+`metrics_version` (app/gateway/memory_gateway.py) so a future re-calibration can be told apart from
+runs recorded under this factor.
 """
 from __future__ import annotations
 
@@ -13,13 +22,15 @@ from typing import Callable, Iterable, TypeVar
 T = TypeVar("T")
 _WORD = re.compile(r"\S+")
 
+PT_CALIBRATION_FACTOR = 1.13
+
 
 def estimate_tokens(text: str) -> int:
     if not text:
         return 0
     chars = len(text)
     words = len(_WORD.findall(text))
-    return max(1, math.ceil(max(chars / 4.0, words * 1.3)))
+    return max(1, math.ceil(max(chars / 4.0, words * 1.3) * PT_CALIBRATION_FACTOR))
 
 
 def truncate_to_tokens(text: str, max_tokens: int) -> str:

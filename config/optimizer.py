@@ -13,14 +13,42 @@ Every stage has its own switch so a regression can be isolated and rolled back w
 set the variable in .env and restart. `MG_OPTIMIZER=false` disables the whole layer and restores
 the exact pre-2026-09-28 behaviour (the default pipeline stays whatever the caller asked for).
 """
+import json
 from dataclasses import dataclass, field, replace
 
-from config import env_bool, env_float, env_int, env_str
+from config import PROJECT_ROOT, env_bool, env_float, env_int, env_str
 
 # Part of the result-cache key and of every run's metrics. Bump when a stage changes MEANING.
 OPTIMIZER_VERSION = "mol-v1"
 
 ROUTE_TARGETS = ("baseline", "graphify", "graphify_jev", "graphify_jev_opt")
+
+# User-local, gitignored (never committed, never read from the vault). Same file the future
+# frontend toggle (proposta 2026-09-28 §3) is meant to write to — "config local (arquivo), não no
+# vault". Missing or malformed file is not an error: every key is optional.
+LOCAL_SETTINGS_PATH = PROJECT_ROOT / "config" / "local_settings.json"
+
+
+def _local_settings() -> dict:
+    try:
+        return json.loads(LOCAL_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError, OSError):
+        return {}
+
+
+def verdict_enabled_default() -> bool:
+    """MG_VERDICT_ENABLED env, overridden by config/local_settings.json {"verdict_enabled": bool}.
+
+    The local file wins when the key is present and is actually a bool -- anything else (missing
+    file, missing key, wrong type) falls back to the env var, which defaults to False (§1.2:
+    "default a decidir após validação" -- the 2026-09-29 benchmark never found a scope where a
+    non-baseline pipeline was worth it, see docs/SCOPE_BENCHMARK.md, so there is nothing validated
+    to turn on by default yet).
+    """
+    local = _local_settings().get("verdict_enabled")
+    if isinstance(local, bool):
+        return local
+    return env_bool("MG_VERDICT_ENABLED", False)
 
 
 @dataclass
@@ -79,6 +107,21 @@ class OptimizerConfig:
     # 0 = check on every call; negative = never (old behaviour: index frozen at startup).
     refresh_interval_s: float = field(default_factory=lambda: env_float("MG_VAULT_REFRESH_S", 5.0))
 
+    # -- VERDICT: routing decision for pipeline="auto", backed by docs/SCOPE_BENCHMARK.md ---------
+    # This reuses `route_for()` above (app/services/verdict.py) -- it is NOT a second "auto"
+    # mechanism (§1.2, §5.6). OFF by default: see verdict_enabled_default() docstring. While off,
+    # `auto` behaves EXACTLY as before this feature existed (no size estimate is even computed).
+    verdict_enabled: bool = field(default_factory=verdict_enabled_default)
+    # Candidate-count buckets recorded for audit (`verdict_size_estimate`/`verdict_reason` in
+    # metrics_json) alongside the routing decision. docs/SCOPE_BENCHMARK.md measured its
+    # small/medium/large cuts on candidate TOKENS, segmented per corpus -- there is no measured cut
+    # for a raw candidate COUNT from a single lightweight pre-filter (BaselineIndex.count(), the
+    # cheap estimate app/services/verdict.py actually uses), so these are conservative placeholders
+    # for LABELING only. They never override MG_ROUTE_*; do not promote them to decide a route
+    # without first running scripts/bench_optimizer.py against candidate counts.
+    verdict_small_max: int = field(default_factory=lambda: env_int("MG_VERDICT_SMALL_MAX", 15))
+    verdict_large_min: int = field(default_factory=lambda: env_int("MG_VERDICT_LARGE_MIN", 50))
+
     version: str = OPTIMIZER_VERSION
 
     def route_for(self, complexity: str) -> str:
@@ -93,7 +136,8 @@ class OptimizerConfig:
     def disabled(cls) -> "OptimizerConfig":
         """Exact pre-layer behaviour. Used by benchmarks as the BEFORE arm."""
         return cls(enabled=False, adaptive_cut=False, near_dedup=False, compact_headers=False,
-                   injection_flag=False, result_cache=False, refresh_interval_s=-1.0)
+                   injection_flag=False, result_cache=False, refresh_interval_s=-1.0,
+                   verdict_enabled=False)
 
     def with_(self, **kw) -> "OptimizerConfig":
         return replace(self, **kw)
