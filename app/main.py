@@ -1,4 +1,4 @@
-"""Entry point: `python -m app.main` starts REST API + frontend on HOST:PORT (default 0.0.0.0:8000)."""
+"""Entry point: `python -m app.main` starts REST API + frontend on HOST:PORT (default 127.0.0.1:8000)."""
 from __future__ import annotations
 
 import socket
@@ -12,12 +12,14 @@ if str(ROOT) not in sys.path:
 
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from app.adapters.registry import warm_detection  # noqa: E402
 from app.api import routes  # noqa: E402
 from app.gateway.memory_gateway import MemoryGateway  # noqa: E402
+from app.services.security import get_or_create_local_token  # noqa: E402
 
 FRONTEND = ROOT / "frontend"
 
@@ -39,6 +41,9 @@ async def lifespan(_app: FastAPI):
     info = g.warm()
     g.log.info("gateway warm: %s", info)
     routes._state["gateway"] = g
+    # Mint (or load) the local write-protection token before serving any request, so the very
+    # first dashboard load can fetch it from GET /config/token (§5.4, §3). Never logged.
+    get_or_create_local_token()
     # Probe agents/models off the request path: the first /system/info would otherwise block
     # ~9 s on network probes, exactly when the dashboard is being opened.
     warm_detection()
@@ -46,7 +51,15 @@ async def lifespan(_app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    from config.benchmark import BenchmarkConfig
+
     app = FastAPI(title="Memory Gateway", version="0.1.0", lifespan=lifespan)
+    cfg = BenchmarkConfig()
+    # Explicit own-origin only (never "*"): the dashboard is same-origin (served by this same app
+    # below), so this only matters for a developer hitting the API from a separate dev server.
+    own_origins = [f"http://{h}:{cfg.port}" for h in (cfg.host, "127.0.0.1", "localhost")]
+    app.add_middleware(CORSMiddleware, allow_origins=sorted(set(own_origins)),
+                       allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-MG-Token"])
     app.include_router(routes.router)
     if FRONTEND.exists():
         app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
@@ -63,10 +76,15 @@ app = create_app()
 def main():
     from config.benchmark import BenchmarkConfig
     cfg = BenchmarkConfig()
-    print(f"Memory Gateway\n  Local:   http://127.0.0.1:{cfg.port}\n  Network: http://{local_ip()}:{cfg.port}")
-    print("  Acesso pela rede pode exigir regra de firewall (não alterada automaticamente):\n"
-          f'  netsh advfirewall firewall add rule name="Memory Gateway {cfg.port}" dir=in action=allow '
-          f"protocol=TCP localport={cfg.port}")
+    print(f"Memory Gateway\n  Local: http://127.0.0.1:{cfg.port}  (bind: {cfg.host}:{cfg.port})")
+    if cfg.host == "127.0.0.1":
+        print("  Loopback apenas (padrão). Para acesso pela rede, defina MG_HOST=0.0.0.0 no .env --\n"
+              "  endpoints de escrita continuam recusando qualquer IP que não seja 127.0.0.1/::1 mesmo assim.")
+    else:
+        print(f"  Network: http://{local_ip()}:{cfg.port}\n"
+              "  Acesso pela rede pode exigir regra de firewall (não alterada automaticamente):\n"
+              f'  netsh advfirewall firewall add rule name="Memory Gateway {cfg.port}" dir=in action=allow '
+              f"protocol=TCP localport={cfg.port}")
     uvicorn.run(app, host=cfg.host, port=cfg.port, log_level="info")
 
 

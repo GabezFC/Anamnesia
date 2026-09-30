@@ -1,12 +1,18 @@
-"""REST API (§6). FastAPI. Read + benchmark operations only; nothing writes to the vault."""
+"""REST API (§6). FastAPI. Read + benchmark operations only; nothing writes to the vault.
+
+Endpoints that change server state (the /config/* group, plus feedback and benchmark-run) require
+`require_local_write` (app/services/security.py, §5.4): loopback client, same-origin Origin/Referer,
+and the `X-MG-Token` header. Everything else stays a plain read."""
 from __future__ import annotations
 
 import json
+import os
 import threading
 import uuid
+from dataclasses import replace as dc_replace
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app.adapters.registry import detect_all
@@ -14,6 +20,14 @@ from app.benchmark.evaluator import validate_evaluation, validate_label
 from app.benchmark.runner import BenchmarkRunner, estimate_plan, load_questions
 from app.benchmark.statistics import aggregate_stats
 from app.schemas.models import DEFAULT_EXPLICIT_PIPELINE, PIPELINES
+from app.services import security
+from app.services.envfile import set_env_var
+from app.services.security import (MODEL_KEY_ENV_VARS, get_or_create_local_token, mask_secret,
+                                   require_local_write, require_localhost)
+from config import local_settings as local_cfg
+from config.optional_stages_catalog import CATALOG as OPTIONAL_STAGES_CATALOG
+from config.optional_stages_catalog import REJECTED as OPTIONAL_STAGES_REJECTED
+from config.retrieval import resolve_vault_path, validate_vault_path_for_runtime
 
 router = APIRouter()
 _state: dict = {"gateway": None, "jobs": {}}
@@ -148,12 +162,12 @@ def _run_benchmark(req: BenchmarkRequest, pipelines):
     return {"job_id": job, "status": "running"}
 
 
-@router.post("/benchmark/run")
+@router.post("/benchmark/run", dependencies=[Depends(require_local_write)])
 def benchmark_run(req: BenchmarkRequest):
     return _run_benchmark(req, req.pipelines or [DEFAULT_EXPLICIT_PIPELINE])
 
 
-@router.post("/benchmark/run-all")
+@router.post("/benchmark/run-all", dependencies=[Depends(require_local_write)])
 def benchmark_run_all(req: BenchmarkRequest):
     return _run_benchmark(req, list(PIPELINES))
 
@@ -178,7 +192,7 @@ def benchmark_job(job_id: str):
     return j
 
 
-@router.post("/benchmark/threshold-sweep")
+@router.post("/benchmark/threshold-sweep", dependencies=[Depends(require_local_write)])
 def threshold_sweep(req: BenchmarkRequest):
     return BenchmarkRunner(gw()).threshold_sweep(_questions(req))
 
@@ -230,7 +244,7 @@ class FalseNegativeRequest(BaseModel):
     candidate_id: str
 
 
-@router.post("/feedback/false-negative")
+@router.post("/feedback/false-negative", dependencies=[Depends(require_local_write)])
 def mark_false_negative(req: FalseNegativeRequest):
     try:
         return gw().db.mark_false_negative(req.run_id, req.candidate_id)
@@ -244,7 +258,7 @@ class LabelRequest(BaseModel):
     label: str
 
 
-@router.post("/feedback/label")
+@router.post("/feedback/label", dependencies=[Depends(require_local_write)])
 def add_label(req: LabelRequest):
     try:
         validate_label(req.label)
@@ -267,15 +281,29 @@ class EvaluationRequest(BaseModel):
     notes: str | None = None
 
 
-@router.post("/feedback/evaluation")
+@router.post("/feedback/evaluation", dependencies=[Depends(require_local_write)])
 def add_evaluation(req: EvaluationRequest):
     gw().db.add_evaluation(validate_evaluation(req.model_dump()))
     return {"ok": True}
 
 
+def _settings_section(g) -> dict:
+    """`settings` block for GET /system/info (§3): every value the config page can change, read
+    back live so a caller can confirm a write took effect without restarting the server."""
+    return {
+        "verdict_enabled": g.optimizer.cfg.verdict_enabled,
+        "optional_stages": local_cfg.get_optional_stages(),
+        "vault_path": str(g.vault.root),
+        "keys_present": {k: mask_secret(os.environ.get(k)) for k in MODEL_KEY_ENV_VARS},
+    }
+
+
 @router.get("/system/info")
 def system_info():
-    return gw().system_info()
+    g = gw()
+    info = g.system_info()
+    info["settings"] = _settings_section(g)
+    return info
 
 
 @router.get("/system/integrations")
@@ -291,3 +319,108 @@ def system_projects():
     makes the dashboard's Projects page generic instead of a hardcoded list.
     """
     return gw().projects()
+
+
+# ---------------------------------------------------------------------------------------------
+# /config/* — interactive configuration page (§3). Every POST here requires require_local_write
+# (loopback + same-origin + X-MG-Token); GETs that only reveal masked/boolean state stay open to
+# any local caller EXCEPT the token bootstrap itself, which is loopback-only (require_localhost).
+# ---------------------------------------------------------------------------------------------
+
+@router.get("/config/token", dependencies=[Depends(require_localhost)])
+def config_token():
+    """One-time bootstrap: the frontend fetches this once and attaches it to every write call."""
+    return {"token": get_or_create_local_token()}
+
+
+@router.get("/config/model-keys", dependencies=[Depends(require_localhost)])
+def get_model_keys():
+    """Masked (last 4 chars) view of every model/consumer secret this page can set. Never the
+    plaintext value — that never round-trips back to the client after being saved."""
+    return {k: mask_secret(os.environ.get(k)) for k in MODEL_KEY_ENV_VARS}
+
+
+class ModelKeyRequest(BaseModel):
+    key_name: str = Field(..., description=f"um de {MODEL_KEY_ENV_VARS}")
+    value: str = Field(..., min_length=1, max_length=2000)
+
+
+@router.post("/config/model-key", dependencies=[Depends(require_local_write)])
+def set_model_key(req: ModelKeyRequest):
+    if req.key_name not in MODEL_KEY_ENV_VARS:
+        raise HTTPException(422, f"key_name inválido: {req.key_name!r}. Use um de {MODEL_KEY_ENV_VARS}")
+    # Never logged: no logger call anywhere in this path touches req.value.
+    set_env_var(security.ENV_PATH, req.key_name, req.value)
+    os.environ[req.key_name] = req.value
+    return {"key_name": req.key_name, "masked": mask_secret(req.value)}
+
+
+class VaultPathRequest(BaseModel):
+    path: str = Field(..., min_length=1, max_length=1000)
+
+
+@router.post("/config/vault-path", dependencies=[Depends(require_local_write)])
+def set_vault_path(req: VaultPathRequest):
+    from app.gateway.memory_gateway import MemoryGateway
+
+    old = gw()
+    try:
+        candidate = resolve_vault_path(req.path)
+        validated = validate_vault_path_for_runtime(candidate, db_path=old.db.path)
+    except (FileNotFoundError, NotADirectoryError, PermissionError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    set_env_var(security.ENV_PATH, "MEMORY_GATEWAY_VAULT", str(validated))
+    os.environ["MEMORY_GATEWAY_VAULT"] = str(validated)
+    # Rebuild against the SAME db/jev/optimizer config the running gateway already had -- only
+    # vault_path changes. Reusing `old.db` (instead of opening a second connection to the same
+    # file) and `old._jev_backend` is also what keeps a test-injected fake judge working across a
+    # vault switch, and preserves any runtime toggle already applied (e.g. verdict_enabled).
+    new_retrieval_cfg = dc_replace(old.retrieval_cfg, vault_path=validated)
+    try:
+        new_gw = MemoryGateway(retrieval_cfg=new_retrieval_cfg, jev_cfg=old.jev_cfg, bench_cfg=old.bench_cfg,
+                               db=old.db, jev_backend=old._jev_backend, opt_cfg=old.opt_cfg,
+                               optimizer_cfg=old.optimizer.cfg)
+        new_gw.warm()
+    except Exception as exc:  # noqa: BLE001 -- a bad rebuild must not brick the running server
+        raise HTTPException(422, f"falha ao reapontar o gateway: {exc}") from exc
+    _state["gateway"] = new_gw
+    return {"vault_path": str(validated), "markdown_files": len(new_gw.vault.list_markdown())}
+
+
+@router.get("/config/verdict")
+def get_verdict_flag():
+    return {"enabled": gw().optimizer.cfg.verdict_enabled}
+
+
+class VerdictRequest(BaseModel):
+    enabled: bool
+
+
+@router.post("/config/verdict", dependencies=[Depends(require_local_write)])
+def set_verdict_flag(req: VerdictRequest):
+    g = gw()
+    local_cfg.update(verdict_enabled=req.enabled)
+    g.optimizer.cfg.verdict_enabled = req.enabled  # reflects immediately, no restart (§3)
+    return {"enabled": req.enabled}
+
+
+@router.get("/config/optional-stages")
+def get_optional_stages_config():
+    return {
+        "catalog": OPTIONAL_STAGES_CATALOG,
+        "rejected": OPTIONAL_STAGES_REJECTED,
+        "enabled": local_cfg.get_optional_stages(),
+    }
+
+
+class OptionalStagesRequest(BaseModel):
+    stages: dict[str, bool]
+
+
+@router.post("/config/optional-stages", dependencies=[Depends(require_local_write)])
+def set_optional_stages_config(req: OptionalStagesRequest):
+    unknown = sorted(set(req.stages) - set(OPTIONAL_STAGES_CATALOG))
+    if unknown:
+        raise HTTPException(422, f"estágio(s) desconhecido(s): {', '.join(unknown)}")
+    updated = local_cfg.update(optional_stages=req.stages)
+    return {"enabled": updated.get("optional_stages", {})}

@@ -252,7 +252,7 @@ class OptionalStagesConfig:
     app/retrieval/optional_stages.py).
 
     Rejected candidates (OmniRoute, RECOMP/Selective Context, GPTCache/RedisVL) have NO flag here
-    on purpose — see config/optional_stages_catalog.py `selectable=False` entries for why.
+    on purpose — see config/optional_stages_catalog.py `REJECTED` for why.
     """
     # -- compression (shrinks a candidate's text) ------------------------------------------------
     llmlingua2: bool = field(default_factory=lambda: env_bool("OPT_STAGE_LLMLINGUA2", False))

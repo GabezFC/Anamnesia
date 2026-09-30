@@ -9,6 +9,7 @@ metrics()       aggregate statistics from SQLite
 """
 from __future__ import annotations
 
+import contextvars
 import time
 import uuid
 from dataclasses import asdict, replace
@@ -40,6 +41,16 @@ from app.services.scope import Scope, discover, parse_scope
 # (the history line chart, item 2.1) split series instead of plotting two incompatible measurement
 # scales as one continuous line. Runs recorded before this field existed simply lack the key.
 METRICS_VERSION = 1
+
+# `active_scope` used to be plain instance state (`self.active_scope = ...`), which is a race: a
+# single MemoryGateway instance is shared across every request (app/api/routes.py `_state["gateway"]`),
+# and FastAPI runs sync endpoints in a thread pool, so two concurrent searches with different scopes
+# could interleave their set/read/reset and leak one request's project scope into another's results
+# (§5.4 da proposta 2026-09-28, item 8 de pendencias-e-riscos-abertos). A ContextVar is per-context
+# (per-thread when a thread never copies another's context, per-Task under asyncio), so each request's
+# value is isolated even though every request shares this one gateway object and this one variable.
+_active_scope_var: contextvars.ContextVar["Scope | None"] = contextvars.ContextVar(
+    "mg_active_scope", default=None)
 
 
 class MemoryGateway:
@@ -83,8 +94,21 @@ class MemoryGateway:
         self.jev = self.make_jev(self.jev_cfg)
         # Lazy in-memory view of graph.json used by the hybrid retriever (reloads on mtime change).
         self.graph_index = GraphIndex(self.graphify.graph_path)
-        # Set per-search so pipelines can scope candidates early; None means global (§14).
-        self.active_scope: Scope | None = None
+
+    # -- scope (contextvar-backed, §5.4) -------------------------------------------
+    @property
+    def active_scope(self) -> "Scope | None":
+        """Set per-search so pipelines can scope candidates early; None means global (§14).
+
+        Backed by a module-level ContextVar (not instance state) so concurrent searches on this
+        SAME shared gateway instance never see each other's scope, even though they all read and
+        write through `gw.active_scope`.
+        """
+        return _active_scope_var.get()
+
+    @active_scope.setter
+    def active_scope(self, value: "Scope | None") -> None:
+        _active_scope_var.set(value)
 
     # -- projects -----------------------------------------------------------------
     def projects(self) -> dict:

@@ -1,160 +1,116 @@
-"""Catalog of optional retrieval stages evaluated for Memory Gateway (proposta 2026-09-28 §1.4).
+"""Catalog of optional retrieval-pipeline stages (§1.4, §3 da proposta 2026-09-28).
 
-Source: `memory-gateway-token-optimization-audit.md` §13 of the Cérebro vault (repository/technique
-survey). Copied here as plain data so the frontend configuration page (proposta §3) can render
-prós/contras/license without reading the vault at request time (the vault is READ ONLY and this data
-does not change per-request).
+Static data only — no import of the libraries themselves (they stay optional dependencies; see
+`memory-gateway-token-optimization-audit.md` §13 in the cérebro for the source table). Each entry
+in CATALOG is a candidate stage the interactive configuration page lists with a toggle. Stages
+rejected outright (OmniRoute, RECOMP/Selective Context, GPTCache/RedisVL) are informational only —
+REJECTED has no toggle and the frontend must never render one for them.
 
-`selectable=False` entries are the ones §13 marked "rejeitar": they are documented here for
-transparency, but no flag exists for them in config/optimization.py and the frontend must never
-expose a toggle for them (proposta §1.4: "não expor os rejeitados como opção ligável, só documentar
-por que foram descartados").
+This file only describes the stages; wiring a toggled-on stage into a pipeline is a separate
+concern (app/retrieval/optional_stages.py) and out of scope here.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-
-
-@dataclass(frozen=True)
-class StageInfo:
-    name: str
-    label: str
-    category: str            # "compression" | "reranking" | "dedup" | "spotlighting" | "rejected"
-    license: str
-    model_size: str
-    verdict: str              # "experimentar" | "integrado" | "rejeitar"
-    pros: list[str] = field(default_factory=list)
-    cons: list[str] = field(default_factory=list)
-    selectable: bool = True   # False => rejected candidate, no flag, no frontend toggle
-    reason: str = ""          # only meaningful when selectable=False
-
-
-CATALOG: dict[str, StageInfo] = {
-    "llmlingua2": StageInfo(
-        name="llmlingua2", label="LLMLingua-2", category="compression",
-        license="MIT", model_size="~560M (xlm-roberta-large-meetingbank)", verdict="experimentar",
-        pros=[
-            "Compressão de prompt treinada para preservar tokens informativos (não é truncamento cego)",
-            "Biblioteca oficial da Microsoft, mantida ativamente",
+CATALOG: dict[str, dict] = {
+    "llmlingua2": {
+        "label": "LLMLingua-2",
+        "licenca": "MIT",
+        "tamanho": "~560MB (xlm-roberta-large-based)",
+        "veredito": "experimentar",
+        "pros": [
+            "Compressão de prompt treinada para preservar informação verificável (datas, números, nomes).",
+            "Licença permissiva (MIT), sem restrição de uso comercial.",
         ],
-        cons=[
-            "Requer baixar/rodar um modelo próprio (custo de latência e memória)",
-            "Economia real de tokens não medida neste branch — lib não instalada "
-            "(requirements-optional.txt, import tardio em app/retrieval/optional_stages.py)",
+        "contras": [
+            "Modelo extra para baixar e manter (~560MB) e rodar (custo de latência/CPU-GPU).",
+            "Ainda não medido neste vault: economia de tokens vs custo de processamento é desconhecida.",
         ],
-    ),
-    "provence": StageInfo(
-        name="provence", label="Provence (naver/provence-reranker-debertav3-v1)",
-        category="compression", license="CC BY-NC-ND 4.0 — SOMENTE USO PESSOAL/NÃO COMERCIAL",
-        model_size="~440M (DeBERTa-v3-large)", verdict="experimentar",
-        pros=[
-            "Reranking + compressão de contexto em um único passo",
-            "Bom desempenho reportado em benchmarks públicos de RAG",
+    },
+    "provence": {
+        "label": "Provence",
+        "licenca": "CC BY-NC-ND (uso pessoal apenas, não permite uso comercial)",
+        "tamanho": "~430MB",
+        "veredito": "experimentar",
+        "pros": [
+            "Poda de contexto (context pruning) focada em manter só o texto relevante à pergunta.",
         ],
-        cons=[
-            "Licença NC-ND impede uso comercial — risco de compliance se o projeto for distribuído "
-            "ou usado comercialmente; manter desligado por padrão é obrigatório, não só recomendado",
-            "Não medido neste branch — lib não instalada",
+        "contras": [
+            "Licença NC-ND bloqueia qualquer uso comercial ou redistribuição modificada — inviável para o "
+            "projeto open-source publicar como padrão habilitado.",
+            "Ainda não medido neste vault.",
         ],
-    ),
-    "bge_reranker_v2_m3": StageInfo(
-        name="bge_reranker_v2_m3", label="BAAI/bge-reranker-v2-m3", category="reranking",
-        license="MIT", model_size="~568M", verdict="experimentar",
-        pros=[
-            "Cross-encoder multilingue (inclui PT-BR), bom recall em benchmarks públicos",
-            "Integra via sentence-transformers CrossEncoder ou FlagEmbedding",
+    },
+    "bge_reranker_v2_m3": {
+        "label": "bge-reranker-v2-m3",
+        "licenca": "Apache-2.0",
+        "tamanho": "~568M parâmetros",
+        "veredito": "experimentar (1ª opção)",
+        "pros": [
+            "Licença permissiva (Apache-2.0), uso comercial livre.",
+            "Reranker multilíngue, cobre PT-BR nativamente.",
+            "1ª opção recomendada na auditoria de repositórios (§13) entre os rerankers avaliados.",
         ],
-        cons=[
-            "Custo de inferência por par (query, candidato) — cresce linear com nº de candidatos",
-            "Não medido neste branch — lib não instalada",
+        "contras": [
+            "Modelo grande (~568M parâmetros): custo de latência e memória por candidato reordenado.",
+            "Ainda não medido neste vault.",
         ],
-    ),
-    "mxbai_rerank_base_v2": StageInfo(
-        name="mxbai_rerank_base_v2", label="mixedbread-ai/mxbai-rerank-base-v2", category="reranking",
-        license="Apache 2.0", model_size="~278M", verdict="experimentar",
-        pros=[
-            "Licença permissiva (Apache 2.0)",
-            "Menor que bge-reranker-v2-m3 — latência de inferência menor",
+    },
+    "mxbai_rerank_base_v2": {
+        "label": "mxbai-rerank-base-v2",
+        "licenca": "Apache-2.0",
+        "tamanho": "~0.5B parâmetros",
+        "veredito": "experimentar (2ª opção)",
+        "pros": [
+            "Licença permissiva (Apache-2.0), uso comercial livre.",
+            "Menor que bge-reranker-v2-m3 para o mesmo propósito — candidato caso a latência do 1ª opção "
+            "não compense.",
         ],
-        cons=[
-            "Multilingue mas com menos validação publicada em PT-BR do que bge-reranker-v2-m3",
-            "Não medido neste branch — lib não instalada",
+        "contras": [
+            "2ª opção na auditoria: sem medição própria ainda que justifique preferência sobre a 1ª.",
+            "Ainda não medido neste vault.",
         ],
-    ),
-    "sentence_dedup_mmr": StageInfo(
-        name="sentence_dedup_mmr", label="Dedup de sentenças + MMR (sem modelo)", category="dedup",
-        license="N/A — código local, determinístico", model_size="0 (sem modelo)", verdict="integrado",
-        pros=[
-            "Zero custo de modelo/rede — reaproveita o mesmo Jaccard de app/services/near_dup.py",
-            "Determinístico: mesma entrada produz sempre a mesma saída",
-            "Medido neste branch sobre contextos reais de benchmark.db — ver "
-            "scripts/measure_optional_stages.py e o resumo no commit",
+    },
+    "sentence_dedup_mmr": {
+        "label": "Dedup por sentença + MMR",
+        "licenca": "sem modelo (heurística determinística)",
+        "tamanho": "N/A",
+        "veredito": "experimentar",
+        "pros": [
+            "Sem custo de modelo: deduplicação por sentença e Maximal Marginal Relevance sobre o contexto "
+            "final, custo zero de tokens.",
+            "Mesma família de técnica já calibrada em app/gateway/optimizer.py (near_dedup em nível de nota).",
         ],
-        cons=[
-            "Similaridade lexical (Jaccard), não semântica — não pega paráfrases sem sobreposição de palavras",
-            "Ganho depende de quanta redundância o vault/contexto já tem; pode ser zero em vaults limpos",
+        "contras": [
+            "Escopo mais fino (sentença, não nota inteira) ainda não medido: risco de cortar uma frase que "
+            "carregava o único fato citável de uma nota.",
         ],
-    ),
-    "spotlight_nonce": StageInfo(
-        name="spotlight_nonce", label="Spotlighting com nonce por requisição", category="spotlighting",
-        license="N/A — técnica, sem modelo", model_size="0 (sem modelo)", verdict="integrado",
-        pros=[
-            "Mitigação adicional de prompt injection: delimitadores imprevisíveis ao redor de cada trecho",
-            "Modo `hash` é determinístico — preserva o prompt cache do consumidor e o ResultCache do Gateway",
+    },
+    "spotlight_nonce": {
+        "label": "Spotlighting com nonce",
+        "licenca": "sem modelo (marcação determinística por requisição)",
+        "tamanho": "N/A",
+        "veredito": "experimentar",
+        "pros": [
+            "Mitigação de segurança contra prompt injection: delimita o conteúdo não confiável do vault com "
+            "um nonce por requisição, dificultando que uma nota finja ser uma instrução de sistema.",
+            "Sem custo de modelo.",
         ],
-        cons=[
-            "Modo `random` quebra bytes/prompt cache do consumidor a cada requisição (trade-off documentado)",
-            "Não é uma defesa completa — complementa o `injection_flag` da MOL (config/optimizer.py), não o substitui",
+        "contras": [
+            "Um nonce por requisição quebra a determinística de bytes que o cache/MOL depende hoje (mesma "
+            "entrada -> mesmos bytes, §5.7) — precisa ser medido junto com o efeito no prompt cache do "
+            "consumidor antes de virar padrão.",
         ],
-    ),
-    "omniroute": StageInfo(
-        name="omniroute", label="OmniRoute", category="rejected",
-        license="não publicada claramente no momento da avaliação", model_size="n/a", verdict="rejeitar",
-        pros=[],
-        cons=[
-            "Roteamento de MODELO (qual LLM responde), não de CONTEXTO — fora do escopo de retrieval do Gateway",
-            "Sem repositório/benchmark público verificável na avaliação (§13 do audit)",
-        ],
-        selectable=False,
-        reason="Fora de escopo (roteador de modelo, não de contexto/retrieval) — ver §13 do audit.",
-    ),
-    "recomp_selective_context": StageInfo(
-        name="recomp_selective_context", label="RECOMP / Selective Context", category="rejected",
-        license="MIT (ambos)", model_size="variável (modelo de compressão próprio)", verdict="rejeitar",
-        pros=[],
-        cons=[
-            "Medido no audit como perda líquida: custo de compressão supera a economia de tokens",
-            "Mesmo padrão de um caso já registrado no Cérebro (filtro cortou 77% do contexto mas "
-            "custou 10x mais no total) — ver proposta §1.5",
-        ],
-        selectable=False,
-        reason="Medido como perda líquida de tokens totais (audit §13) — mesmo padrão de perda já registrado.",
-    ),
-    "gptcache_redisvl": StageInfo(
-        name="gptcache_redisvl", label="GPTCache / RedisVL", category="rejected",
-        license="MIT (GPTCache) / Apache 2.0 (RedisVL)", model_size="n/a — infraestrutura de cache",
-        verdict="rejeitar",
-        pros=[],
-        cons=[
-            "Requer infraestrutura externa (Redis) — o Gateway é local e não deve exigir dependências externas",
-            "O Gateway já tem cache em camadas próprio (app/services/jev_cache.py, "
-            "config/optimizer.py ResultCache) cobrindo o mesmo problema",
-        ],
-        selectable=False,
-        reason="Dependência de infraestrutura externa (Redis); o Gateway já tem cache próprio em camadas.",
-    ),
+    },
 }
 
-
-def selectable() -> list[StageInfo]:
-    return [s for s in CATALOG.values() if s.selectable]
-
-
-def rejected() -> list[StageInfo]:
-    return [s for s in CATALOG.values() if not s.selectable]
-
-
-def to_dict() -> dict:
-    """Serializable form for a future REST endpoint / frontend page (§3). Not wired to a route
-    here — that endpoint is out of this task's scope."""
-    return {name: asdict(info) for name, info in CATALOG.items()}
+# Avaliados e descartados (memory-gateway-token-optimization-audit.md §13). Informativo apenas —
+# NUNCA expor toggle para estes: a decisão já foi tomada e não é reversível pela UI.
+REJECTED: dict[str, str] = {
+    "OmniRoute": "Rejeitado: gateway de API de LLM (roteia provedores, fallback, compressão de "
+        "prompt); fica entre o agente e o provedor, não entre o agente e o vault. Ganho alegado "
+        "não verificado (audit §13).",
+    "RECOMP / Selective Context": "Rejeitado: RECOMP exige treino de compressor; Selective "
+        "Context é projeto parado (audit §13).",
+    "GPTCache / RedisVL": "Rejeitado: cache de RESPOSTAS de LLM; o Gateway não gera resposta, e "
+        "cache semântico tem falso-positivo (audit §13).",
+}

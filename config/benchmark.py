@@ -39,7 +39,11 @@ class BenchmarkConfig:
     # zlib-compress `runs.context` on write (§5.3). Off by default: existing tooling that reads the
     # SQLite file directly (not through Database._decode) would see base64 instead of text.
     db_compress_context: bool = field(default_factory=lambda: env_bool("DB_COMPRESS_CONTEXT", False))
-    host: str = field(default_factory=lambda: env_str("HOST", "0.0.0.0"))
+    # Loopback by default (§5.4 da proposta 2026-09-28): a server that starts open on the LAN with
+    # no authentication used to be the default. MG_HOST is the canonical override; the legacy HOST
+    # var (never documented as network-facing) still works so an existing .env keeps behaving, but
+    # no longer defaults to 0.0.0.0 -- opening to the LAN is now an explicit choice.
+    host: str = field(default_factory=lambda: env_str("MG_HOST", env_str("HOST", "127.0.0.1")))
     port: int = field(default_factory=lambda: env_int("PORT", 8000))
     seed: int = field(default_factory=lambda: env_int("BENCHMARK_SEED", 42))
 
