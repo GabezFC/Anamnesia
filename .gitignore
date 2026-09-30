@@ -33,6 +33,7 @@ htmlcov/
 .env.local
 .env.*.local
 !.env.example
+config/local_settings.json
 *.pem
 *.key
 *.p12

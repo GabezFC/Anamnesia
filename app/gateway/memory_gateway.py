@@ -34,6 +34,12 @@ from app.services.obsidian import ObsidianVault
 from app.services.pricing import cost_usd
 from app.services.scope import Scope, discover, parse_scope
 
+# Bumped whenever a change alters the MEANING of a metric already in metrics_json -- e.g. the PT
+# calibration factor in app/gateway/token_budget.py:estimate_tokens (§5.5 item 9). Lets a consumer
+# (the history line chart, item 2.1) split series instead of plotting two incompatible measurement
+# scales as one continuous line. Runs recorded before this field existed simply lack the key.
+METRICS_VERSION = 1
+
 
 class MemoryGateway:
     def __init__(self, retrieval_cfg: RetrievalConfig | None = None, jev_cfg: JevConfig | None = None,
@@ -160,7 +166,7 @@ class MemoryGateway:
             pre.update(opt.ensure_fresh(self))
         except Exception as exc:  # noqa: BLE001 — a failed freshness check never blocks a search
             pre["optimizer_errors"] = [f"freshness:{type(exc).__name__}"]
-        plan = opt.plan(query, pipeline)
+        plan = opt.plan(query, pipeline, self)
         pipeline = plan.pipeline
         cache_on = self.bench_cfg.cache_enabled
         ckey = opt.cache_key(plan, max_results, parsed_scope.label(), context_budget, jev_overrides) \
@@ -208,6 +214,7 @@ class MemoryGateway:
         judge_tokens = (jev_in or 0) + (m.get("jev_output_tokens") or 0) if is_jev else 0
         total_spent = judge_tokens + ctx_tokens
         m.update({
+            "metrics_version": METRICS_VERSION,
             "pipeline": pipeline,
             "candidates": m.get("documents_found", 0),
             "survivors": len(cands),
@@ -249,6 +256,10 @@ class MemoryGateway:
             "result_cache_hit": cache_hit,
             **pre, **post,
         }
+        if self.optimizer.cfg.verdict_enabled and plan.requested == "auto":
+            out["verdict_pipeline_chosen"] = plan.pipeline
+            out["verdict_reason"] = plan.reason
+            out["verdict_size_estimate"] = plan.verdict_size_estimate
         errs = list(pre.get("optimizer_errors", [])) + list(post.get("optimizer_errors", []))
         if errs:
             out["optimizer_errors"] = errs

@@ -88,3 +88,17 @@ class BaselineIndex:
             ))
         out.sort(key=lambda c: -c.score)
         return out
+
+    def count(self, query: str) -> int:
+        """Candidate count for the SAME FTS5 match `search()` uses, without materializing rows or
+        applying a limit. Cheap, deterministic size estimate for the verdict router
+        (app/services/verdict.py) -- no judge, no model call."""
+        if self.conn is None:
+            self.build()
+        terms = query_terms(query)
+        if not terms:
+            return 0
+        match = " OR ".join('"' + t.replace('"', "") + '"' for t in terms)
+        with self._lock:
+            row = self.conn.execute("SELECT COUNT(*) FROM sec WHERE sec MATCH ?", (match,)).fetchone()
+        return row[0] if row else 0

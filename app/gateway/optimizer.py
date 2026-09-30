@@ -42,6 +42,7 @@ from app.schemas.models import Candidate
 from app.services.injection_screen import screen
 from app.services.near_dup import cluster_near_duplicates
 from app.services.query_fp import QueryProfile, classify
+from app.services.verdict import decide
 
 FREE_PIPELINES = ("baseline", "graphify")
 # Zero-width and bidirectional-override characters (U+200B-U+200F, U+202A-U+202E, U+2060-U+2064,
@@ -55,6 +56,7 @@ class Plan:
     pipeline: str
     profile: QueryProfile | None
     reason: str
+    verdict_size_estimate: int | None = None
 
 
 class ResultCache:
@@ -146,18 +148,36 @@ class MemoryOptimizer:
             self._last_check = time.time()
 
     # -- analysis + routing --------------------------------------------------------------------
-    def plan(self, query: str, pipeline: str) -> Plan:
+    def plan(self, query: str, pipeline: str, gw=None) -> Plan:
+        """`gw` (the MemoryGateway) is optional and used ONLY to compute the verdict's cheap size
+        estimate (BaselineIndex.count()) when `cfg.verdict_enabled` is on; every other caller
+        (including all of tests/test_optimizer.py, written before the verdict existed) keeps
+        working unchanged by omitting it.
+        """
         profile = None
         try:
             profile = classify(query)
         except Exception:  # noqa: BLE001 — analysis is advisory, never fatal
             profile = None
         if pipeline != "auto":
+            # Explicit pipeline requests NEVER go through the verdict, no exception (§1.2).
             return Plan(pipeline, pipeline, profile, "explicit")
         if not self.cfg.enabled:
             return Plan("auto", "baseline", profile, "optimizer_disabled_default")
         complexity = profile.complexity if profile else "AMBIGUOUS"
+        if self.cfg.verdict_enabled:
+            size_estimate = self._verdict_size_estimate(gw, query)
+            chosen, reason = decide(query, complexity, size_estimate, self.cfg)
+            return Plan("auto", chosen, profile, reason, size_estimate)
         return Plan("auto", self.cfg.route_for(complexity), profile, f"auto:{complexity}")
+
+    def _verdict_size_estimate(self, gw, query: str) -> int | None:
+        if gw is None:
+            return None
+        try:
+            return gw.baseline.count(query)
+        except Exception:  # noqa: BLE001 — advisory only, must never block a search
+            return None
 
     # -- result cache --------------------------------------------------------------------------
     def cache_key(self, plan: Plan, max_results: int, scope: str | None, budget: int | None,
