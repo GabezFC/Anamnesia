@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Python tests
+        # tests/conftest.py: no network, no TypeSafe API, no graphify binary, no real vault —
+        # everything is mocked, so this runs unmodified in CI.
+        run: pytest tests -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Frontend import graph check
+        run: node scripts/check_frontend_imports.mjs
+      - name: Frontend metrics resilience check
+        run: node scripts/check_frontend_resilience.mjs
+      # scripts/mcp_smoke.py and any script that needs a live `python -m app.main` server or a
+      # headless Chrome/Playwright session are intentionally NOT run here — this job has neither.
+      # They stay local/dev-only checks. scripts/check_frontend_charts.mjs and
+      # scripts/check_flow_dimming.mjs are also browser-free and could be added to this gate later;
+      # they are simply out of scope for this change.

@@ -102,6 +102,13 @@ class RetrievalConfig:
     graphify_graph_expand: int = field(default_factory=lambda: env_int("GRAPHIFY_GRAPH_EXPAND", 15))
     graphify_query_budget: int = field(default_factory=lambda: env_int("GRAPHIFY_QUERY_BUDGET", 6000))
     graphify_timeout_s: int = field(default_factory=lambda: env_int("GRAPHIFY_TIMEOUT_S", 60))
+    # Personalized PageRank graph expansion (§5.5, HippoRAG-style), opt-in. See app/retrieval/ppr.py.
+    # Off by default: flag off reproduces the exact BFS behaviour byte-for-byte (tests/test_ppr.py).
+    # Never used by graphify_jev (frozen pipeline) regardless of this flag.
+    ppr_enabled: bool = field(default_factory=lambda: env_bool("PPR_ENABLED", False))
+    ppr_alpha: float = field(default_factory=lambda: env_float("PPR_ALPHA", 0.85))
+    ppr_iters: int = field(default_factory=lambda: env_int("PPR_ITERS", 30))
+    ppr_top_n: int = field(default_factory=lambda: env_int("PPR_TOP_N", 15))
 
     @property
     def mirror_dir(self) -> Path:

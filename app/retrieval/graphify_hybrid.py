@@ -166,12 +166,16 @@ class GraphIndex:
 
 
 def hybrid_search(gw, query: str, limit: int, text_seeds: int = 10,
-                  graph_expand: int = 15) -> tuple[list[Candidate], dict]:
+                  graph_expand: int = 15, allow_ppr: bool = True) -> tuple[list[Candidate], dict]:
     """BM25 entry points + graph neighbours. Returns (candidates, metrics).
 
     Scores are assigned so ordering is meaningful downstream: BM25 hits keep a high band
     (1.0 -> 0.55 by rank) and graph-only neighbours sit below it (0.5 -> 0.3), because a note
     found purely by structure is weaker evidence than one whose text matches the query.
+
+    `allow_ppr=False` forces the BFS expansion even when `PPR_ENABLED` is set (used by the frozen
+    graphify_jev pipeline, §5.5). Otherwise, when `rc.ppr_enabled` is True, graph neighbours come
+    from Personalized PageRank (app/retrieval/ppr.py) instead of BFS.
     """
     t0 = time.perf_counter()
     rc = gw.retrieval_cfg
@@ -180,8 +184,10 @@ def hybrid_search(gw, query: str, limit: int, text_seeds: int = 10,
 
     bm = gw.baseline.search(query, limit=max(rc.max_candidates, limit))
     seed_files: list[str] = []
+    bm_scores: dict[str, float] = {}
     for c in bm:
         f = c.source_file.replace("\\", "/")
+        bm_scores.setdefault(f, c.score)
         if f not in seed_files:
             seed_files.append(f)
         if len(seed_files) >= text_seeds:
@@ -191,8 +197,16 @@ def hybrid_search(gw, query: str, limit: int, text_seeds: int = 10,
     if not seed_files:
         seed_files = index.lexical_seed_files(query, text_seeds)
 
-    related = index.expand(index.nodes_for_files(seed_files), graph_expand, set(seed_files)) \
-        if index.loaded else []
+    use_ppr = allow_ppr and getattr(rc, "ppr_enabled", False) and index.loaded
+    if use_ppr:
+        from app.retrieval import ppr
+        related = ppr.expand(index, seed_files, bm_scores, rc.ppr_top_n,
+                             rc.ppr_alpha, rc.ppr_iters, exclude=set(seed_files))
+        expand_mode = "ppr"
+    else:
+        related = index.expand(index.nodes_for_files(seed_files), graph_expand, set(seed_files)) \
+            if index.loaded else []
+        expand_mode = "bfs"
     t_graph = time.perf_counter()
 
     order = {f: i for i, f in enumerate(seed_files)}
@@ -244,5 +258,6 @@ def hybrid_search(gw, query: str, limit: int, text_seeds: int = 10,
         "graphify_graph_available": index.loaded,
         "graphify_truncated": False,
         "graphify_mode": "hybrid",
+        "graphify_expand_mode": expand_mode,
     }
     return cands[:limit], metrics

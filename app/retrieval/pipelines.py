@@ -58,7 +58,7 @@ def run_baseline(gw, query: str, max_results: int) -> tuple[list[Candidate], dic
     }
 
 
-def _graphify_candidates(gw, query: str):
+def _graphify_candidates(gw, query: str, allow_ppr: bool = True):
     rc = gw.retrieval_cfg
     t0 = time.perf_counter()
     # Hybrid needs a real graph.json to expand structurally. When it is absent (fresh checkout,
@@ -73,7 +73,8 @@ def _graphify_candidates(gw, query: str):
         # CLI traversal (measured 2026-09-27). See app/retrieval/graphify_hybrid.py.
         raw, ginfo = hybrid_search(gw, query, rc.max_candidates,
                                    text_seeds=rc.graphify_text_seeds,
-                                   graph_expand=rc.graphify_graph_expand)
+                                   graph_expand=rc.graphify_graph_expand,
+                                   allow_ppr=allow_ppr)
     else:
         raw, ginfo = gw.graphify.search(query, limit=rc.max_candidates)
         ginfo = {**ginfo, "graphify_mode": "cli"}
@@ -119,7 +120,8 @@ def full_note_text(gw, c: Candidate) -> str:
 
 
 def run_graphify_jev(gw, query: str, max_results: int, jev=None):
-    uniq, metrics = _graphify_candidates(gw, query)
+    # allow_ppr=False: graphify_jev is frozen (§5.5) — PPR_ENABLED must never change its output.
+    uniq, metrics = _graphify_candidates(gw, query, allow_ppr=False)
     jev = jev or gw.jev
     rc = gw.retrieval_cfg
     # Deterministic top-K cut BEFORE the paid judge (zero tokens). See app/services/prefilter.py.
