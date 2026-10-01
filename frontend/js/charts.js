@@ -2,6 +2,9 @@
 // Every chart: responsive (re-renders on container resize), hover tooltips, legend, units,
 // and an explicit "Não medido" state when the series carries no real values.
 import { esc } from './format.js';
+// niceMax (axis rounding), splitSegments (gap handling), valueScale (linear/log) and the
+// dash/marker cycles that keep colour from being the only signal all live in series.js.
+import { dashFor, markerFor, niceMax, splitSegments, valueScale } from './series.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const el = (name, attrs = {}) => {
@@ -31,12 +34,7 @@ function bindTip(wrap, node, html) {
   node.addEventListener('mouseleave', () => { tip.style.opacity = '0'; });
 }
 
-/** niceMax: round an axis maximum up to a readable step. */
-function niceMax(v) {
-  if (!(v > 0)) return 1;
-  const mag = 10 ** Math.floor(Math.log10(v));
-  return Math.ceil(v / (mag / 2)) * (mag / 2);
-}
+/** niceMax: round an axis maximum up to a readable step. (lives in series.js) */
 
 function legendHTML(series) {
   return `<div class="chart-legend">${series.map((s) =>
@@ -65,23 +63,26 @@ export function destroyCharts(root) {
 /**
  * Re-render chart whenever the container is resized.
  * draw(width) must fully repaint wrap.
+ * wrap._chartRedraw(force) repaints without waiting for a resize; the line chart
+ * uses it when the "ver tabela" toggle changes what the panel shows.
  */
 function responsive(wrap, draw) {
   let last = 0;
-  const run = () => {
+  const run = (force) => {
     if (!wrap.isConnected) { disconnect(wrap); return; }
     const w = Math.max(280, Math.floor(wrap.clientWidth || wrap.parentElement?.clientWidth || 600));
-    if (Math.abs(w - last) < 6) return;
+    if (!force && Math.abs(w - last) < 6) return;
     last = w;
     draw(w);
   };
   disconnect(wrap);
+  wrap._chartRedraw = run;
   if (typeof ResizeObserver === 'function') {
-    wrap._chartRO = new ResizeObserver(run);
+    wrap._chartRO = new ResizeObserver(() => run(false));
     wrap._chartRO.observe(wrap);
   } else {
-    wrap._chartWin = run;
-    window.addEventListener('resize', run);
+    wrap._chartWin = () => run(false);
+    window.addEventListener('resize', wrap._chartWin);
   }
   run();
   // one deferred pass: at first paint clientWidth may still be 0
@@ -232,58 +233,232 @@ export function stackedBarChart(wrap, { rows, unit = '', fmt = String, emptyMsg 
 }
 
 /* ======================================================================== */
-/** Multi-series line chart. points: [{x:number(epoch s), y:number}] per series. */
-export function lineChart(wrap, { series, unit = '', fmt = String, xFmt = String, emptyMsg = 'nenhuma série disponível' }) {
-  const clean = (series || []).map((s) => ({
+/** Marker shape as a DOM node — the same shape is used on the plot, the legend and the table. */
+function markerNode(kind, cx, cy, color, r) {
+  if (kind === 'square') return el('rect', { fill: color, x: cx - r, y: cy - r, width: r * 2, height: r * 2 });
+  if (kind === 'triangle') {
+    return el('polygon', { fill: color, points: `${cx},${cy - r - 0.5} ${cx + r + 0.5},${cy + r} ${cx - r - 0.5},${cy + r}` });
+  }
+  if (kind === 'diamond') {
+    return el('polygon', { fill: color, points: `${cx},${cy - r - 0.6} ${cx + r + 0.6},${cy} ${cx},${cy + r + 0.6} ${cx - r - 0.6},${cy}` });
+  }
+  return el('circle', { fill: color, cx, cy, r });
+}
+
+/** The same marker as inline markup, for the legend key and the table cells. */
+function markerSVG(kind, color, r = 3) {
+  const fill = esc(color);
+  if (kind === 'square') return `<rect x="${13 - r}" y="${6 - r}" width="${r * 2}" height="${r * 2}" fill="${fill}"/>`;
+  if (kind === 'triangle') {
+    return `<polygon points="13,${6 - r - 0.5} ${13 + r + 0.5},${6 + r} ${13 - r - 0.5},${6 + r}" fill="${fill}"/>`;
+  }
+  if (kind === 'diamond') {
+    return `<polygon points="13,${6 - r - 0.6} ${13 + r + 0.6},6 13,${6 + r + 0.6} ${13 - r - 0.6},6" fill="${fill}"/>`;
+  }
+  return `<circle cx="13" cy="6" r="${r}" fill="${fill}"/>`;
+}
+
+let CHART_SEQ = 0;
+
+/**
+ * Multi-series line chart that refuses to draw a trend it cannot measure.
+ *
+ * series: [{ label, color, points: [{ x: epoch seconds, y, n?, bucket?, breakBefore?, tip? }] }]
+ *
+ * The caller aggregates and flags the gaps (see aggregateRuns in series.js): a
+ * polyline is drawn only inside a run of points where `breakBefore` is false, so
+ * a new session, a day with no data, a hole longer than the allowed gap, or a
+ * change of `metrics_version` all cut the line instead of being bridged.
+ *
+ * Accessibility (design-system rule "cor nunca é o único portador de informação"):
+ * every series also carries a dash pattern and a marker shape, echoed in the
+ * legend and in the equivalent table; the svg has a text summary; values are
+ * labelled directly when the series is short enough for labels not to collide.
+ */
+export function lineChart(wrap, {
+  series, unit = '', fmt = String, xFmt = String, emptyMsg = 'nenhuma série disponível',
+  logScale = false, xTicks = null, tableLabel = '', ariaTitle = '', notes = [],
+}) {
+  const clean = (series || []).map((s, i) => ({
     ...s,
+    dash: s.dash !== undefined ? s.dash : dashFor(i),
+    marker: s.marker || markerFor(i),
     points: (s.points || []).filter((p) => typeof p.x === 'number' && Number.isFinite(p.x)
-      && typeof p.y === 'number' && Number.isFinite(p.y)),
+      && typeof p.y === 'number' && Number.isFinite(p.y)).slice().sort((a, b) => a.x - b.x),
   })).filter((s) => s.points.length);
   const pts = clean.flatMap((s) => s.points);
   if (!pts.length) return emptyInto(wrap, emptyMsg);
-  responsive(wrap, (W) => {
-    const padL = 64; const padR = 16; const padT = 12; const padB = 40; const H = 258;
-    const plotW = Math.max(60, W - padL - padR); const plotH = H - padT - padB;
-    const xs = pts.map((p) => p.x); const ys = pts.map((p) => p.y);
-    const x0 = Math.min(...xs); const x1 = Math.max(...xs);
-    const yMax = niceMax(Math.max(...ys, 0)) || 1;
-    const sx = (x) => padL + (x1 === x0 ? plotW / 2 : ((x - x0) / (x1 - x0)) * plotW);
-    const sy = (y) => padT + plotH - (y / yMax) * plotH;
-    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: 'img' });
 
-    for (let i = 0; i <= 4; i++) {
-      const y = padT + plotH - (plotH * i) / 4;
+  const drawn = clean.map((s) => ({ s, segments: splitSegments(s.points) }));
+  const nSegments = drawn.reduce((a, d) => a + d.segments.length, 0);
+  const nBreaks = drawn.reduce((a, d) => a + Math.max(0, d.segments.length - 1), 0);
+  const scale = valueScale(pts.map((p) => p.y), { log: logScale });
+  const xs = pts.map((p) => p.x);
+  const x0 = Math.min(...xs);
+  const x1 = Math.max(...xs);
+  const ticks = (Array.isArray(xTicks) && xTicks.length >= 2 ? xTicks : [x0, (x0 + x1) / 2, x1])
+    .filter((t) => t >= x0 && t <= x1);
+  // Labels next to every marker only when they cannot pile up on each other.
+  const valueLabels = pts.length <= 24 && clean.length <= 6;
+  const versions = [...new Set(pts.map((p) => p.metricsVersion))];
+  const summary = lineSummary({ clean, x0, x1, scale, nSegments, nBreaks, versions, unit, fmt, xFmt, title: ariaTitle });
+  const tid = wrap._chartTableId || (wrap._chartTableId = `chart-table-${++CHART_SEQ}`);
+
+  responsive(wrap, (W) => {
+    const padL = 64; const padR = 16; const padT = 14; const padB = 40; const H = 258;
+    const plotW = Math.max(60, W - padL - padR); const plotH = H - padT - padB;
+    const sx = (x) => padL + (x1 === x0 ? plotW / 2 : ((x - x0) / (x1 - x0)) * plotW);
+    const sy = (y) => padT + plotH - scale.norm(y) * plotH;
+    const svg = el('svg', {
+      viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: 'img', 'aria-label': summary,
+    });
+    const titleNode = el('title', {});
+    titleNode.textContent = summary;
+    svg.appendChild(titleNode);
+
+    for (const tv of scale.ticks) {
+      const y = sy(tv);
       svg.appendChild(el('line', { class: 'grid-line', x1: padL, x2: padL + plotW, y1: y, y2: y }));
       const t = el('text', { class: 'axis', x: padL - 8, y: y + 3, 'text-anchor': 'end' });
-      t.textContent = fmt((yMax * i) / 4);
+      t.textContent = fmt(tv);
       svg.appendChild(t);
     }
-    [x0, (x0 + x1) / 2, x1].forEach((xv, i) => {
+    if (ticks.length <= 8) {
+      for (const xv of ticks) {
+        const x = sx(xv);
+        svg.appendChild(el('line', { class: 'grid-line', x1: x, x2: x, y1: padT, y2: padT + plotH }));
+      }
+    }
+    ticks.forEach((xv, i) => {
       const t = el('text', {
-        class: 'axis', x: sx(xv), y: H - 20,
-        'text-anchor': i === 0 ? 'start' : i === 2 ? 'end' : 'middle',
+        class: 'axis', x: Math.min(W - padR, Math.max(padL, sx(xv))), y: H - 20,
+        'text-anchor': i === 0 ? 'start' : i === ticks.length - 1 ? 'end' : 'middle',
       });
       t.textContent = xFmt(xv);
       svg.appendChild(t);
     });
-    for (const s of clean) {
-      const p = s.points.slice().sort((a, b) => a.x - b.x);
-      if (p.length > 1) {
-        svg.appendChild(el('path', {
-          d: p.map((q, i) => `${i ? 'L' : 'M'}${sx(q.x).toFixed(1)},${sy(q.y).toFixed(1)}`).join(' '),
-          fill: 'none', stroke: s.color, 'stroke-width': 1.8, 'stroke-linejoin': 'round',
-        }));
+
+    for (const { s, segments } of drawn) {
+      for (const seg of segments) {
+        if (seg.length > 1) {
+          svg.appendChild(el('path', {
+            d: seg.map((q, i) => `${i ? 'L' : 'M'}${sx(q.x).toFixed(1)},${sy(q.y).toFixed(1)}`).join(' '),
+            fill: 'none', stroke: s.color, 'stroke-width': 1.8, 'stroke-linejoin': 'round',
+            'stroke-dasharray': s.dash || null,
+          }));
+        }
       }
-      const showDots = p.length <= 120;
-      for (const q of p) {
-        const c = el('circle', { cx: sx(q.x), cy: sy(q.y), r: showDots ? 2.6 : 1.4, fill: s.color });
-        bindTip(wrap, c, `<b>${esc(s.label)}</b><br>${esc(xFmt(q.x))}<br>${esc(fmt(q.y))}${unit ? ` ${esc(unit)}` : ''}${q.tip ? `<br>${q.tip}` : ''}`);
-        svg.appendChild(c);
+      const dense = s.points.length > 120;
+      for (const q of s.points) {
+        const x = sx(q.x);
+        const y = sy(q.y);
+        const m = markerNode(s.marker, x, y, s.color, dense ? 2 : 2.6);
+        bindTip(wrap, m, pointTip(s, q, unit, fmt, xFmt));
+        svg.appendChild(m);
+        if (valueLabels) {
+          const lab = el('text', {
+            class: 'point-val', x: Math.min(W - padR - 2, Math.max(padL + 2, x)),
+            y: Math.max(padT + 8, y - 7), 'text-anchor': 'middle',
+          });
+          lab.textContent = fmt(q.y);
+          svg.appendChild(lab);
+        }
       }
     }
     wrap.innerHTML = '';
     wrap.appendChild(svg);
-    wrap.insertAdjacentHTML('beforeend', legendHTML(clean) +
-      (unit ? `<div class="chart-legend"><span class="muted">Unidade: ${esc(unit)}</span></div>` : ''));
+    wrap.insertAdjacentHTML('beforeend', lineLegendHTML(clean)
+      + (unit ? `<div class="chart-legend"><span class="muted">Unidade: ${esc(unit)}</span></div>` : '')
+      + lineFootHTML(wrap, tid, {
+        summary, notes, unit, fmt, xFmt, clean, nSegments, tableLabel,
+      }));
+    const btn = wrap.querySelector('.chart-table-btn');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        wrap._tableOpen = !wrap._tableOpen;
+        if (typeof wrap._chartRedraw === 'function') wrap._chartRedraw(true);
+      });
+    }
   });
+}
+
+/** Legend whose key repeats the dash pattern and the marker: colour is never the only signal. */
+function lineLegendHTML(series) {
+  return `<div class="chart-legend">${series.map((s) =>
+    `<span class="key"><svg class="chart-key" width="26" height="12" viewBox="0 0 26 12" aria-hidden="true" focusable="false">`
+    + `<line x1="1" y1="6" x2="25" y2="6" stroke="${esc(s.color)}" stroke-width="2.5"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/>`
+    + `${markerSVG(s.marker, s.color)}</svg>${esc(s.label)}</span>`).join('')}</div>`;
+}
+
+/** Footer: what was plotted, the caveats, and the button that opens the equivalent table. */
+function lineFootHTML(wrap, tid, o) {
+  const open = Boolean(wrap._tableOpen);
+  const notes = o.notes.filter(Boolean);
+  return `${notes.length ? `<p class="chart-note">${notes.map((n) => esc(n)).join(' · ')}</p>` : ''}
+    <div class="chart-actions">
+      <button type="button" class="linkish chart-table-btn" aria-expanded="${open}" aria-controls="${tid}">
+        ${open ? 'esconder tabela' : 'ver tabela'}</button>
+      <span class="muted">${o.clean.length} séries · ${o.clean.reduce((a, s) => a + s.points.length, 0)} pontos · ${o.nSegments} trechos</span>
+    </div>
+    ${open ? lineTableHTML(tid, o) : ''}`;
+}
+
+/** The same numbers as the chart, as a table: mandatory equivalent for screen readers. */
+function lineTableHTML(tid, { clean, unit, fmt, xFmt, tableLabel }) {
+  const rowsAll = clean.flatMap((s) => s.points.map((q) => ({ s, q })));
+  const capped = rowsAll.length > 500;
+  const rows = capped ? rowsAll.slice(0, 500) : rowsAll;
+  const withBucket = clean.some((s) => s.points.some((q) => q.bucket));
+  const body = rows.map(({ s, q }) => `<tr>
+      <td><span class="chart-cell-key"><svg class="chart-key" width="26" height="12" viewBox="0 0 26 12" aria-hidden="true" focusable="false">`
+    + `<line x1="1" y1="6" x2="25" y2="6" stroke="${esc(s.color)}" stroke-width="2.5"${s.dash ? ` stroke-dasharray="${esc(s.dash)}"` : ''}/>`
+    + `${markerSVG(s.marker, s.color)}</svg>${esc(s.label)}</span></td>
+      <td class="mono">${esc(xFmt(q.x))}</td>
+      ${withBucket ? `<td class="mono">${esc(String(q.bucket === null || q.bucket === undefined ? '—' : q.bucket).slice(0, 30))}</td>` : ''}
+      <td class="num">${esc(fmt(q.y))}</td>
+      <td class="num">${q.n === undefined ? '<span class="muted">—</span>' : esc(fmtNumPlain(q.n))}</td>
+      <td class="mono">${q.metricsVersion === null || q.metricsVersion === undefined
+    ? '<span class="muted">não registrado</span>' : esc(String(q.metricsVersion))}</td>
+    </tr>`).join('');
+  return `<div class="table-scroll" id="${tid}">
+      <table class="data chart-data">
+        <caption class="muted">${esc(tableLabel || 'valores')}${unit ? ` (${esc(unit)})` : ''}</caption>
+        <thead><tr><th>Série</th><th>Quando</th>${withBucket ? '<th>Sessão</th>' : ''}<th class="num">Valor</th><th class="num">Runs</th><th>metrics_version</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+      ${capped ? `<p class="chart-note">mostrando as primeiras 500 de ${rowsAll.length} linhas — o gráfico acima também é limitado</p>` : ''}
+    </div>`;
+}
+
+const fmtNumPlain = (n) => (typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('en-US') : String(n));
+
+function pointTip(s, q, unit, fmt, xFmt) {
+  const bits = [`<b>${esc(s.label)}</b>`, esc(xFmt(q.x))];
+  if (q.bucket) bits.push(`sessão ${esc(String(q.bucket))}`);
+  bits.push(`${esc(fmt(q.y))}${unit ? ` ${esc(unit)}` : ''}`);
+  if (q.n > 1) bits.push(`mediana de ${q.n} runs`);
+  if (q.n === 1) bits.push('1 run');
+  if (q.sessions > 1) bits.push(`${q.sessions} sessões`);
+  if (q.metricsVersion !== null && q.metricsVersion !== undefined) bits.push(`metrics_version ${esc(String(q.metricsVersion))}`);
+  if (q.tip) bits.push(q.tip);
+  return bits.join('<br>');
+}
+
+/** Screen-reader summary: what is plotted, over what span, and where the line breaks. */
+function lineSummary({ clean, x0, x1, scale, nSegments, nBreaks, versions, unit, fmt, xFmt, title }) {
+  const ys = clean.flatMap((s) => s.points.map((q) => q.y));
+  const parts = [
+    title || 'Série temporal',
+    `${clean.length} séries, ${ys.length} pontos`,
+    `de ${xFmt(x0)} a ${xFmt(x1)}`,
+    `valores de ${fmt(Math.min(...ys))} a ${fmt(Math.max(...ys))}${unit ? ` ${unit}` : ''}`,
+    `escala ${scale.kind === 'log' ? 'logarítmica' : 'linear'}`,
+  ];
+  if (nBreaks > 0) {
+    parts.push(`${nBreaks} trechos sem ligação porque faltam dados (${nSegments} trechos no total)`);
+  }
+  if (versions.length > 1) {
+    parts.push(`metrics_version ${versions.map((v) => (v === null ? 'não registrado' : v)).join(', ')} — versões diferentes não são ligadas entre si`);
+  }
+  return `${parts.join('. ')}.`;
 }

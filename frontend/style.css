@@ -427,6 +427,24 @@ text.axis { fill: var(--text-2); font-size: 10px; }
 text.axis-val { fill: var(--text-1); font-size: 10px; font-variant-numeric: tabular-nums; }
 line.grid-line { stroke: var(--line-0); }
 
+/* Accessible line chart: legend key, value labels, table toggle and its notes. */
+svg.chart-key { display: inline-block; vertical-align: -2px; overflow: visible; }
+text.point-val {
+  fill: var(--text-1); font-size: 10px; font-variant-numeric: tabular-nums;
+  paint-order: stroke; stroke: var(--bg-1); stroke-width: 3px; stroke-linejoin: round;
+}
+.chart-note { margin: var(--s2) 0 0; font-size: var(--fs-xs); color: var(--text-2); }
+.chart-actions {
+  display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap;
+  margin-top: var(--s2); font-size: var(--fs-xs); color: var(--text-2);
+}
+.chart-actions .chart-table-btn { font-size: var(--fs-xs); }
+.chart-cell-key { display: inline-flex; align-items: center; gap: var(--s2); white-space: nowrap; }
+table.chart-data { min-width: 560px; }
+table.chart-data caption {
+  caption-side: top; text-align: left; padding: var(--s1) 0 var(--s2); font-size: var(--fs-xs);
+}
+
 /* ---------------------------------------------------------------- pipeline flow */
 .flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: var(--s2); }
 .flow-node {

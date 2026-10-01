@@ -8,6 +8,9 @@ import {
   recallOf, precisionOf, costOf, mean, safePath, armOf, judgeTokens, savedTokens,
 } from './format.js';
 import {
+  AGG_MODES, AGG_LABEL, AGG_HINT, RUN_POINT_CAP, aggregateRuns, bucketTicks,
+} from './series.js';
+import {
   metricCard, panel, emptyState, notWiredState, notMeasuredState, table, segmented, kvTable,
   callout, skeletonLines, skeletonTable,
 } from './components.js';
@@ -35,6 +38,8 @@ export function renderHistory(ctx) {
   }
   const key = HIST_SERIES[ctx.state.histSeries] ? ctx.state.histSeries : 'tokens';
   const [label, , , unit, tipKey] = HIST_SERIES[key];
+  const agg = AGG_MODES.includes(ctx.state.histAgg) ? ctx.state.histAgg : 'day';
+  const scale = ctx.state.histScale === 'log' ? 'log' : 'linear';
   const sessions = ctx.sessions || [];
 
   const sessionRows = sessions.map((s) => {
@@ -56,8 +61,14 @@ export function renderHistory(ctx) {
       <span class="muted">Série temporal:</span>
       ${segmented('histSeries', Object.entries(HIST_SERIES).map(([k, v]) => [k, v[0]]), key)}
     </div>
+    <div class="page-toolbar">
+      <span class="muted">Agregação:</span>
+      ${segmented('histAgg', AGG_MODES.map((m) => [m, AGG_LABEL[m]]), agg)}
+      <span class="muted">Escala:</span>
+      ${segmented('histScale', [['linear', 'Linear'], ['log', 'Log']], scale)}
+    </div>
     ${panel(`${label} ao longo do tempo`, '<div class="chart-wrap" data-chart="hist-line"></div>',
-    { sub: `${rs.length} runs ordenadas por created_at · unidade: ${unit}`, prov: 'experimental' })}
+    { sub: `${rs.length} runs ordenadas por created_at · ${AGG_HINT[agg]} · unidade: ${unit}`, prov: 'experimental' })}
     ${panel('Sessões', table([
     { label: 'Sessão' }, { label: 'Tipo' }, { label: 'Runs', num: true },
     { label: 'Tokens gastos', num: true, tipKey: 'total_tokens' },
@@ -238,16 +249,37 @@ export function mountHistory(root, ctx) {
   const rs = realRuns(ctx.runs);
   const key = HIST_SERIES[ctx.state.histSeries] ? ctx.state.histSeries : 'tokens';
   const [label, valFn, fmt, unit] = HIST_SERIES[key];
+  const agg = AGG_MODES.includes(ctx.state.histAgg) ? ctx.state.histAgg : 'day';
+  const logScale = ctx.state.histScale === 'log';
   const w = root.querySelector('[data-chart="hist-line"]');
   if (w) {
+    // Runs are NOT plotted raw by default: one line per pipeline would join
+    // thousands of runs of different sessions across days with no data in
+    // between. Aggregating first (median per day / per session) keeps the shape
+    // honest; the raw view is opt-in and capped.
+    const notes = [];
+    const built = PIPELINES.map((p) => {
+      const a = aggregateRuns(rs.filter((r) => r.pipeline === p), {
+        mode: agg, valFn, maxPoints: RUN_POINT_CAP,
+      });
+      if (!a.points.length) return null;
+      if (a.truncated > 0) {
+        notes.push(`${PIPELINE_SHORT[p] || p}: amostra de ${a.points.length} de ${a.total} runs`);
+      }
+      return {
+        label: PIPELINE_SHORT[p] || p,
+        color: PIPELINE_COLOR[p],
+        points: a.points,
+      };
+    }).filter(Boolean);
     lineChart(w, {
-      series: PIPELINES.map((p) => ({
-        label: PIPELINE_SHORT[p] || p, color: PIPELINE_COLOR[p],
-        points: rs.filter((r) => r.pipeline === p)
-          .map((r) => ({ x: num(r.created_at), y: num(valFn(metricsOf(r))) }))
-          .filter((q) => q.x !== null && q.y !== null),
-      })).filter((s) => s.points.length),
-      unit, fmt, xFmt: fmtDateShort,
+      series: built,
+      unit, fmt, xFmt: agg === 'session' ? fmtDate : fmtDateShort,
+      logScale,
+      xTicks: bucketTicks(built.flatMap((s) => s.points)),
+      tableLabel: `${label} — ${AGG_HINT[agg]}`,
+      ariaTitle: `${label} ao longo do tempo (${AGG_HINT[agg]})`,
+      notes,
       emptyMsg: `nenhuma run carregada tem a métrica "${label}"`,
     });
   }
