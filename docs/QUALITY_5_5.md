@@ -83,6 +83,85 @@ poderia incluir, além da seção casada pelo BM25, um resumo/cabeçalhos das de
 nota (ainda dentro do orçamento de 300 tokens), para o JEV não julgar "não relevante" uma nota cuja
 única seção visível é um título genérico.
 
+## Parte 2b — Correção (§5.5 item 2, TAREFA J)
+
+`graphify_jev` continua congelado — nada em `app/retrieval/pipelines.py` ou
+`app/services/dedup.py` (`preprocess`) foi tocado; a tabela "frozen" abaixo é idêntica à da Parte 2.
+A pergunta era se `graphify_jev_opt` (que já roda `snippet.extract`/`fit_or_keep` atrás da flag
+`OPT_SMART_SNIPPET`, ligada em `OptimizationConfig.default_cascade()`) também errava a seção.
+`scripts/check_jev_snippet.py --path opt` (novo) mede isso reusando `app.retrieval.pipelines_opt`
+real: extraí as etapas livres (`select_pool`, antes do estágio pago) para o script e para
+`run_graphify_jev_optimized` chamarem o MESMO código — não uma reimplementação.
+
+**Resposta: sim, errava — e por duas causas distintas em `fit_or_keep`/`extract`, não por falta de
+qualidade do algoritmo de janela.** `extract()` já ancora corretamente na seção certa mesmo com
+poucos tokens de orçamento (linha "seed" é escolhida em TODA a nota, não só perto do início). Os dois
+bugs reais, medidos em `app/services/snippet.py`:
+
+1. **Regra 2 (STRICT IMPROVEMENT) só perguntava "ficou mais barato?"** — nunca "ficou melhor?". Um
+   candidato cujo snippet original já era minúsculo (um título) tem `effective = min(budget,
+   current_cost)` também minúsculo; o recorte correto, no MESMO preço, não "economiza" tokens o
+   suficiente para passar o `min_saving`, e era descartado mesmo sendo estritamente mais relevante.
+   Corrigido: aceita o recorte quando ele cobre estritamente mais termos da query que o atual, ao
+   MESMO custo ou menor — nunca mais caro (`effective` já garante isso; Regra 1 intocada).
+2. **O prefixo de heading (redundante com o campo `section` já enviado ao juiz separadamente, ver
+   `JevClient.candidate_payload`) consumia sozinho o orçamento inteiro** em candidatos pequenos
+   (15–63 tokens), e a Regra 3 (não perder evidência) contava palavras genéricas do TÍTULO (ex.:
+   "software" em "Licenças de software...") como "evidência", vetando a realocação. Corrigido:
+   heading é descartado quando custaria mais da metade do orçamento disponível, e termos que só
+   batem no heading não contam para a Regra 3 (o juiz já os vê via `section` de qualquer forma).
+
+Efeito colateral encontrado e corrigido: o ramo de early-return de `extract()` truncava para um piso
+interno de busca (`max(16, max_tokens - reserve)`), não para o `max_tokens` do chamador — violava o
+próprio contrato da função em orçamentos pequenos (`<~20` tokens). `SNIPPET_POLICY_VERSION` subiu
+para `"snip-v2"` (invalida o cache de snippet existente).
+
+### Antes/depois por caminho, vault real, mesmas 3 perguntas
+
+| qid | caminho | estratégia | tokens do snippet | termos de evidência no snippet |
+|---|---|---|---|---|
+| q05 | frozen (congelado, sem mudança) | — | 15 | 0/28 |
+| q05 | opt — antes da correção | kept (idêntico ao frozen) | 15 | 0/28 |
+| q05 | opt — depois | **relocated** | 15 | 0/28 |
+| q07 | frozen | — | 59 | 1/25 |
+| q07 | opt — antes | kept (idêntico ao frozen) | 59 | 1/25 |
+| q07 | opt — depois | kept (`kept_evidence_loss` evitado, mas sem ganho — ver limitação) | 59 | 1/25 |
+| q10 | frozen | — | 63 | 1/11 |
+| q10 | opt — antes | kept (idêntico ao frozen) | 63 | 1/11 |
+| q10 | opt — depois | **relocated** | 60 | **2/11** |
+
+Honestidade sobre o resultado: q05 agora ancora corretamente na subseção certa (`## Conteúdo ### 1.
+Os três grupos de licença`, confirmado inspecionando o texto do snippet), mas o orçamento efetivo
+(`min(budget, current_cost)` = 15 tokens, porque o candidato original já era só o título) é pequeno
+demais para caber qualquer linha da tabela de evidência — a seção está certa, o ORÇAMENTO do
+candidato não é suficiente para carregar a resposta, e nenhuma mudança dentro de `fit_or_keep` pode
+resolver isso sem violar a Regra 1 (ceiling), que é testada e intencional
+(`test_fit_or_keep_is_never_worse_than_the_baseline_at_any_budget`). Na produção, o estágio pago de
+`progressive_context` (`expand`, até 600 tokens) pode recuperar esse caso quando o primeiro veredito
+do juiz cai na banda ambígua — mas isso é pago e este script nunca chama o juiz, então não é medido
+aqui. q10 melhora de verdade (conteúdo relevante sobre o preço promocional agora visível). q07
+permanece bloqueado: a palavra "corrigido" da query também aparece no parágrafo de abertura genérico
+da nota ("Cada item aqui foi **reproduzido e corrigido**"), fora do heading, então a Regra 3 (que
+não foi enfraquecida além da exclusão de heading, de propósito, para não reabrir a regressão sq070)
+ainda veta a realocação — um falso positivo da mesma proteção que intencionalmente barra perdas de
+evidência reais.
+
+### Corpus sintético, antes/depois (120 perguntas, 110 respondíveis com `expected_sources`)
+
+Medido com `select_pool(..., opt=OptimizationConfig.default_cascade())` sobre todas as perguntas
+respondíveis, comparando a implementação anterior de `fit_or_keep`/`extract` (reconstruída à parte,
+sem tocar o módulo real) contra o código atual:
+
+| | perguntas que chegam ao JEV (recall) | termos de evidência cobertos (soma) | tokens de snippet (soma) |
+|---|---|---|---|
+| antes | 104/110 | 797/1186 (0.672) | 9618 |
+| depois | 104/110 (**sem queda**) | 806/1186 (0.680, **+9**) | 9534 (**-84, -0.9%**) |
+
+Recall (quantas perguntas têm a fonte esperada sobrevivendo ao pré-filtro) não mudou — a correção
+atua só DEPOIS do candidato já estar no pool, nunca na decisão de quem entra. O ganho é pequeno no
+agregado porque só uma minoria dos 110 candidatos tem a patologia "snippet original = só o título";
+nos que têm, o ganho de evidência é real (q10 acima) e nunca aumenta o custo em tokens.
+
 ## Parte 3 — Sweep de PREFILTER_TOP_K / PREFILTER_LEXICAL_WEIGHT (`scripts/sweep_prefilter.py`)
 
 "Recall do pré-filtro" = a fonte esperada sobrevive ao corte determinístico (chegaria ao JEV),

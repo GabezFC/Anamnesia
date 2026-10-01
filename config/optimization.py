@@ -95,6 +95,13 @@ class OptimizationConfig:
     cache_snippets: bool = field(default_factory=lambda: env_bool("OPT_CACHE_SNIPPETS", False))
 
     # -- CAMADA C: less content per judgement ---------------------------------------------------
+    # DOCUMENTED, NEVER WIRED (§5.5 item 3 / Parte 2b): `graphify_jev` (app.retrieval.pipelines) is
+    # FROZEN and calls `dedup.preprocess` directly — it never reads `OptimizationConfig` at all, so
+    # this flag cannot affect it no matter what it is set to. It exists only to record the intent
+    # ("smart snippets could in principle apply to the frozen path too") without implying it is safe
+    # or available; wiring it would require re-measuring the frozen baseline, which is out of scope.
+    # Default False, and must stay False — there is no code path that reads this field.
+    snippet_for_frozen: bool = field(default_factory=lambda: env_bool("OPT_SNIPPET_FOR_FROZEN", False))
     smart_snippet: bool = field(default_factory=lambda: env_bool("OPT_SMART_SNIPPET", False))
     snippet_tokens: int = field(default_factory=lambda: env_int("OPT_SNIPPET_TOKENS", 300))
     # Minimum tokens a re-cut must save to be worth taking. CALIBRATED 2026-09-27: on question sq070

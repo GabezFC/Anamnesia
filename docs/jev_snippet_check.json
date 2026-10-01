@@ -5,9 +5,14 @@
   "q07",
   "q10"
  ],
+ "paths": [
+  "frozen",
+  "opt"
+ ],
  "results": [
   {
    "qid": "q05",
+   "path": "frozen",
    "question": "Quais são os três grupos de licença de software e o que cada um significa na prática?",
    "expected_sources": [
     "30-Projetos/Norteia_Cerebro/estudos/licencas-de-software-redis-e-valkey.md"
@@ -17,6 +22,7 @@
    "candidates_sent_to_jev": 8,
    "expected_source_reached_jev": true,
    "section_chosen": "Licenças de software — o caso Redis e Valkey",
+   "snippet_strategy": null,
    "snippet_tokens": 15,
    "snippet_contains_evidence": false,
    "snippet_evidence_terms_hit": "0/28",
@@ -29,6 +35,7 @@
   },
   {
    "qid": "q07",
+   "path": "frozen",
    "question": "Por que o comando pnpm dava \"command not found\" no shell do agente no Windows e como foi corrigido?",
    "expected_sources": [
     "30-Projetos/Norteia_Cerebro/procedimentos/ambiente-local-windows-armadilhas.md"
@@ -38,6 +45,7 @@
    "candidates_sent_to_jev": 8,
    "expected_source_reached_jev": true,
    "section_chosen": "Ambiente local (Windows + MSYS) — armadilhas verificadas",
+   "snippet_strategy": null,
    "snippet_tokens": 59,
    "snippet_contains_evidence": false,
    "snippet_evidence_terms_hit": "1/25",
@@ -50,6 +58,7 @@
   },
   {
    "qid": "q10",
+   "path": "frozen",
    "question": "Qual o preço promocional do plano KVM 4 da Hostinger e qual a armadilha desse valor?",
    "expected_sources": [
     "30-Projetos/Norteia_Cerebro/decisoes/12-decisao-de-vps-e-custos.md"
@@ -59,9 +68,79 @@
    "candidates_sent_to_jev": 8,
    "expected_source_reached_jev": true,
    "section_chosen": "12 — Decisão de VPS e Custos > Decisão pendente",
+   "snippet_strategy": null,
    "snippet_tokens": 63,
    "snippet_contains_evidence": false,
    "snippet_evidence_terms_hit": "1/11",
+   "evidence_location_in_full_note": {
+    "heading": "12 — Decisão de VPS e Custos > 🔴 Três armadilhas que a tabela esconde > 1. \"R$ 59,99/mês\" não é mensalidade",
+    "line": 45,
+    "hits": 8,
+    "of": 11
+   }
+  },
+  {
+   "qid": "q05",
+   "path": "opt",
+   "question": "Quais são os três grupos de licença de software e o que cada um significa na prática?",
+   "expected_sources": [
+    "30-Projetos/Norteia_Cerebro/estudos/licencas-de-software-redis-e-valkey.md"
+   ],
+   "prefilter_top_k": 8,
+   "candidates_in": 25,
+   "candidates_sent_to_jev": 20,
+   "expected_source_reached_jev": true,
+   "section_chosen": "Licenças de software — o caso Redis e Valkey",
+   "snippet_strategy": "relocated",
+   "snippet_tokens": 15,
+   "snippet_contains_evidence": false,
+   "snippet_evidence_terms_hit": "0/28",
+   "evidence_location_in_full_note": {
+    "heading": "Licenças de software — o caso Redis e Valkey > Conteúdo > 1. Os três grupos de licença",
+    "line": 27,
+    "hits": 27,
+    "of": 28
+   }
+  },
+  {
+   "qid": "q07",
+   "path": "opt",
+   "question": "Por que o comando pnpm dava \"command not found\" no shell do agente no Windows e como foi corrigido?",
+   "expected_sources": [
+    "30-Projetos/Norteia_Cerebro/procedimentos/ambiente-local-windows-armadilhas.md"
+   ],
+   "prefilter_top_k": 8,
+   "candidates_in": 25,
+   "candidates_sent_to_jev": 20,
+   "expected_source_reached_jev": true,
+   "section_chosen": "Ambiente local (Windows + MSYS) — armadilhas verificadas",
+   "snippet_strategy": null,
+   "snippet_tokens": 59,
+   "snippet_contains_evidence": false,
+   "snippet_evidence_terms_hit": "1/25",
+   "evidence_location_in_full_note": {
+    "heading": "Ambiente local (Windows + MSYS) — armadilhas verificadas > 1. `pnpm: command not found` no shell do agente 🔴",
+    "line": 20,
+    "hits": 24,
+    "of": 25
+   }
+  },
+  {
+   "qid": "q10",
+   "path": "opt",
+   "question": "Qual o preço promocional do plano KVM 4 da Hostinger e qual a armadilha desse valor?",
+   "expected_sources": [
+    "30-Projetos/Norteia_Cerebro/decisoes/12-decisao-de-vps-e-custos.md"
+   ],
+   "prefilter_top_k": 8,
+   "candidates_in": 25,
+   "candidates_sent_to_jev": 6,
+   "expected_source_reached_jev": true,
+   "section_chosen": "12 — Decisão de VPS e Custos > Decisão pendente",
+   "snippet_strategy": "relocated",
+   "snippet_tokens": 60,
+   "snippet_contains_evidence": false,
+   "snippet_evidence_terms_hit": "2/11",
    "evidence_location_in_full_note": {
     "heading": "12 — Decisão de VPS e Custos > 🔴 Três armadilhas que a tabela esconde > 1. \"R$ 59,99/mês\" não é mensalidade",
     "line": 45,

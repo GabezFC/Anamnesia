@@ -32,6 +32,20 @@ So `extract` must be called with a budget that is `min(policy_budget, what_the_c
 and the caller must keep the original whenever extraction did not come out smaller. That rule lives in
 `fit_or_keep` below so no call site can forget it.
 
+SAME PRICE, WRONG SECTION (snip-v2, measured 2026-10-01, docs/QUALITY_5_5.md Parte 2/2b)
+------------------------------------------------------------------------------------------
+The ceiling above (`effective = min(budget, current_cost)`) means `extract` can never cost more than
+`current` already does -- but "never cheaper" is not the same question as "never better". q05/q07/q10
+all had a TINY `current` (a title line or an unrelated neighbour section, 15-63 tokens): `extract`,
+run at that same tiny budget, correctly re-anchors on the right section (seed selection scans the
+WHOLE note regardless of budget) and comes back at THE SAME cost, because the budget was fully used
+either way. The old rule-2 check (`current_cost - res.tokens <= min_saving`) only ever asked "did this
+get cheaper?", so a same-price, right-section replacement was rejected exactly like a same-price,
+no-better one would be. `min_saving` exists to price a GAMBLE (spend a possible evidence loss to save
+a few tokens, see "sq070" below) -- it has nothing to say about a strictly-better candidate that costs
+the ceiling no more than before, so that case is let through regardless of `min_saving` (still gated by
+rule 3: it can never cost evidence `current` already had).
+
 `max_tokens` uses the project's deterministic estimator (chars/4 vs words*1.3), NOT a provider
 tokenizer, so a snippet's cost is identical for every consumer and reproducible in benchmarks.
 """
@@ -42,7 +56,7 @@ from dataclasses import dataclass
 from app.gateway.token_budget import estimate_tokens, truncate_to_tokens
 from app.services.query_fp import stem, tokens
 
-SNIPPET_POLICY_VERSION = "snip-v1"
+SNIPPET_POLICY_VERSION = "snip-v2"
 ELISION = "\n[…]\n"
 
 
@@ -111,8 +125,15 @@ def extract(text: str, query: str, max_tokens: int, heading: str = "") -> Snippe
         return SnippetResult(text=cut, tokens=estimate_tokens(cut), strategy="head",
                              matched_lines=0, coverage=_coverage(text, qt))
 
-    # Reserve room for the heading and the elision marker before choosing the window.
-    prefix = f"{heading}\n" if heading and heading not in lines[0] else ""
+    # Reserve room for the heading and the elision marker before choosing the window. The heading
+    # repeats metadata the judge already receives as its own `section` field (see
+    # JevClient.candidate_payload), so on a small budget it is not worth the tokens: measured
+    # 2026-10-01 (docs/QUALITY_5_5.md Parte 2b), an unconditional heading prefix consumed the ENTIRE
+    # budget on q05/q07/q10 (15-63 tokens) and silently starved the window search down to the
+    # heading itself, which is exactly the "wrong section" failure this function exists to prevent.
+    # Dropped once it alone would cost more than half of what is actually available.
+    candidate_prefix = f"{heading}\n" if heading and heading not in lines[0] else ""
+    prefix = "" if estimate_tokens(candidate_prefix) * 2 > max_tokens else candidate_prefix
     reserve = estimate_tokens(prefix) + estimate_tokens(ELISION) * 2
     budget = max(16, max_tokens - reserve)
 
@@ -126,8 +147,15 @@ def extract(text: str, query: str, max_tokens: int, heading: str = "") -> Snippe
     while hi < len(lines) and fenced[hi - 1] and fenced[hi]:
         hi += 1
     if _cost(lines, lo, hi) > budget:
-        cut = truncate_to_tokens("\n".join(lines[lo:hi]), budget)
-        return SnippetResult(text=prefix + cut, tokens=estimate_tokens(prefix + cut),
+        # `budget` has a 16-token floor (so a search always has SOME room to work with) that can
+        # exceed the caller's real `max_tokens` when the latter is tiny; truncate the final text to
+        # `max_tokens` itself, not to the inflated search floor, so the stated contract ("within
+        # max_tokens") holds even in this early-return branch.
+        cut = truncate_to_tokens("\n".join(lines[lo:hi]), max(1, max_tokens - estimate_tokens(prefix)))
+        out = prefix + cut
+        if estimate_tokens(out) > max_tokens:
+            out = truncate_to_tokens(out, max_tokens)
+        return SnippetResult(text=out, tokens=estimate_tokens(out),
                              strategy="focused", matched_lines=1, coverage=_coverage(text, qt))
 
     while True:
@@ -171,7 +199,11 @@ def fit_or_keep(full_text: str, current: str, query: str, budget: int,
 
       1. CEILING — the effective budget is capped by what the candidate already costs, so a cheap
          candidate can never be inflated to fill a larger policy budget.
-      2. STRICT IMPROVEMENT — the result is kept only if it is cheaper by at least `min_saving`.
+      2. IMPROVEMENT — the result is kept if it is either cheaper by at least `min_saving` (a pure
+         token-cost win), OR it covers strictly more of the query than `current` at no extra cost
+         (a same-price SECTION RELOCATION — see "SAME PRICE, WRONG SECTION" above). `min_saving`
+         only prices the first kind of win; it has no say over the second, because the ceiling in
+         rule 1 already guarantees a relocation is never more expensive than `current`.
       3. NO EVIDENCE LOSS — the re-cut must not drop any query term that `current` already had.
       4. FAIL SAFE — on any doubt the original is returned unchanged, so the worst case equals the
          baseline exactly.
@@ -195,13 +227,27 @@ def fit_or_keep(full_text: str, current: str, query: str, budget: int,
     res = extract(full_text, query, effective, heading=heading)
     if not res.text:
         return current, "kept"
-    if current_cost - res.tokens <= min_saving:
-        return current, "kept"
+
     # Rule 3: every query term the CURRENT snippet already evidenced must survive the re-cut.
+    # Terms that only matched because they are part of `heading` are excluded: the judge always
+    # receives the section heading as its own payload field (JevClient.candidate_payload) regardless
+    # of what the snippet text says, so losing a heading-only overlap from the snippet body loses
+    # nothing the judge cannot already see. Without this, a generic topic word repeated in the
+    # note's TITLE (e.g. "software" in "Licenças de software...") counted as "evidence" and blocked
+    # every relocation away from a title-only snippet — measured 2026-10-01, q05/q07 (Parte 2b).
     qt = set(tokens(query))
     if qt:
-        had = qt & set(tokens(current))
+        heading_terms = set(tokens(heading)) if heading else set()
+        had = (qt & set(tokens(current))) - heading_terms
         kept = qt & set(tokens(res.text))
         if had - kept:
             return current, "kept_evidence_loss"
-    return res.text, res.strategy
+
+    saved = current_cost - res.tokens
+    if saved > min_saving:
+        return res.text, res.strategy
+    # Rule 1 already guarantees res.tokens <= current_cost, so a relocation is never a cost
+    # regression — only ever accept it when it genuinely covers more of the query, never on a tie.
+    if qt and res.coverage > _coverage(current, qt):
+        return res.text, "relocated"
+    return current, "kept"

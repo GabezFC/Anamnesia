@@ -287,10 +287,12 @@ def test_snippet_keeps_code_fences_intact():
 def test_fit_or_keep_never_grows_a_snippet_that_is_already_small():
     """The measured regression this exists to prevent: enabling smart snippets INCREASED the judge
     payload by 415 tokens over 24 candidates, because extraction filled the policy budget on
-    candidates whose section was already far cheaper than it."""
+    candidates whose section was already far cheaper than it. `min_saving=40` matches the
+    calibrated production default (`opt.snippet_min_saving`, see config/optimization.py): a
+    same-coverage re-cut that is only trivially cheaper is not worth touching."""
     full = NOTE + ("\n\npadding irrelevante que nao responde nada. " * 200)
     short_section = "## Decisao\nO driver escolhido foi asyncpg 0.31."
-    out, strategy = fit_or_keep(full, short_section, "qual driver asyncpg", budget=300)
+    out, strategy = fit_or_keep(full, short_section, "qual driver asyncpg", budget=300, min_saving=40)
     assert estimate_tokens(out) <= estimate_tokens(short_section)
     assert strategy == "kept" and out == short_section
 
@@ -355,6 +357,105 @@ def test_fit_or_keep_never_loses_evidence_at_any_budget(budget):
         had = qt & set(tokens(current))
         kept = qt & set(tokens(out))
         assert not (had - kept), (budget, sorted(had - kept))
+
+
+# -- fit_or_keep: SECTION RELOCATION at equal price (snip-v2, §5.5 item 2 / Parte 2b) -------------
+# Fixture shaped like the measured failure (docs/QUALITY_5_5.md Parte 2): a candidate whose
+# ORIGINAL snippet is just the note's title + a generic one-line blurb (no part of the real
+# answer), with the actual answer buried in a deeper subsection the pre-filter never truncates
+# down to. Synthetic, not the real vault, so this test has no external dependency.
+LICENSE_NOTE = """# Licencas de software exemplo
+
+Nota de referencia sobre licenciamento de bibliotecas usadas no projeto.
+
+## Conteudo
+
+### 1. Os tres grupos de licenca
+| Grupo | Exemplos | O que significa |
+| --- | --- | --- |
+| Permissiva | MIT, BSD | Pode usar e vender livremente |
+| Copyleft forte | GPL, AGPL | Precisa abrir o codigo alterado |
+| Source available | SSPL, BSL | Proibicao comercial |
+"""
+LICENSE_CURRENT = ("# Licencas de software exemplo\n\n"
+                   "Nota de referencia sobre licenciamento de bibliotecas usadas no projeto.")
+LICENSE_QUERY = "quais sao os tres grupos de licenca de software e o que cada um significa"
+LICENSE_HEADING = "Licencas de software exemplo"
+
+
+def test_fit_or_keep_relocates_a_title_only_snippet_to_the_matching_section():
+    """THE q05 REGRESSION, fixed. Rule 1 (ceiling) means a re-cut of this candidate can never cost
+    more than the title+blurb already did — so without relocation, it is permanently stuck on a
+    snippet with ZERO of the query's evidence, at any policy budget, simply because that is what the
+    pre-filter happened to pick as this candidate's starting section. The re-cut must be allowed at
+    the SAME price (not a shrink, not a growth) when it demonstrably covers more of the query."""
+    out, strategy = fit_or_keep(LICENSE_NOTE, LICENSE_CURRENT, LICENSE_QUERY, budget=300,
+                                heading=LICENSE_HEADING, min_saving=40)
+    assert strategy == "relocated"
+    assert estimate_tokens(out) <= estimate_tokens(LICENSE_CURRENT)
+    assert "tres grupos de licenca" in out
+
+
+def test_fit_or_keep_relocation_is_deterministic():
+    """No LLM, no randomness: the same inputs must produce byte-identical output every time."""
+    first = fit_or_keep(LICENSE_NOTE, LICENSE_CURRENT, LICENSE_QUERY, budget=300,
+                        heading=LICENSE_HEADING, min_saving=40)
+    for _ in range(5):
+        assert fit_or_keep(LICENSE_NOTE, LICENSE_CURRENT, LICENSE_QUERY, budget=300,
+                           heading=LICENSE_HEADING, min_saving=40) == first
+
+
+@pytest.mark.parametrize("budget", [20, 40, 80, 150, 300, 1200])
+def test_fit_or_keep_relocation_never_exceeds_the_ceiling(budget):
+    """Rule 1 still holds for the relocated branch: cost <= current, at every budget."""
+    out, _ = fit_or_keep(LICENSE_NOTE, LICENSE_CURRENT, LICENSE_QUERY, budget,
+                         heading=LICENSE_HEADING, min_saving=40)
+    assert estimate_tokens(out) <= estimate_tokens(LICENSE_CURRENT)
+
+
+def test_fit_or_keep_does_not_relocate_when_current_already_covers_the_query():
+    """No regression on the common case: a candidate whose snippet already covers 100% of the
+    query (the whole note, the maximum any re-cut could ever reach) is left untouched — there is
+    nothing a same-price alternative could possibly improve on."""
+    out, strategy = fit_or_keep(LICENSE_NOTE, LICENSE_NOTE, LICENSE_QUERY, budget=300,
+                                heading=LICENSE_HEADING, min_saving=40)
+    assert strategy == "kept" and out == LICENSE_NOTE
+
+
+def test_rule3_ignores_a_query_term_that_only_matched_the_heading():
+    """The judge always receives `section` as its own payload field (JevClient.candidate_payload),
+    independent of the snippet text, so a query term that only matched because it was part of the
+    HEADING is not real evidence the snippet body carried — losing it must not veto a relocation
+    that is otherwise strictly better (measured q05: "software" only matched the note's title)."""
+    assert "software" in set(tokens(LICENSE_HEADING)) & set(tokens(LICENSE_QUERY))
+    out, strategy = fit_or_keep(LICENSE_NOTE, LICENSE_CURRENT, LICENSE_QUERY, budget=300,
+                                heading=LICENSE_HEADING, min_saving=40)
+    assert strategy == "relocated"
+    assert "software" not in tokens(out)  # dropped, but not disqualifying: only the heading had it
+
+
+def test_rule3_still_vetoes_a_real_evidence_term_lost_outside_the_heading():
+    """The heading exclusion must not reopen the sq070 regression: a term present in the BODY of
+    `current` (not just the heading) that the re-cut would drop is still disqualifying."""
+    note = ("# Licencas de software exemplo\n\n" + ("preenchimento irrelevante sem relacao. " * 60) +
+            "\n\n## Resposta\nA licenca MIT e permissiva e aceita uso comercial irrestrito.\n")
+    current = "## Resposta\nA licenca MIT e permissiva e aceita uso comercial irrestrito."
+    query = "qual licenca mit e permissiva"
+    out, strategy = fit_or_keep(note, current, query, budget=300, heading="Licencas de software exemplo",
+                                min_saving=0)
+    assert "mit" in tokens(out) or strategy == "kept_evidence_loss"
+
+
+@pytest.mark.parametrize("max_tokens", [3, 5, 7, 10, 16, 20])
+def test_extract_never_exceeds_max_tokens_even_below_the_search_floor(max_tokens):
+    """Regression for the early-return branch bug (measured alongside q05/q07/q10, Parte 2b):
+    `extract` used to truncate to its own internal 16-token search floor instead of the caller's
+    real `max_tokens` whenever a single seed line already exceeded that floor, silently breaking
+    the "within max_tokens" contract documented on `extract` for small budgets. (Below 3 tokens
+    `truncate_to_tokens` itself cannot comply — its elision marker alone costs 2 — which is a
+    separate, pre-existing floor unrelated to this fix.)"""
+    res = extract(LICENSE_NOTE, LICENSE_QUERY, max_tokens, heading=LICENSE_HEADING)
+    assert res.tokens <= max_tokens
 
 
 # =============================================================================================

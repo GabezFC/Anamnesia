@@ -1,10 +1,18 @@
-"""Check the ~300-token snippet that graphify_jev would hand JEV, without calling the judge (§5.5).
+"""Check the ~300-token snippet JEV would receive, for either pipeline, without calling the judge
+(§5.5, Parte 2b).
 
-Reuses the REAL pipeline internals (app.retrieval.pipelines._graphify_candidates + the real
-app.services.prefilter.prefilter) so the snippet inspected here is byte-for-byte what
-run_graphify_jev would send, not an approximation: same BM25 seeds, same graph expansion
-(allow_ppr=False, matching the frozen pipeline), same preprocess() truncation to
-RetrievalConfig.snippet_max_tokens, same prefilter ranking and top_k cut.
+`--path frozen` reuses the REAL pipeline internals (app.retrieval.pipelines._graphify_candidates +
+the real app.services.prefilter.prefilter) so the snippet inspected here is byte-for-byte what
+run_graphify_jev would send: same BM25 seeds, same graph expansion (allow_ppr=False, matching the
+frozen pipeline), same preprocess() truncation to RetrievalConfig.snippet_max_tokens, same prefilter
+ranking and top_k cut. This path, and `app.services.dedup.preprocess`, are FROZEN (§5.5) — never
+touch them to make this check pass.
+
+`--path opt` reuses app.retrieval.pipelines_opt.select_pool — the exact free-stage cascade
+(candidates -> smart snippet via `snippet.extract`/`fit_or_keep` -> ranking -> dedup -> zero-evidence
+shadow -> adaptive-K) that `graphify_jev_opt` runs before ever calling the judge, under the same
+OptimizationConfig.default_cascade() production uses. Same `extract()` call, same token budget,
+stopped right before the PAID stage.
 
 For each target question (q05, q07, q10 by default) reports:
   - whether a candidate from the expected source survived the pre-filter cut (i.e. would reach JEV)
@@ -13,7 +21,7 @@ For each target question (q05, q07, q10 by default) reports:
   - where in the FULL note that evidence actually lives (which section, by line), so a "snippet
     picked the wrong section" failure is visible even when the right FILE survived the pre-filter
 
-No LLM call, no network: pure deterministic re-run of the retrieval + pre-filter stages.
+No LLM call, no network: pure deterministic re-run of the retrieval + pre-filter (or cascade) stages.
 """
 from __future__ import annotations
 
@@ -37,6 +45,7 @@ from app.services.obsidian import split_sections  # noqa: E402
 from app.services.prefilter import prefilter, terms  # noqa: E402
 
 DEFAULT_QIDS = ("q05", "q07", "q10")
+DEFAULT_MAX_RESULTS = 10  # matches app.gateway.memory_gateway.MemoryGateway.search default
 
 
 def _ensure_fresh_graph(gw: MemoryGateway, vault: Path) -> None:
@@ -98,32 +107,51 @@ def locate_evidence_in_note(gw, source_file: str, needed: set[str]) -> dict:
     return best or {"heading": None, "line": None, "hits": 0, "of": len(needed)}
 
 
-def check_question(gw, rc, q: dict) -> dict:
+def check_question(gw, rc, q: dict, path: str = "frozen") -> dict:
     needed = evidence_terms(q)
     exp_sources = set(q.get("expected_sources") or [])
 
-    # Same candidate generation graphify_jev uses: allow_ppr=False (frozen pipeline, §5.5).
-    uniq, _metrics = _graphify_candidates(gw, q["question"], allow_ppr=False)
-    judged_in, withheld, pf = prefilter(q["question"], uniq, rc.prefilter_top_k, rc.prefilter_lexical_weight)
+    if path == "frozen":
+        # Same candidate generation graphify_jev uses: allow_ppr=False (frozen pipeline, §5.5).
+        uniq, _metrics = _graphify_candidates(gw, q["question"], allow_ppr=False)
+        judged_in, withheld, pf = prefilter(q["question"], uniq, rc.prefilter_top_k,
+                                            rc.prefilter_lexical_weight)
+        candidates_in, candidates_sent = pf["prefilter_in"], pf["prefilter_sent"]
+    elif path == "opt":
+        # Same free-stage cascade graphify_jev_opt runs, under the production default (§1.3):
+        # candidates -> smart snippet (extract/fit_or_keep) -> ranking -> dedup -> adaptive-K.
+        from app.retrieval.pipelines_opt import select_pool
+        from config.optimization import OptimizationConfig
+        fs = select_pool(gw, q["question"], DEFAULT_MAX_RESULTS,
+                         opt=OptimizationConfig.default_cascade())
+        judged_in, withheld = fs.pool, fs.withheld
+        candidates_in = len(fs.pool) + len(fs.withheld)
+        candidates_sent = len(fs.pool)
+    else:
+        raise ValueError(f"unknown --path {path!r}, expected 'frozen' or 'opt'")
 
-    judged_files = {c.source_file for c in judged_in}
     survivor = next((c for c in judged_in if c.source_file in exp_sources), None)
     withheld_hit = next((c for c in withheld if c.source_file in exp_sources), None)
 
     out = {
         "qid": q["id"],
+        "path": path,
         "question": q["question"],
         "expected_sources": sorted(exp_sources),
         "prefilter_top_k": rc.prefilter_top_k,
-        "candidates_in": pf["prefilter_in"],
-        "candidates_sent_to_jev": pf["prefilter_sent"],
+        "candidates_in": candidates_in,
+        "candidates_sent_to_jev": candidates_sent,
         "expected_source_reached_jev": survivor is not None,
     }
 
     if survivor is not None:
         hit, of = snippet_evidence_ratio(survivor.snippet, needed)
         out.update({
+            # `section` is the candidate's ORIGINAL heading metadata (unchanged by smart-snippet,
+            # it is sent to the judge as its own payload field regardless) — `snippet_strategy`
+            # is what actually tells you whether the opt path re-cut the snippet text itself.
             "section_chosen": survivor.section,
+            "snippet_strategy": (survivor.meta or {}).get("snippet_strategy"),
             "snippet_tokens": survivor.token_estimate or estimate_tokens(survivor.snippet),
             "snippet_contains_evidence": hit == of and of > 0,
             "snippet_evidence_terms_hit": f"{hit}/{of}",
@@ -146,6 +174,9 @@ def main():
     ap.add_argument("--questions", required=True, help="path to the real benchmark/questions.json")
     ap.add_argument("--vault", required=True, help="path to the real (read-only) vault")
     ap.add_argument("--qids", nargs="*", default=list(DEFAULT_QIDS))
+    ap.add_argument("--path", choices=("frozen", "opt", "both"), default="both",
+                    help="frozen=dedup.preprocess (graphify_jev); opt=snippet.extract cascade "
+                         "(graphify_jev_opt); both=run and report both (default)")
     ap.add_argument("--out", default=str(PROJECT_ROOT / "docs" / "jev_snippet_check.json"))
     a = ap.parse_args()
 
@@ -156,8 +187,10 @@ def main():
     gw = make_gw(vault)
     rc = gw.retrieval_cfg
 
-    results = [check_question(gw, rc, q) for q in targets]
-    report = {"vault": str(vault), "questions_checked": a.qids, "results": results}
+    paths = ("frozen", "opt") if a.path == "both" else (a.path,)
+    results = [check_question(gw, rc, q, path=p) for p in paths for q in targets]
+    report = {"vault": str(vault), "questions_checked": a.qids, "paths": list(paths),
+              "results": results}
 
     print(json.dumps(report, ensure_ascii=False, indent=1))
     if a.out:

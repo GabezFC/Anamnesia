@@ -93,8 +93,10 @@ def _apply_smart_snippets(gw, query: str, cands: list[Candidate], opt, cache: La
                 cache.put_snippet(content_hash(text), SNIPPET_POLICY_VERSION, budget, qkey, snippet)
         new_cost = estimate_tokens(snippet)
         # Defence in depth: fit_or_keep already refuses to grow a snippet, but a cached entry was
-        # written under a possibly different original, so the guard is re-applied here.
-        if snippet and snippet != original and new_cost < original_cost:
+        # written under a possibly different original, so the guard is re-applied here. `<=`, not
+        # `<`: a same-price SECTION RELOCATION (snip-v2, kind == "relocated") costs no more than
+        # `original` by construction but is not strictly cheaper, so it must still pass this gate.
+        if snippet and snippet != original and new_cost <= original_cost:
             c.snippet = snippet
             c.content_hash = content_hash(snippet)
             c.token_estimate = new_cost
@@ -128,15 +130,19 @@ def safety_net_eligible(pool: list[Candidate]) -> list[Candidate]:
     return [c for c in pool if c.decision not in (QUARANTINE, UNSELECTED)]
 
 
-def run_graphify_jev_optimized(gw, query: str, max_results: int, jev=None, opt=None):
-    """Cascade pipeline. `opt` is an OptimizationConfig; with `opt.enabled=False` this delegates to
-    the frozen baseline so a benchmark can use one code path for both arms."""
+def select_pool(gw, query: str, max_results: int, opt=None):
+    """Every FREE stage of the cascade: candidates -> smart snippets -> ranking -> dedup ->
+    zero-evidence shadow -> adaptive-K / pre-filter. Stops right before the judge is called.
+
+    Factored out of `run_graphify_jev_optimized` so a diagnostic (e.g.
+    scripts/check_jev_snippet.py) can inspect exactly what the judge would receive — same
+    candidate generation, same `extract()` budget, same pool selection — without spending a
+    judge token. `opt.enabled=False` is the caller's job to check; this assumes the cascade runs.
+    """
     from config.optimization import OptimizationConfig
-    from app.retrieval.pipelines import run_graphify_jev
+    from types import SimpleNamespace
 
     opt = opt or getattr(gw, "opt_cfg", None) or OptimizationConfig()
-    if not opt.enabled:
-        return run_graphify_jev(gw, query, max_results, jev=jev)
     # Rejects flag combinations that were measured to be net losses (see config/optimization.py).
     opt.validate()
 
@@ -201,6 +207,25 @@ def run_graphify_jev_optimized(gw, query: str, max_results: int, jev=None, opt=N
         waves = None
         metrics.update(pf)
     metrics["free_stage_latency_ms"] = round((time.perf_counter() - t_free0) * 1000, 1)
+
+    return SimpleNamespace(pool=pool, withheld=withheld, waves=waves, metrics=metrics,
+                           cache=cache, profile=profile, conf=conf, rc=rc, jcfg=jcfg,
+                           clusters=clusters, ze=ze, opt=opt)
+
+
+def run_graphify_jev_optimized(gw, query: str, max_results: int, jev=None, opt=None):
+    """Cascade pipeline. `opt` is an OptimizationConfig; with `opt.enabled=False` this delegates to
+    the frozen baseline so a benchmark can use one code path for both arms."""
+    from config.optimization import OptimizationConfig
+    from app.retrieval.pipelines import run_graphify_jev
+
+    opt = opt or getattr(gw, "opt_cfg", None) or OptimizationConfig()
+    if not opt.enabled:
+        return run_graphify_jev(gw, query, max_results, jev=jev)
+
+    fs = select_pool(gw, query, max_results, opt=opt)
+    pool, withheld, waves, metrics = fs.pool, fs.withheld, fs.waves, fs.metrics
+    cache, rc, jcfg, clusters, ze = fs.cache, fs.rc, fs.jcfg, fs.clusters, fs.ze
 
     # ---- PAID stage ------------------------------------------------------------------------
     jev = jev or gw.jev
