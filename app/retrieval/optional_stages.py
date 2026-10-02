@@ -21,8 +21,10 @@ from __future__ import annotations
 
 import hashlib
 import re
+import threading
 import time
 import uuid
+from collections import OrderedDict
 from typing import Any, Callable
 
 from app.gateway.token_budget import estimate_tokens
@@ -32,6 +34,11 @@ from app.services.near_dup import jaccard, shingles
 from config.optimization import OPTIONAL_STAGE_NAMES, OptionalStagesConfig
 
 _WARNED: set[str] = set()
+
+LLMLINGUA2_MODEL = "microsoft/llmlingua-2-xlm-roberta-large-meetingbank"
+PROVENCE_MODEL = "naver/provence-reranker-debertav3-v1"
+BGE_MODEL = "BAAI/bge-reranker-v2-m3"
+MXBAI_MODEL = "mixedbread-ai/mxbai-rerank-base-v2"
 
 
 def _warn_once(name: str, msg: str) -> None:
@@ -207,9 +214,13 @@ def spotlight_nonce(query: str, cands: list[Candidate], full_texts: dict[str, st
     t0 = time.perf_counter()
     mode = cfg.spotlight_nonce_mode if cfg.spotlight_nonce_mode in ("hash", "random") else "hash"
     request_nonce = uuid.uuid4().hex[:12] if mode == "random" else None
-    wrapped = 0
+    wrapped = forged = 0
     for c in cands:
         text = _effective_text(c, full_texts)
+        # A note must not be able to close its own span: neutralise any delimiter-looking token.
+        if "spotlight" in text.lower():
+            text = re.sub(r"(?i)spotlight", "SPOT-LIGHT", text)
+            forged += 1
         if mode == "random":
             nonce = request_nonce
         else:
@@ -227,115 +238,245 @@ def spotlight_nonce(query: str, cands: list[Candidate], full_texts: dict[str, st
         "stage_spotlight_nonce_mode": mode,
         "stage_spotlight_nonce_deterministic": mode == "hash",
         "stage_spotlight_nonce_wrapped": wrapped,
+        "stage_spotlight_nonce_forged_delimiters": forged,
         "stage_spotlight_nonce_latency_ms": round((time.perf_counter() - t0) * 1000, 1),
     }
 
 
 # =================================================================================================
 # model-backed stages — optional dependency, late import, skip-on-missing (§1.4)
+#
+# APIs verified against the installed libraries on 2026-10-01 (docs/OPTIONAL_STAGES_BENCHMARK.md §2):
+#   llmlingua 0.2.2        PromptCompressor(model_name=..., use_llmlingua2=True, device_map=...)
+#                          .compress_prompt_llmlingua2(...) — WITHOUT use_llmlingua2=True the model is
+#                          loaded as a causal LM and the call is wrong (fixed here).
+#   transformers 4.57.6    Provence via AutoModel(trust_remote_code=True).process(q, ctx) -> pruned_context
+#                          (needs nltk 'punkt_tab'); mxbai-rerank 0.1.6 is BROKEN on transformers>=5
+#                          (Qwen2Tokenizer.prepare_for_model was removed), so the bench env pins <5.
+#   sentence-transformers  CrossEncoder(name, device=..., max_length=...).predict(pairs)
+#   mxbai-rerank 0.1.6     MxbaiRerankV2(name).rank(query, docs, return_documents=False) -> [.index/.score]
 # =================================================================================================
+_MODEL_LOCK = threading.Lock()
+_MODELS: dict[str, Any] = {}
+_LOAD_MS: dict[str, float] = {}
+_RERANK_CACHE: "OrderedDict[tuple[str, str, str], float]" = OrderedDict()
+_RERANK_CACHE_MAX = 8192
+
+
+def _device() -> str:
+    try:
+        import torch  # type: ignore
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        return "cpu"
+
+
+def _get_model(name: str, loader: Callable[[], Any]) -> tuple[Any, float, bool]:
+    """Load a stage's model ONCE per process. Returns (model, load_ms, cold). Before this existed
+    every search() reloaded the weights from disk (seconds per call)."""
+    with _MODEL_LOCK:
+        if name in _MODELS:
+            return _MODELS[name], 0.0, False
+        t0 = time.perf_counter()
+        model = loader()
+        ms = round((time.perf_counter() - t0) * 1000, 1)
+        _MODELS[name] = model
+        _LOAD_MS[name] = ms
+        return model, ms, True
+
+
+def release_models() -> None:
+    """Drop every loaded model and free VRAM (benchmark isolation / low-memory hosts)."""
+    with _MODEL_LOCK:
+        _MODELS.clear()
+        _LOAD_MS.clear()
+    import gc
+    gc.collect()
+    try:
+        import torch  # type: ignore
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except ImportError:
+        pass
+
+
+def clear_rerank_cache() -> None:
+    _RERANK_CACHE.clear()
+
+
+def _query_fp(query: str) -> str:
+    return hashlib.sha1(" ".join(query.lower().split()).encode("utf-8")).hexdigest()[:16]
+
+
+def _text_hash(text: str) -> str:
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
+
+
+def _rerank(stage: str, query: str, texts: list[str], cfg: OptionalStagesConfig,
+            score_fn: Callable[[list[str]], list[float]]) -> tuple[list[float], dict[str, Any]]:
+    """Score `texts` for `query`, consulting the (stage, query_fp, content_hash) cache first so a
+    repeated question over unchanged notes never reaches the model (cfg.rerank_cache)."""
+    qfp = _query_fp(query)
+    scores: list[float | None] = [None] * len(texts)
+    todo: list[int] = []
+    for i, t in enumerate(texts):
+        key = (stage, qfp, _text_hash(t))
+        if cfg.rerank_cache and key in _RERANK_CACHE:
+            _RERANK_CACHE.move_to_end(key)
+            scores[i] = _RERANK_CACHE[key]
+        else:
+            todo.append(i)
+    if todo:
+        fresh = score_fn([texts[i] for i in todo])
+        for i, sc in zip(todo, fresh):
+            scores[i] = float(sc)
+            if cfg.rerank_cache:
+                _RERANK_CACHE[(stage, qfp, _text_hash(texts[i]))] = float(sc)
+        while len(_RERANK_CACHE) > _RERANK_CACHE_MAX:
+            _RERANK_CACHE.popitem(last=False)
+    return [float(x) for x in scores], {
+        f"stage_{stage}_cache_hits": len(texts) - len(todo), f"stage_{stage}_cache_misses": len(todo),
+        f"stage_{stage}_model_calls": 1 if todo else 0}
+
+
+def _compress_loop(stage: str, cands: list[Candidate], full_texts: dict[str, str],
+                   fn: Callable[[str], str]) -> dict[str, Any]:
+    tokens_before = tokens_after = changed = calls = 0
+    for c in cands:
+        text = _effective_text(c, full_texts)
+        tokens_before += estimate_tokens(text)
+        new_text = fn(text)
+        calls += 1
+        tokens_after += estimate_tokens(new_text or text)
+        if new_text and new_text != text:
+            _set_text(c, full_texts, new_text)
+            changed += 1
+    return {f"stage_{stage}_candidates_changed": changed, f"stage_{stage}_tokens_before": tokens_before,
+            f"stage_{stage}_tokens_after": tokens_after,
+            f"stage_{stage}_tokens_saved": tokens_before - tokens_after,
+            f"stage_{stage}_model_calls": calls}
+
+
 def llmlingua2(query: str, cands: list[Candidate], full_texts: dict[str, str],
                cfg: OptionalStagesConfig) -> dict[str, Any]:
     """LLMLingua-2 prompt compression (MIT, `pip install llmlingua`). Not installed by default —
-    see requirements-optional.txt [compress]."""
+    see requirements-optional.txt [compress]. Query-agnostic token classification; newlines and
+    digits are force-kept so markdown structure and numeric facts survive."""
     try:
         from llmlingua import PromptCompressor  # type: ignore
     except ImportError as exc:
         _warn_once("llmlingua2", f"pip package 'llmlingua' not installed ({exc})")
         return {"optional_stage_skipped": "llmlingua2"}
+
+    def load():
+        return PromptCompressor(model_name=LLMLINGUA2_MODEL, use_llmlingua2=True, device_map=_device())
+
+    model, load_ms, cold = _get_model("llmlingua2", load)
     t0 = time.perf_counter()
-    compressor = PromptCompressor(model_name="microsoft/llmlingua-2-xlm-roberta-large-meetingbank")
-    tokens_before = tokens_after = 0
-    changed = 0
-    for c in cands:
-        text = _effective_text(c, full_texts)
-        tokens_before += estimate_tokens(text)
-        result = compressor.compress_prompt(text, rate=0.5)
-        new_text = result.get("compressed_prompt", text)
-        tokens_after += estimate_tokens(new_text)
-        if new_text and new_text != text:
-            _set_text(c, full_texts, new_text)
-            changed += 1
-    return {
-        "stage_llmlingua2_enabled": True, "stage_llmlingua2_candidates_changed": changed,
-        "stage_llmlingua2_tokens_before": tokens_before, "stage_llmlingua2_tokens_after": tokens_after,
-        "stage_llmlingua2_tokens_saved": tokens_before - tokens_after,
-        "stage_llmlingua2_latency_ms": round((time.perf_counter() - t0) * 1000, 1),
-    }
+
+    def one(text: str) -> str:
+        r = model.compress_prompt_llmlingua2(text, rate=cfg.llmlingua2_rate, force_tokens=["\n"],
+                                             force_reserve_digit=True, drop_consecutive=True)
+        return r.get("compressed_prompt", text)
+
+    m = _compress_loop("llmlingua2", cands, full_texts, one)
+    m.update({"stage_llmlingua2_enabled": True, "stage_llmlingua2_load_ms": load_ms,
+              "stage_llmlingua2_cold": cold,
+              "stage_llmlingua2_latency_ms": round((time.perf_counter() - t0) * 1000, 1)})
+    return m
 
 
 def provence(query: str, cands: list[Candidate], full_texts: dict[str, str],
              cfg: OptionalStagesConfig) -> dict[str, Any]:
-    """Provence context reranking+compression (naver/provence-reranker-debertav3-v1).
+    """Provence context reranking+pruning (naver/provence-reranker-debertav3-v1), query-aware.
 
     LICENSE CC BY-NC-ND 4.0 — SOMENTE USO PESSOAL/NÃO COMERCIAL. Never enable this flag in a
-    commercial deployment; see config/optional_stages_catalog.py."""
+    commercial deployment; see config/optional_stages_catalog.py. Sentence splitting inside the
+    model is nltk English punkt ('punkt_tab' must be downloaded once)."""
     try:
         from transformers import AutoModel  # type: ignore
     except ImportError as exc:
         _warn_once("provence", f"pip package 'transformers' not installed ({exc})")
         return {"optional_stage_skipped": "provence"}
+
+    def load():
+        mdl = AutoModel.from_pretrained(PROVENCE_MODEL, trust_remote_code=True)
+        return mdl.to(_device()).eval()
+
+    model, load_ms, cold = _get_model("provence", load)
     t0 = time.perf_counter()
-    model = AutoModel.from_pretrained("naver/provence-reranker-debertav3-v1", trust_remote_code=True)
-    tokens_before = tokens_after = 0
-    changed = 0
-    for c in cands:
-        text = _effective_text(c, full_texts)
-        tokens_before += estimate_tokens(text)
-        result = model.process(query, text)
-        new_text = result.get("pruned_context", text) if isinstance(result, dict) else text
-        tokens_after += estimate_tokens(new_text)
-        if new_text and new_text != text:
-            _set_text(c, full_texts, new_text)
-            changed += 1
-    return {
-        "stage_provence_enabled": True, "stage_provence_candidates_changed": changed,
-        "stage_provence_tokens_before": tokens_before, "stage_provence_tokens_after": tokens_after,
-        "stage_provence_tokens_saved": tokens_before - tokens_after,
-        "stage_provence_latency_ms": round((time.perf_counter() - t0) * 1000, 1),
-    }
+
+    def one(text: str) -> str:
+        r = model.process(query, text, threshold=cfg.provence_threshold)
+        return r.get("pruned_context", text) if isinstance(r, dict) else text
+
+    m = _compress_loop("provence", cands, full_texts, one)
+    m.update({"stage_provence_enabled": True, "stage_provence_load_ms": load_ms,
+              "stage_provence_cold": cold,
+              "stage_provence_latency_ms": round((time.perf_counter() - t0) * 1000, 1)})
+    return m
+
+
+def _apply_order(cands: list[Candidate], scores: list[float]) -> None:
+    order = sorted(range(len(cands)), key=lambda i: -scores[i])  # stable: ties keep prior rank
+    cands[:] = [cands[i] for i in order]
+    # ModelContextBuilder.rank() re-sorts by (relevance, score); `rerank_rank` is its primary key.
+    for pos, c in enumerate(cands):
+        c.meta = {**(c.meta or {}), "rerank_rank": pos}
 
 
 def bge_reranker_v2_m3(query: str, cands: list[Candidate], full_texts: dict[str, str],
                         cfg: OptionalStagesConfig) -> dict[str, Any]:
-    """BAAI/bge-reranker-v2-m3 cross-encoder reranking (MIT, `pip install sentence-transformers`).
+    """BAAI/bge-reranker-v2-m3 cross-encoder reranking (Apache-2.0, `pip install sentence-transformers`).
     Reorders `cands` in place; never drops a candidate."""
     try:
         from sentence_transformers import CrossEncoder  # type: ignore
     except ImportError as exc:
         _warn_once("bge_reranker_v2_m3", f"pip package 'sentence-transformers' not installed ({exc})")
         return {"optional_stage_skipped": "bge_reranker_v2_m3"}
+
+    def load():
+        return CrossEncoder(BGE_MODEL, device=_device(), max_length=cfg.rerank_max_length)
+
+    model, load_ms, cold = _get_model("bge_reranker_v2_m3", load)
     t0 = time.perf_counter()
-    model = CrossEncoder("BAAI/bge-reranker-v2-m3")
-    pairs = [(query, _effective_text(c, full_texts)) for c in cands]
-    scores = model.predict(pairs)
-    order = sorted(range(len(cands)), key=lambda i: -scores[i])
-    cands[:] = [cands[i] for i in order]
-    return {
-        "stage_bge_reranker_v2_m3_enabled": True, "stage_bge_reranker_v2_m3_reordered": len(cands),
-        "stage_bge_reranker_v2_m3_latency_ms": round((time.perf_counter() - t0) * 1000, 1),
-    }
+    texts = [_effective_text(c, full_texts) for c in cands]
+    scores, m = _rerank("bge_reranker_v2_m3", query, texts, cfg,
+                        lambda ts: [float(x) for x in model.predict([(query, t) for t in ts])])
+    _apply_order(cands, scores)
+    m.update({"stage_bge_reranker_v2_m3_enabled": True, "stage_bge_reranker_v2_m3_reordered": len(cands),
+              "stage_bge_reranker_v2_m3_load_ms": load_ms, "stage_bge_reranker_v2_m3_cold": cold,
+              "stage_bge_reranker_v2_m3_latency_ms": round((time.perf_counter() - t0) * 1000, 1)})
+    return m
 
 
 def mxbai_rerank_base_v2(query: str, cands: list[Candidate], full_texts: dict[str, str],
                           cfg: OptionalStagesConfig) -> dict[str, Any]:
-    """mixedbread-ai/mxbai-rerank-base-v2 reranking (Apache 2.0, `pip install mxbai-rerank`).
-    Reorders `cands` in place; never drops a candidate."""
+    """mixedbread-ai/mxbai-rerank-base-v2 reranking (Apache 2.0, `pip install mxbai-rerank`,
+    needs transformers<5). Reorders `cands` in place; never drops a candidate."""
     try:
         from mxbai_rerank import MxbaiRerankV2  # type: ignore
     except ImportError as exc:
         _warn_once("mxbai_rerank_base_v2", f"pip package 'mxbai-rerank' not installed ({exc})")
         return {"optional_stage_skipped": "mxbai_rerank_base_v2"}
+
+    model, load_ms, cold = _get_model("mxbai_rerank_base_v2", lambda: MxbaiRerankV2(MXBAI_MODEL))
     t0 = time.perf_counter()
-    model = MxbaiRerankV2("mixedbread-ai/mxbai-rerank-base-v2")
-    docs = [_effective_text(c, full_texts) for c in cands]
-    results = model.rank(query, docs, return_documents=False)
-    order = [r.index for r in results]
-    cands[:] = [cands[i] for i in order]
-    return {
-        "stage_mxbai_rerank_base_v2_enabled": True, "stage_mxbai_rerank_base_v2_reordered": len(cands),
-        "stage_mxbai_rerank_base_v2_latency_ms": round((time.perf_counter() - t0) * 1000, 1),
-    }
+    texts = [_effective_text(c, full_texts) for c in cands]
+
+    def score(ts: list[str]) -> list[float]:
+        res = model.rank(query, ts, return_documents=False, top_k=len(ts), sort=False)
+        out = [0.0] * len(ts)
+        for r in res:
+            out[r.index] = float(r.score)
+        return out
+
+    scores, m = _rerank("mxbai_rerank_base_v2", query, texts, cfg, score)
+    _apply_order(cands, scores)
+    m.update({"stage_mxbai_rerank_base_v2_enabled": True, "stage_mxbai_rerank_base_v2_reordered": len(cands),
+              "stage_mxbai_rerank_base_v2_load_ms": load_ms, "stage_mxbai_rerank_base_v2_cold": cold,
+              "stage_mxbai_rerank_base_v2_latency_ms": round((time.perf_counter() - t0) * 1000, 1)})
+    return m
 
 
 # =================================================================================================

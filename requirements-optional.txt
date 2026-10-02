@@ -1,24 +1,33 @@
 # Optional retrieval stages (proposta 2026-09-28 §1.4/§5.5, app/retrieval/optional_stages.py).
-# NONE of these are installed in this branch's venv or exercised beyond their "dependency missing"
-# skip path (tests/test_optional_stages.py) -- versions below are NOT verified against this
-# project the way requirements.txt's are (see CLAUDE.md "Não inventar APIs": inspecionar -> versão
-# -> documentação -> teste manual -> implementar -> testar). Pin and verify before installing.
+# NONE of these are runtime deps of the Gateway: every stage is OFF by default and is skipped with a
+# single log warning (`optional_stage_skipped:<name>` in the run metrics) when its library is missing.
 #
-# Each stage is OFF by default (config/optimization.py OptionalStagesConfig) and is skipped with a
-# single log warning, never an error, when its section below is not installed.
+# VERSIONS BELOW WERE INSTALLED AND EXERCISED ON 2026-10-01/02 (docs/OPTIONAL_STAGES_BENCHMARK.md):
+#   Windows 11, Python 3.11.16, RTX 3060 12 GB, separate venv (NEVER the project .venv):
+#     uv venv --python 3.11 %LOCALAPPDATA%/Temp/mg-stages-venv
+#     uv pip install --python <that venv> -r requirements.txt -r requirements-optional.txt \
+#         --extra-index-url https://download.pytorch.org/whl/cu124
+#   The project itself requires Python >= 3.14; the optional stack was benchmarked on 3.11 because
+#   torch/llmlingua wheels are published for it. Not validated on 3.14.
+
+torch==2.6.0+cu124          # CUDA 12.4 build (index https://download.pytorch.org/whl/cu124)
 
 # [compress] -- llmlingua2, provence
-# llmlingua2: LLMLingua-2 prompt compression, MIT license.
-# llmlingua
+llmlingua==0.2.2            # llmlingua2 (MIT). Model microsoft/llmlingua-2-xlm-roberta-large-meetingbank (MIT)
 # provence: naver/provence-reranker-debertav3-v1 -- LICENSE CC BY-NC-ND 4.0, SOMENTE USO
-# PESSOAL/NÃO COMERCIAL (config/optional_stages_catalog.py). Needs transformers with
-# trust_remote_code=True for this specific model.
-# transformers
+# PESSOAL/NÃO COMERCIAL. Needs trust_remote_code=True and the nltk 'punkt_tab' data:
+#   python -c "import nltk; nltk.download('punkt_tab')"
+nltk==3.10.3
 
 # [rerank] -- bge_reranker_v2_m3, mxbai_rerank_base_v2
-# bge_reranker_v2_m3: BAAI/bge-reranker-v2-m3 cross-encoder, MIT license. Either backend works;
-# sentence-transformers is the smaller install.
-# sentence-transformers
-# FlagEmbedding
-# mxbai_rerank_base_v2: mixedbread-ai/mxbai-rerank-base-v2, Apache 2.0 license.
-# mxbai-rerank
+sentence-transformers==6.1.0    # bge_reranker_v2_m3 (model BAAI/bge-reranker-v2-m3)
+mxbai-rerank==0.1.6             # mxbai_rerank_base_v2 (model mixedbread-ai/mxbai-rerank-base-v2)
+
+# Shared. transformers MUST be <5: mxbai-rerank 0.1.6 calls Qwen2Tokenizer.prepare_for_model, removed
+# in transformers 5.x (verified: AttributeError on 5.18.0, works on 4.57.6).
+transformers==4.57.6
+huggingface-hub==0.36.2
+tokenizers==0.22.2
+accelerate==1.15.0
+numpy==2.4.6
+psutil==7.2.2                   # scripts/bench_stages.py RAM column

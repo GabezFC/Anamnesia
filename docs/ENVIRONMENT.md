@@ -54,3 +54,9 @@ Vault de desenvolvimento apontado por `MEMORY_GATEWAY_VAULT` (`<YOUR_VAULT_PATH>
 ## Resultados de verificação (2026-09-24)
 - JEV real: 3 candidatos em 1 request strict → relevância 0.98/0.01/0.01, injection 0.02/0.01/**0.98** (nota "Ignore todas as instruções…" → QUARANTINE). usage real 1226 in / 112 out; estimativa local 946 → fator 1.35.
 - qwen3:8b via Hermes + MCP: não conseguiu chamar a ferramenta (loop de `tool_call` malformado com tool_search; só raciocínio sem resposta com tool_search off). qwen3:14b: chamou `memory_search` (run registrado com agent=mcp) e respondeu corretamente citando `decisao-driver-asyncpg.md` (2 api calls, 18.668 tokens totais, 3m20s).
+
+## Estágios opcionais — ambiente de benchmark (verificado 2026-10-02)
+Venv separado (nunca o `.venv` do projeto): Python 3.11.16, torch 2.6.0+cu124 (RTX 3060 12 GB, CUDA ok),
+transformers **4.57.6** (<5 obrigatório para `mxbai-rerank` 0.1.6), sentence-transformers 6.1.0, llmlingua 0.2.2,
+nltk 3.10.3 (+ `punkt_tab` para o Provence). Preset `OPT_STAGES_PRESET=off|free|approved` (padrão `free`).
+Medições, versões e licenças: `docs/OPTIONAL_STAGES_BENCHMARK.md`; stack opcional **não validado em Python 3.14**.

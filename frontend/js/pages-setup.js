@@ -28,7 +28,7 @@ export function renderSetup() {
     ${panel('Veredito — roteador automático de pipeline', `<div id="setup-verdict">${skeletonLines(2)}</div>`,
     { sub: 'liga/desliga VERDICT_ENABLED em runtime, sem reiniciar o servidor' })}
     ${panel('Estágios opcionais (compressão / reranking)', `<div id="setup-stages">${skeletonTable(6)}</div>`,
-    { sub: 'todos desligados por padrão — ver prós/contras antes de ligar' })}
+    { sub: 'preset padrão: só a dedup por sentença (sem modelo) no graphify_jev_opt; os demais desligados — ver medições, prós e contras antes de ligar' })}
   `;
 }
 
