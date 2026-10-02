@@ -234,7 +234,7 @@ class MemoryGateway:
         # -- OPTIONAL STAGES (§1.4/§5.5): reranking/compression/dedup/spotlighting, all off by
         # default. Never runs on graphify_jev (frozen reference pipeline).
         if pipeline != "graphify_jev":
-            osc = self.optional_stages_cfg.resolved()
+            osc = self.optional_stages_cfg.resolved(pipeline)
             if osc.active_flags():
                 try:
                     m.update(apply_optional_stages(query, cands, full, osc))

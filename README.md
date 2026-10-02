@@ -117,7 +117,8 @@ Then edit `.env`. Nothing in it is required to run the tests or the free-stage v
 To run the test suite, install dev tooling on top: `pip install -r requirements-dev.txt` (adds
 `pytest`; `requirements.txt` alone is the minimal runtime install). Optional retrieval stages
 (compression/reranking, §1.4 — off by default, see `app/retrieval/optional_stages.py`) have their
-own heavier dependencies in `requirements-optional.txt`; none are required for the default pipelines.
+own heavier dependencies in `requirements-optional.txt`; none are required for the default pipelines. The measured, approved subset is selectable with `OPT_STAGES_PRESET=off|free|approved`
+(default `free` = sentence dedup only; see `docs/OPTIMIZED_PIPELINE.md`).
 
 ---
 

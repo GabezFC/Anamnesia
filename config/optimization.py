@@ -240,6 +240,27 @@ OPTIONAL_STAGES_VERSION = "stages-v1"
 OPTIONAL_STAGE_NAMES = ("llmlingua2", "provence", "bge_reranker_v2_m3", "mxbai_rerank_base_v2",
                         "sentence_dedup_mmr", "spotlight_nonce")
 
+# -- APPROVED PRESET (M2 benchmark, docs/OPTIONAL_STAGES_BENCHMARK.md) ------------------------------
+# A stage is approved only if it loses neither recall nor fact_in_context AND reduces total tokens or
+# improves precision (rank-aware: P@3 / MRR), measured on the synthetic corpus (120 q) and the real
+# vault (12 q) against the SAME baseline. Reprovados (llmlingua2, mxbai_rerank_base_v2,
+# spotlight_nonce) keep their flag but are never part of a preset.
+APPROVED_FREE_STAGES: tuple[str, ...] = ("sentence_dedup_mmr",)            # no model: safe to default ON
+APPROVED_MODEL_STAGES: tuple[str, ...] = ("bge_reranker_v2_m3", "provence")  # heavy deps: opt-in only
+APPROVED_STAGES: tuple[str, ...] = APPROVED_FREE_STAGES + APPROVED_MODEL_STAGES
+
+# off      nothing: `graphify_jev_opt` exactly as before M2 (the comparable baseline)
+# free     APPROVED_FREE_STAGES (default; needs no extra dependency)
+# approved APPROVED_STAGES; a model stage whose library is missing is skipped + recorded (fallback)
+STAGES_PRESETS = ("off", "free", "approved")
+# The preset only touches the optimized judge path. `graphify_jev` is frozen; `baseline`/`graphify`
+# only get the stages whose flag was set explicitly (env or config/local_settings.json).
+PRESET_PIPELINES = ("graphify_jev_opt",)
+
+
+def preset_stages(preset: str) -> tuple[str, ...]:
+    return {"free": APPROVED_FREE_STAGES, "approved": APPROVED_STAGES}.get(preset, ())
+
 
 @dataclass
 class OptionalStagesConfig:
@@ -288,6 +309,19 @@ class OptionalStagesConfig:
     sentence_dedup_mmr_lambda: float = field(
         default_factory=lambda: env_float("OPT_STAGE_SENTENCE_DEDUP_MMR_LAMBDA", 0.5))
 
+    # -- model-stage tuning (only read when the matching stage is on) ------------------------------
+    # LLMLingua-2 target keep-rate (fraction of tokens kept); upstream default 0.5.
+    llmlingua2_rate: float = field(default_factory=lambda: env_float("OPT_STAGE_LLMLINGUA2_RATE", 0.5))
+    # Provence keep-threshold on the per-sentence relevance; upstream default 0.1.
+    # 0.05, not the upstream 0.1: at 0.1 Provence lost 1 of 110 buried facts on the synthetic corpus
+    # (99/110 vs 100/110); 0.05 and 0.03 kept all 100 (docs/OPTIONAL_STAGES_BENCHMARK.md).
+    provence_threshold: float = field(default_factory=lambda: env_float("OPT_STAGE_PROVENCE_THRESHOLD", 0.05))
+    # Cross-encoder max input tokens (bounds VRAM/latency on long notes).
+    rerank_max_length: int = field(default_factory=lambda: env_int("OPT_STAGE_RERANK_MAX_LENGTH", 1024))
+    # Reranker score cache keyed by (stage, query_fp, text hash): a repeated question over unchanged
+    # text never reaches the model.
+    rerank_cache: bool = field(default_factory=lambda: env_bool("OPT_STAGE_RERANK_CACHE", True))
+
     spotlight_nonce: bool = field(default_factory=lambda: env_bool("OPT_STAGE_SPOTLIGHT_NONCE", False))
     # "hash" (default): nonce = sha256(content + local secret)[:12] -- deterministic, so identical
     # content always produces identical bytes (keeps the consumer's prompt cache AND this project's
@@ -302,15 +336,27 @@ class OptionalStagesConfig:
     spotlight_nonce_secret: str = field(
         default_factory=lambda: env_str("OPT_STAGE_SPOTLIGHT_NONCE_SECRET", ""))
 
+    # OPT_STAGES_PRESET = off | free | approved (see STAGES_PRESETS). Unknown value -> "off".
+    preset: str = field(default_factory=lambda: env_str("OPT_STAGES_PRESET", "free"))
+
     version: str = OPTIONAL_STAGES_VERSION
 
     def with_(self, **kw) -> "OptionalStagesConfig":
         return replace(self, **kw)
 
+    def for_pipeline(self, pipeline: str) -> "OptionalStagesConfig":
+        """Turn on the preset's stages when `pipeline` is one the preset applies to. Flags that are
+        already True stay True; nothing is ever turned off here (config/local_settings.json is applied
+        AFTER this, in `resolved`, so a user's explicit toggle always wins over the preset)."""
+        if pipeline not in PRESET_PIPELINES:
+            return self
+        names = preset_stages(self.preset)
+        return self.with_(**{n: True for n in names}) if names else self
+
     def active_flags(self) -> list[str]:
         return [n for n in OPTIONAL_STAGE_NAMES if getattr(self, n) is True]
 
-    def resolved(self) -> "OptionalStagesConfig":
+    def resolved(self, pipeline: str | None = None) -> "OptionalStagesConfig":
         """Apply `config/local_settings.json` {"optional_stages": {"<name>": bool}} overrides so
         the frontend configuration page (proposta §1.4/§3) can toggle a stage without an env var
         or a restart. Only recognised stage names with an actual bool value override; the local
@@ -319,11 +365,12 @@ class OptionalStagesConfig:
         """
         from config.local_settings import get_optional_stages
 
+        base = self.for_pipeline(pipeline) if pipeline else self
         overrides = get_optional_stages()
         if not overrides:
-            return self
+            return base
         kw = {k: v for k, v in overrides.items() if k in OPTIONAL_STAGE_NAMES}
-        return self.with_(**kw) if kw else self
+        return base.with_(**kw) if kw else base
 
     def to_dict(self) -> dict:
         return dict(self.__dict__)

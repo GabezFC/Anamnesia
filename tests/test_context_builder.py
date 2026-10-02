@@ -54,3 +54,18 @@ def test_render_prompt():
     assert "CTX-AQUI" in p and "Qual a stack?" in p
     assert "{CONTEXT}" not in p and "{QUESTION}" not in p
     assert "(nenhum contexto recuperado)" in render_prompt("", "q")
+
+
+def test_rerank_rank_overrides_relevance_and_score_when_present():
+    # The reranker stages set meta["rerank_rank"]; it must beat relevance/score (it used to be ignored).
+    x = C("x", "x.md", "x", score=100, rel=0.9)
+    y = C("y", "y.md", "y", score=1, rel=0.2)
+    x.meta, y.meta = {"rerank_rank": 1}, {"rerank_rank": 0}
+    assert [c.candidate_id for c in ModelContextBuilder.rank([x, y])] == ["y", "x"]
+
+
+def test_rank_without_rerank_rank_is_unchanged():
+    # graphify_jev never runs a stage -> no key -> the original (relevance, score) order, exactly.
+    cands = [C("x", "x.md", "x", score=100, rel=0.2), C("y", "y.md", "y", score=1, rel=0.9),
+             C("z", "z.md", "z", score=50, rel=0.9)]
+    assert [c.candidate_id for c in ModelContextBuilder.rank(cands)] == ["z", "y", "x"]

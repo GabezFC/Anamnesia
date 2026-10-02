@@ -56,7 +56,12 @@ class ModelContextBuilder:
     @staticmethod
     def rank(cands: list[Candidate]) -> list[Candidate]:
         """Relevance, then score; then round-robin over files so one note cannot dominate (§30)."""
-        ordered = sorted(cands, key=lambda c: (-(c.relevance if c.relevance is not None else -1), -c.score))
+        # `rerank_rank` (meta) is set only by the optional reranker stages
+        # (app/retrieval/optional_stages.py); absent -> constant 0, i.e. the original ordering,
+        # byte for byte (graphify_jev never runs a stage). Without this key the builder discarded the
+        # rerankers' order entirely (measured 2026-10-02: identical MRR/P@3 with and without them).
+        ordered = sorted(cands, key=lambda c: ((c.meta or {}).get("rerank_rank", 0),
+                                               -(c.relevance if c.relevance is not None else -1), -c.score))
         by_file: dict[str, list[Candidate]] = {}
         for c in ordered:
             by_file.setdefault(c.source_file, []).append(c)
