@@ -277,10 +277,13 @@ class JevService:
         anchor the judge cannot use, and the full vault path when only the note name carries
         meaning. With ~50 candidates per query that was ~1,500 wasted tokens. We now send a short
         integer `ref` for correlation and the note's basename; the caller maps ref -> candidate.
+        `graph_score` is rounded to 2 decimals: the judge only compares candidates within the same
+        batch, so 2 decimals is as much precision as it can act on, and the shorter literal saves
+        1-2 tokens per candidate (~50-100 tokens/query).
         """
         source = c.source_file.rsplit("/", 1)[-1]
         payload = {"source": source, "section": c.section, "snippet": c.snippet,
-                   "graph_score": round(c.score, 4)}
+                   "graph_score": round(c.score, 2)}
         if ref is not None:
             payload = {"ref": ref, **payload}
         return payload
