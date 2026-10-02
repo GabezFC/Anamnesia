@@ -107,6 +107,10 @@ CATEGORIES: tuple[tuple[str, str], ...] = (
 CATEGORY_ORDER: dict[str, int] = {key: i for i, (key, _) in enumerate(CATEGORIES)}
 CATEGORY_LABELS: dict[str, str] = dict(CATEGORIES)
 
+#: Findings per category that `LintReport.render()` shows before collapsing the rest into a
+#: count. Enough to see the shape of a category, not enough to bury the other ones.
+SUMMARY_EXAMPLES = 3
+
 _FM_KEY = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$")
 _FM_LIST_ITEM = re.compile(r"^\s+-\s")
 
@@ -157,8 +161,15 @@ class LintReport:
             "findings": [f.to_dict() for f in self.findings],
         }
 
-    def render(self) -> str:
-        """Human-readable report, grouped by category. Stable output for a given vault."""
+    def render(self, verbose: bool = False) -> str:
+        """Human-readable report, grouped by category. Stable output for a given vault.
+
+        Summary by default: one line per category plus at most `SUMMARY_EXAMPLES` findings, and
+        a count for what is left. A real vault has ~60 orphan findings in one category, and
+        listing every one of them buries the other categories and costs a page of tokens for
+        information nobody reads; the count already says how much there is. `verbose=True` is
+        the full listing, unchanged.
+        """
         lines = [f"vault: {self.vault}", f"arquivos .md: {self.files}", f"itens: {self.total}"]
         grouped = self.by_category()
         for key, label in CATEGORIES:
@@ -167,7 +178,11 @@ class LintReport:
                 continue
             lines.append("")
             lines.append(f"[{key}] {label} ({len(items)})")
-            lines.extend(f"  - {f.path}: {f.detail}" for f in items)
+            shown = items if verbose else items[:SUMMARY_EXAMPLES]
+            lines.extend(f"  - {f.path}: {f.detail}" for f in shown)
+            if not verbose and len(items) > SUMMARY_EXAMPLES:
+                rest = len(items) - SUMMARY_EXAMPLES
+                lines.append(f"  ... (+{rest} mais; use -v/--verbose para listar todos)")
         if not self.findings:
             lines.append("")
             lines.append("OK: nenhum item.")
@@ -443,6 +458,8 @@ def lint(vault_path: str | Path, *, max_note_chars: int = MAX_NOTE_CHARS,
     return LintReport(vault=str(vault.root), files=len(notes), findings=_sort(findings))
 
 
-def render(report: LintReport) -> str:
-    """Text report, grouped by category (the CLI default)."""
-    return report.render()
+def render(report: LintReport, verbose: bool = False) -> str:
+    """Text report, grouped by category (the CLI default; summary unless `verbose`)."""
+    return report.render(verbose=verbose)
+
+

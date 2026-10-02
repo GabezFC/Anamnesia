@@ -22,6 +22,8 @@ For each target question (q05, q07, q10 by default) reports:
     picked the wrong section" failure is visible even when the right FILE survived the pre-filter
 
 No LLM call, no network: pure deterministic re-run of the retrieval + pre-filter (or cascade) stages.
+Candidate generation is the expensive part and never changes while the vault does, so it goes
+through `scripts/_candidate_cache.py`; `--no-cache` forces the full re-run.
 """
 from __future__ import annotations
 
@@ -40,9 +42,9 @@ from config.retrieval import RetrievalConfig  # noqa: E402
 from app.gateway.memory_gateway import MemoryGateway  # noqa: E402
 from app.gateway.token_budget import estimate_tokens  # noqa: E402
 from app.retrieval.graphify_hybrid import GraphIndex  # noqa: E402
-from app.retrieval.pipelines import _graphify_candidates  # noqa: E402
 from app.services.obsidian import split_sections  # noqa: E402
 from app.services.prefilter import prefilter, terms  # noqa: E402
+from scripts._candidate_cache import cached_candidates  # noqa: E402
 
 DEFAULT_QIDS = ("q05", "q07", "q10")
 DEFAULT_MAX_RESULTS = 10  # matches app.gateway.memory_gateway.MemoryGateway.search default
@@ -107,13 +109,15 @@ def locate_evidence_in_note(gw, source_file: str, needed: set[str]) -> dict:
     return best or {"heading": None, "line": None, "hits": 0, "of": len(needed)}
 
 
-def check_question(gw, rc, q: dict, path: str = "frozen") -> dict:
+def check_question(gw, rc, q: dict, path: str = "frozen", *, vault: Path | None = None,
+                   use_cache: bool = True) -> dict:
     needed = evidence_terms(q)
     exp_sources = set(q.get("expected_sources") or [])
+    vault = Path(vault) if vault is not None else Path(rc.vault_path)
 
     if path == "frozen":
         # Same candidate generation graphify_jev uses: allow_ppr=False (frozen pipeline, §5.5).
-        uniq, _metrics = _graphify_candidates(gw, q["question"], allow_ppr=False)
+        uniq = cached_candidates(gw, vault, q["question"], use_cache=use_cache)
         judged_in, withheld, pf = prefilter(q["question"], uniq, rc.prefilter_top_k,
                                             rc.prefilter_lexical_weight)
         candidates_in, candidates_sent = pf["prefilter_in"], pf["prefilter_sent"]
@@ -178,6 +182,8 @@ def main():
                     help="frozen=dedup.preprocess (graphify_jev); opt=snippet.extract cascade "
                          "(graphify_jev_opt); both=run and report both (default)")
     ap.add_argument("--out", default=str(PROJECT_ROOT / "docs" / "jev_snippet_check.json"))
+    ap.add_argument("--no-cache", action="store_true",
+                    help="ignora o cache de candidatos e re-executa a recuperação")
     a = ap.parse_args()
 
     qs_all = json.loads(Path(a.questions).read_text(encoding="utf-8"))
@@ -188,7 +194,8 @@ def main():
     rc = gw.retrieval_cfg
 
     paths = ("frozen", "opt") if a.path == "both" else (a.path,)
-    results = [check_question(gw, rc, q, path=p) for p in paths for q in targets]
+    results = [check_question(gw, rc, q, path=p, vault=vault, use_cache=not a.no_cache)
+               for p in paths for q in targets]
     report = {"vault": str(vault), "questions_checked": a.qids, "paths": list(paths),
               "results": results}
 

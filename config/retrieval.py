@@ -28,6 +28,18 @@ def resolve_vault_path(raw: str | Path | None = None) -> Path:
     return Path(str(value)).expanduser().resolve()
 
 
+def fell_back_to_default(raw: str | Path | None = None) -> bool:
+    """True when `resolve_vault_path` had to fall through to the bundled corpus.
+
+    No explicit value and no env var: a command run this way measures the example vault, which
+    is valid but not what someone auditing a real vault expects. A caller that wants to say so
+    (vault-lint) warns; the value is still correct.
+    """
+    if raw or env_str(VAULT_ENV_VAR, "") or env_str(LEGACY_VAULT_ENV_VAR, ""):
+        return False
+    return resolve_vault_path(raw) == DEFAULT_VAULT
+
+
 def validate_vault_path(path: Path) -> Path:
     """Fail loudly and legibly instead of silently indexing an empty directory."""
     p = Path(path)
