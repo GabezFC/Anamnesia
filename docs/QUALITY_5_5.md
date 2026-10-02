@@ -21,6 +21,13 @@ pertence de fato ao vault pedido; se não, forçam `graphify.build(force=True)` 
 números abaixo foram coletados já com essa verificação ativa (grafo real confirmado: 1420 nós /
 1760 arestas, `source_file` resolvendo dentro do vault real).
 
+A geração de candidatos (`_graphify_candidates(..., allow_ppr=False)`, o BM25 + expansão de grafo
+inteiro) é a parte cara e determinística: `scripts/check_jev_snippet.py` e `scripts/sweep_prefilter.py`
+passam por `scripts/_candidate_cache.py`, que guarda `uniq` em
+`data/cache/candidates/<sha1(fingerprint+pergunta)>.pkl`. A fingerprint cobre (caminho relativo,
+mtime_ns, tamanho) de cada `.md` do vault mais o mtime de `graphify-out/graph.json`, então editar
+uma nota ou rebuildar o grafo invalida tudo. `--no-cache` nos dois scripts desliga.
+
 ## Parte 1 — PPR (HippoRAG-style), §5.5
 
 `app/retrieval/ppr.py`: power iteration pura em Python (sem dependência nova) sobre o `adj` que

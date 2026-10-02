@@ -8,6 +8,9 @@ ranking varies per grid point, so the whole sweep costs zero extra retrieval cal
 
 Grid: K in {4,6,8,10,12,16,20}, lexical_weight in {0.0,0.15,0.3,0.5,0.7}. Current defaults (see
 config/retrieval.py) are K=8, weight=0.3.
+
+Candidate generation is deterministic, so it goes through `scripts/_candidate_cache.py` and a
+re-run over an unchanged vault costs nothing; `--no-cache` forces the full retrieval.
 """
 from __future__ import annotations
 
@@ -27,8 +30,8 @@ from config.optimizer import OptimizerConfig  # noqa: E402
 from config.retrieval import RetrievalConfig  # noqa: E402
 from app.gateway.memory_gateway import MemoryGateway  # noqa: E402
 from app.retrieval.graphify_hybrid import GraphIndex  # noqa: E402
-from app.retrieval.pipelines import _graphify_candidates  # noqa: E402
 from app.services.prefilter import prefilter  # noqa: E402
+from scripts._candidate_cache import cached_candidates  # noqa: E402
 
 KS = [4, 6, 8, 10, 12, 16, 20]
 WS = [0.0, 0.15, 0.3, 0.5, 0.7]
@@ -60,8 +63,9 @@ def make_gw(vault: Path) -> MemoryGateway:
     return gw
 
 
-def build_cache(gw, qs: list) -> dict:
+def build_cache(gw, qs: list, *, vault: Path | None = None, use_cache: bool = True) -> dict:
     """Run candidate generation once per answerable question with expected_sources."""
+    vault = Path(vault) if vault is not None else Path(gw.retrieval_cfg.vault_path)
     cache = {}
     for q in qs:
         if not q.get("answerable", True):
@@ -69,7 +73,7 @@ def build_cache(gw, qs: list) -> dict:
         exp = set(q.get("expected_sources") or [])
         if not exp:
             continue
-        uniq, _metrics = _graphify_candidates(gw, q["question"], allow_ppr=False)
+        uniq = cached_candidates(gw, vault, q["question"], use_cache=use_cache)
         cache[q["id"]] = (q["question"], uniq, exp)
     return cache
 
@@ -102,19 +106,23 @@ def main():
     ap.add_argument("--real-questions", default=None)
     ap.add_argument("--vault-real", default=None)
     ap.add_argument("--out", default=str(PROJECT_ROOT / "docs" / "prefilter_sweep.json"))
+    ap.add_argument("--no-cache", action="store_true",
+                    help="ignora o cache de candidatos e re-executa a recuperação")
     a = ap.parse_args()
 
     report = {}
 
     qs_syn = json.loads(Path(a.synthetic_questions).read_text(encoding="utf-8"))
     gw_syn = make_gw(Path(a.vault_synthetic).resolve())
-    cache_syn = build_cache(gw_syn, qs_syn)
+    cache_syn = build_cache(gw_syn, qs_syn, vault=Path(a.vault_synthetic).resolve(),
+                            use_cache=not a.no_cache)
     report["synthetic"] = {"questions_with_expected_sources": len(cache_syn), "sweep": sweep_corpus(cache_syn)}
 
     if a.real_questions and a.vault_real:
         qs_real = json.loads(Path(a.real_questions).read_text(encoding="utf-8"))
         gw_real = make_gw(Path(a.vault_real).resolve())
-        cache_real = build_cache(gw_real, qs_real)
+        cache_real = build_cache(gw_real, qs_real, vault=Path(a.vault_real).resolve(),
+                                 use_cache=not a.no_cache)
         report["real"] = {"questions_with_expected_sources": len(cache_real), "sweep": sweep_corpus(cache_real)}
 
     print(json.dumps(report, ensure_ascii=False, indent=1))
