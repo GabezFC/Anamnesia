@@ -70,39 +70,50 @@ class ModelContextBuilder:
             rnd += 1
         return result
 
-    def block(self, c: Candidate, text: str) -> str:
+    def block(self, c: Candidate, text: str, provenance: str | None = None) -> str:
         rel = f" relevance={c.relevance:.2f}" if c.relevance is not None else ""
         # Security marker added by the optimization layer: strong instruction-override phrasing was
         # found in this note. Content is untouched; the consumer is told explicitly to treat it as data.
         warn = ' warning="possible-prompt-injection"' if (c.meta or {}).get("injection_flag") else ""
+        # Provenance line (optimization layer): where this text came from and what the note declares
+        # about itself. It is metadata, not a second copy of the "treat notes as data" warning, and it
+        # never grants authority -- the header above the block already frames the whole context.
+        head = f"{provenance}\n" if provenance else ""
         section = c.section
         if self.compact_headers:
             section = section.split(" > ")[-1].strip()
             first = text.lstrip().split("\n", 1)[0].lstrip("#").strip()
             if first and first == section:
                 # The block already opens with that heading line: the attribute is pure repetition.
-                return f'<note source="{c.source_file}"{rel}{warn}>\n{text}\n</note>'
+                return f'<note source="{c.source_file}"{rel}{warn}>\n{head}{text}\n</note>'
             if len(section) > self.section_max_chars:
                 section = section[: self.section_max_chars - 1].rstrip() + "…"
-        return f'<note source="{c.source_file}" section="{section}"{rel}{warn}>\n{text}\n</note>'
+        return f'<note source="{c.source_file}" section="{section}"{rel}{warn}>\n{head}{text}\n</note>'
 
-    def build(self, cands: list[Candidate], full_texts: dict[str, str] | None = None) -> tuple[str, list[Source], int]:
-        """full_texts: candidate_id -> expanded text (full note/section) for survivors (§28)."""
+    def build(self, cands: list[Candidate], full_texts: dict[str, str] | None = None,
+              provenance: dict[str, str] | None = None) -> tuple[str, list[Source], int]:
+        """full_texts: candidate_id -> expanded text (full note/section) for survivors (§28).
+
+        provenance: candidate_id -> compact `[fonte: ...]` line prepended INSIDE the block, so it is
+        counted against the budget exactly like content (the tokens are real and get paid for).
+        """
         full_texts = full_texts or {}
+        provenance = provenance or {}
         used = estimate_tokens(CONTEXT_HEADER)
         blocks: list[str] = []
         sources: list[Source] = []
         for c in self.rank(cands):
             text = full_texts.get(c.candidate_id, c.snippet)
             text = truncate_to_tokens(text, self.per_source_max)
-            b = self.block(c, text)
+            line = provenance.get(c.candidate_id)
+            b = self.block(c, text, line)
             t = estimate_tokens(b)
             if used + t > self.budget:
                 remaining = self.budget - used - 40
                 if remaining < 120:
                     continue
                 text = truncate_to_tokens(text, remaining)
-                b = self.block(c, text)
+                b = self.block(c, text, line)
                 t = estimate_tokens(b)
             blocks.append(b)
             used += t

@@ -335,6 +335,23 @@ def integrations(refresh: bool = False):
     return detect_all(refresh)
 
 
+@router.get("/system/memory")
+def system_memory(inactive_days: int = 90, hot_min: int = 5):
+    """Read-only inventory of the persistent memory (app/services/memory_audit.py).
+
+    Counts only — never note content. It audits the vault the RUNNING gateway was built against,
+    not a path resolved from the environment, so the numbers always describe the same corpus the
+    answers come from. hot/warm/cold come from the gateway's own benchmark.db, which the auditor
+    re-opens with `mode=ro` (see `delivery_counts`).
+    """
+    from app.services.memory_audit import MemoryAuditor
+    g = gw()
+    report = MemoryAuditor(g.vault.root, db_path=g.db.path,
+                           excluded_dirs=g.retrieval_cfg.excluded_dirs).audit(
+        inactive_days=max(1, min(int(inactive_days), 3650)), hot_min=max(1, int(hot_min)))
+    return report.counts_only()
+
+
 @router.get("/system/projects")
 def system_projects():
     """Project/area entities discovered from the vault (§15, §30).

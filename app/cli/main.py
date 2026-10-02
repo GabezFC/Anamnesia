@@ -7,6 +7,7 @@
   python -m memory_gateway info
   python -m memory_gateway vault-check [--save FILE | --compare FILE]
   python -m memory_gateway vault-lint [--vault PATH] [--json]
+  python -m memory_gateway memory-audit [--vault PATH] [--db benchmark.db] [--json] [-v]
   python -m memory_gateway index
   python -m memory_gateway db-prune --keep-days N [--keep-sessions s1,s2] [--dry-run] [--vacuum]
 """
@@ -162,6 +163,69 @@ def cmd_vault_lint(a):
     sys.exit(0 if report.total == 0 else 1)
 
 
+
+def cmd_memory_audit(a):
+    """Read-only inventory of the persistent memory (`app/services/memory_audit.py`).
+
+    Prints COUNTS by default. `--verbose` adds the candidate file lists (paths only — never note
+    content) and `--json` returns the whole report, still without any note body.
+    """
+    from pathlib import Path
+    from app.services.memory_audit import MemoryAuditor
+    from config.retrieval import (RetrievalConfig, fell_back_to_default, resolve_vault_path,
+                                  validate_vault_path)
+    if fell_back_to_default(a.vault):
+        print("memory-audit: usando o vault sintético (passe --vault)", file=sys.stderr)
+    try:
+        vault = validate_vault_path(resolve_vault_path(a.vault))
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        sys.exit(str(exc))
+    db = getattr(a, "db", None)
+    # Audit exactly the notes a search can reach (same excluded_dirs as RetrievalConfig).
+    auditor = MemoryAuditor(Path(vault), db_path=Path(db) if db else None,
+                            excluded_dirs=RetrievalConfig().excluded_dirs)
+    report = auditor.audit(inactive_days=a.inactive_days, near_dup_threshold=a.near_dup_threshold,
+                           hot_min=a.hot_min, max_runs=a.max_runs)
+    if _print(report.to_dict(), a.json):
+        return
+    s = report.summary
+    u = report.usage
+    print(f"vault={report.vault} notas={s.notes_scanned} bytes={s.bytes_total} "
+          f"tokens_estimados={s.tokens_total} linha_de_proveniencia_media={s.provenance_tokens_mean}")
+    print(f"  por_status={s.by_status}")
+    print(f"  duplicatas exatas={s.dup_exact} grupos_quase_duplicados={s.dup_near_groups} "
+          f"orfas={s.orphan_count} wikilinks_quebrados={s.wikilinks_broken_count}/{s.wikilinks_total}")
+    print(f"  sem_frontmatter={s.notes_without_fm} com_campo_faltando={s.notes_missing_fields} "
+          f"inativas_ha_{s.inactive_days}d={s.inactive_gt_n} arquivadas={s.archived_count} "
+          f"substituidas={s.superseded_count}")
+    print(f"  conflitos_candidatos={s.conflicts} (mesmo_title={s.conflicts_same_title}, "
+          f"citando_substituicao={s.conflicts_superseded})")
+    print(f"  secoes_repetidas={s.repeated_sections} em {s.notes_with_repeated_sections} notas "
+          f"({s.repeated_section_token_share:.4f} dos tokens)")
+    if u.db_path or u.db_error:
+        print(f"  hot={u.hot} warm={u.warm} cold={u.cold} "
+              f"(runs lidos={u.runs_scanned}, entregas={u.deliveries})"
+              + (f" ERRO={u.db_error}" if u.db_error else ""))
+    print(f"  varredura={report.scan_ms}ms cache={report.cached}")
+    if a.verbose:
+        for label, items in (("duplicatas exatas", report.dup_exact),
+                             ("quase-duplicadas", report.dup_near),
+                             ("conflitos", report.conflicts),
+                             ("orfas", [report.orphans]),
+                             ("sem frontmatter", report.notes_without_frontmatter),
+                             ("inativas", report.inactive),
+                             ("arquivadas", report.archived),
+                             ("substituidas", report.superseded)):
+            if items:
+                print(f"  [{label}] {len(items)}")
+                for it in items[:40]:
+                    print("   -", " / ".join(it) if isinstance(it, list) else it)
+        if report.usage.hot_top:
+            print("  [hot]", ", ".join(f"{p}={c}" for p, c in report.usage.hot_top[:15]))
+            print("  [warm]", ", ".join(f"{p}={c}" for p, c in report.usage.warm_top[:15]))
+
+
+
 def cmd_index(a):
     print(json.dumps(_gw().warm(), ensure_ascii=False, indent=2, default=str))
 
@@ -230,6 +294,21 @@ def build_parser() -> argparse.ArgumentParser:
     dp.add_argument("--dry-run", action="store_true", help="só conta quantas runs seriam apagadas")
     dp.add_argument("--vacuum", action="store_true", help="roda VACUUM após apagar (ignora com --dry-run)")
     dp.set_defaults(fn=cmd_db_prune)
+    ma = sub.add_parser("memory-audit",
+                        help="inventário somente leitura da memória persistente (contagens, sem conteúdo)")
+    ma.add_argument("--vault", help="caminho do vault")
+    ma.add_argument("--near-dup-threshold", type=float, default=0.92)
+    ma.add_argument("--inactive-days", type=int, default=90,
+                    help="notas 'ativo' sem update há mais dias que isto entram em 'inativas'")
+    ma.add_argument("--hot-min", type=int, default=5,
+                    help="entregas mínimas em benchmark.db para a nota ser HOT (>=) ; 1..N-1 = warm, 0 = cold")
+    ma.add_argument("--db", help="benchmark.db lido em mode=ro para contar hot/warm/cold")
+    ma.add_argument("--max-runs", type=int, default=0,
+                    help="limita quantas runs (0 = todas) são lidas para o hot/warm/cold")
+    ma.add_argument("--json", action="store_true")
+    ma.add_argument("-v", "--verbose", action="store_true", help="lista os arquivos candidatos")
+    ma.set_defaults(fn=cmd_memory_audit)
+
     vl = sub.add_parser("vault-lint", help="lint determinístico READ-ONLY do vault (saída 1 se houver itens)")
     vl.add_argument("--vault", help="caminho do vault (default: vault configurado no projeto)")
     vl.add_argument("--max-note-chars", type=int, help=f"limite de tamanho de nota (default {MAX_NOTE_CHARS_LITERAL})")

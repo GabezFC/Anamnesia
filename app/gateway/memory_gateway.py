@@ -164,13 +164,30 @@ class MemoryGateway:
         jev = self.make_jev(replace(self.jev_cfg, **(jev_overrides or {}))) if jev_overrides else self.jev
         return jev.evaluate(query, candidates)
 
-    def build_context(self, candidates, full_texts=None, budget: int | None = None):
+    def build_context(self, candidates, full_texts=None, budget: int | None = None, provenance=None):
         oc = self.optimizer.cfg
         b = ModelContextBuilder(budget or self.retrieval_cfg.model_context_budget,
                                 self.retrieval_cfg.per_source_max_tokens,
                                 compact_headers=oc.enabled and oc.compact_headers,
                                 section_max_chars=oc.header_section_max_chars)
-        return b.build(candidates, full_texts)
+        return b.build(candidates, full_texts, provenance=provenance)
+
+    def provenance_for(self, cands, pipeline: str):
+        """Provenance lines for the delivered candidates — {} for the frozen reference pipeline.
+
+        `pipeline` must be the EFFECTIVE one (`plan.pipeline`), not what the caller asked for:
+        `graphify_jev` is a legal routing target, so an `auto` request can land on the frozen
+        pipeline and must be left byte-identical too. Every other pipeline gets the lines when the
+        layer is on.
+        """
+        from app.gateway.optimizer import FROZEN_PIPELINES
+        if pipeline in FROZEN_PIPELINES:
+            return {}, {}
+        try:
+            return self.optimizer.provenance_lines(cands, self)
+        except Exception as exc:  # noqa: BLE001 — metadata only, never break a search
+            self.log.warning("provenance failed: %s", exc)
+            return {}, {"provenance_errors": [type(exc).__name__]}
 
     def search(self, query: str, pipeline: str = "auto", max_results: int = 10,
                jev_overrides: dict[str, Any] | None = None, context_budget: int | None = None,
@@ -229,8 +246,9 @@ class MemoryGateway:
                 m["scope_leaked_blocked"] = len(cands) - len(kept)
             cands = kept
         m["scope"] = parsed_scope.label()
-        # -- MEMORY OPTIMIZATION LAYER: post-retrieval (adaptive cut, near-dup, security flag) ---
-        cands, post = opt.post_filter(cands, plan)
+        # -- MEMORY OPTIMIZATION LAYER: post-retrieval (adaptive cut, near-dup, security flag,
+        #    temporality, conflict demotion). The last two read the note frontmatter (read-only).
+        cands, post = opt.post_filter(cands, plan, gw=self, query=query)
         # -- OPTIONAL STAGES (§1.4/§5.5): reranking/compression/dedup/spotlighting, all off by
         # default. Never runs on graphify_jev (frozen reference pipeline).
         if pipeline != "graphify_jev":
@@ -240,7 +258,8 @@ class MemoryGateway:
                     m.update(apply_optional_stages(query, cands, full, osc))
                 except Exception as exc:  # noqa: BLE001 — an optional stage must never break search
                     m["optional_stages_errors"] = [f"{type(exc).__name__}: {exc}"]
-        context, sources, ctx_tokens = self.build_context(cands, full, context_budget)
+        prov, prov_m = self.provenance_for(cands, plan.pipeline)
+        context, sources, ctx_tokens = self.build_context(cands, full, context_budget, provenance=prov)
         t1 = time.perf_counter()
 
         before = m.get("candidate_tokens_before_filter") or 0
@@ -278,6 +297,7 @@ class MemoryGateway:
             "client": meta.get("client"),
         })
         m.update(self._optimizer_metrics(plan, pre, post, cache_hit=False))
+        m.update(prov_m)
         if error:
             m["error"] = error
         result = MemoryResult(query=query, pipeline=pipeline, context=context, sources=sources, metrics=m,

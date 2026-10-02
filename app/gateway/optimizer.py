@@ -12,6 +12,9 @@ all go through `MemoryGateway.search`, and the layer lives there. Stages, in exe
       -> adaptive cut        drop the tail far below the best hit (SIMPLE/MEDIUM, free pipelines)
       -> near-dup collapse   copies / "-rev" / "-copia" notes delivered once
       -> security flag       strong instruction-override phrases -> attribute on the <note> block
+      -> temporality         archived / superseded notes demoted, history only when it is asked for
+      -> consistency         conflicting notes: newest kept, older demoted and marked
+      -> provenance          one compact `[fonte: ...]` line per delivered source
       -> context build       compact headers (ModelContextBuilder)
     FINAL CONTEXT -> consumer model
 
@@ -24,8 +27,12 @@ DESIGN RULES
 2. Never a single point of failure. Every stage is wrapped: an exception is recorded in
    `metrics.optimizer_errors` and the request continues with the un-optimized data.
 3. Never remove security context. The injection flag only ADDS an attribute; notes are never
-   rewritten, and the CONTEXT_HEADER "treat as data" framing is always kept.
-4. Every decision is observable: each stage writes its own metrics into the run, so the effect of
+   rewritten, and the CONTEXT_HEADER "treat as data" framing is always kept. The provenance line adds
+   metadata about the note, never authority: a note does not become more trustworthy by being
+   stored, and the line never repeats the header's instruction to the consumer.
+4. Never change the frozen pipeline. `graphify_jev` is the benchmark reference point, so the
+   memory-metadata stages skip it entirely and its delivered context stays byte-identical.
+5. Every decision is observable: each stage writes its own metrics into the run, so the effect of
    the layer can be audited per request from benchmark.db.
 """
 from __future__ import annotations
@@ -41,10 +48,16 @@ from config.optimizer import OptimizerConfig
 from app.schemas.models import Candidate
 from app.services.injection_screen import screen
 from app.services.near_dup import cluster_near_duplicates
+from app.services.provenance import (ProvenanceIndex, apply_temporal, provenance_tokens,
+                                     resolve_conflicts, wants_history)
 from app.services.query_fp import QueryProfile, classify
 from app.services.verdict import decide
 
 FREE_PIPELINES = ("baseline", "graphify")
+# The frozen reference pipeline (§1.3): it is the benchmark's comparison point, so the memory
+# metadata stages (provenance, temporality, conflict demotion) never touch it. Every other pipeline
+# -- baseline, graphify and the optimized cascade -- gets them.
+FROZEN_PIPELINES = ("graphify_jev",)
 # Zero-width and bidirectional-override characters (U+200B-U+200F, U+202A-U+202E, U+2060-U+2064,
 # U+2066-U+2069, U+FEFF). BOM is only suspicious mid-text, so a leading one is ignored by lstrip.
 _INVISIBLE = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069]|(?<=.)\ufeff", re.S)
@@ -107,6 +120,34 @@ class MemoryOptimizer:
         self._last_check = 0.0
         self._fp_lock = threading.Lock()
         self.index_rebuilds = 0
+        self._prov: ProvenanceIndex | None = None
+        self._prov_fp: tuple | None = None
+
+    # -- provenance index --------------------------------------------------------------------------
+    def provenance_index(self, gw) -> ProvenanceIndex | None:
+        """Frontmatter cache for the files this request delivers, rebuilt whenever the vault changes.
+
+        Reuses the fingerprint the freshness check already computed (`ensure_fresh` runs on every
+        search and is throttled by `refresh_interval_s`), so this costs no extra stat pass per
+        request -- measured: a separate stat-only fingerprint on the 520-note corpus cost ~30 ms per
+        search, more than the retrieval it annotated. Outside a search (unit tests calling
+        `post_filter` with no fingerprint yet) it is computed once and cached. Returns None when
+        there is no gateway: the metadata stages then have nothing to read and are skipped, exactly
+        as they were before this stage existed.
+        """
+        if gw is None:
+            return None
+        with self._fp_lock:
+            fp = self._vault_fp
+            if fp is None:
+                try:
+                    fp = gw.vault.fingerprint()
+                except Exception:  # noqa: BLE001 — advisory stage, never fatal
+                    return None
+            if self._prov is None or self._prov_fp != fp:
+                self._prov = ProvenanceIndex(gw.vault)
+                self._prov_fp = fp
+            return self._prov
 
     # -- freshness -----------------------------------------------------------------------------
     def ensure_fresh(self, gw) -> dict:
@@ -195,7 +236,8 @@ class MemoryOptimizer:
                 budget or 0, tuple(sorted((jev_overrides or {}).items())), self._vault_fp) + extra
 
     # -- post-retrieval stages -----------------------------------------------------------------
-    def post_filter(self, cands: list[Candidate], plan: Plan) -> tuple[list[Candidate], dict]:
+    def post_filter(self, cands: list[Candidate], plan: Plan, gw=None,
+                    query: str | None = None) -> tuple[list[Candidate], dict]:
         m: dict[str, Any] = {}
         if not self.cfg.enabled or not cands:
             return cands, m
@@ -244,9 +286,64 @@ class MemoryOptimizer:
         m["opt_candidates_in"] = before
         m["opt_candidates_out"] = len(cands)
         m["opt_snippet_tokens_removed"] = tokens_before - sum(c.token_estimate or 0 for c in cands)
+
+        # 4. memory metadata: temporality (supersession / archived) and conflict demotion. Both read
+        #    the note's own frontmatter through the provenance index and only ever DEMOTE or MARK.
+        #    The frozen pipeline is skipped (design rule 4) and so is a request with no gateway.
+        if plan.pipeline not in FROZEN_PIPELINES:
+            index = self.provenance_index(gw)
+            raw_query = query if query is not None else (plan.profile.raw if plan.profile else "")
+            if self.cfg.temporal_demote:
+                try:
+                    cands, tm = apply_temporal(cands, index, wants_history(raw_query),
+                                               self.cfg.historical_demote,
+                                               exclude=self.cfg.historical_exclude)
+                    m.update(tm)
+                    m["opt_candidates_out"] = len(cands)
+                    m["opt_snippet_tokens_removed"] = tokens_before - sum(
+                        c.token_estimate or 0 for c in cands)
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"temporal:{type(exc).__name__}")
+            if self.cfg.conflict_check:
+                try:
+                    cands, cm = resolve_conflicts(cands, index, self.cfg.conflict_demote,
+                                                  self.cfg.conflict_overlap)
+                    m.update(cm)
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"conflicts:{type(exc).__name__}")
+
         if errors:
             m["optimizer_errors"] = errors
         return cands, m
+
+    def provenance_lines(self, cands: list[Candidate], gw) -> tuple[dict[str, str], dict]:
+        """`{candidate_id: "[fonte: ...]"}` for the delivered candidates, plus its cost in tokens.
+
+        The line is built from the note's own frontmatter (file name, type, status, last update,
+        project) and nothing else; a note with no frontmatter still gets a line, with `?` where the
+        note declares nothing. The historical marker is appended for archived/superseded notes, so
+        history is visible in the delivered text instead of only in the metrics. Returns {} for the
+        frozen pipeline and for a disabled layer.
+        """
+        out: dict[str, str] = {}
+        if not self.cfg.enabled or not self.cfg.provenance or not cands:
+            return out, {}
+        index = self.provenance_index(gw)
+        if index is None:
+            return out, {}
+        for c in cands:
+            line = index.line(c.source_file)
+            if (c.meta or {}).get("historical"):
+                line = f"{line} {index.marker(c.source_file)}".strip()
+            if line:
+                out[c.candidate_id] = line
+        return out, {"provenance_tokens": provenance_tokens(list(out.values())),
+                     "provenance_lines": len(out),
+                     # Proof that the provenance line integrates with the injection flag instead of
+                     # repeating it: these lines sit on blocks that already carry the warning attr.
+                     "provenance_on_flagged": sum(1 for c in cands
+                                                  if c.candidate_id in out
+                                                  and (c.meta or {}).get("injection_flag"))}
 
 
 def adaptive_cut(cands: list[Candidate], ratio: float, floor: int) -> tuple[list[Candidate], int]:
