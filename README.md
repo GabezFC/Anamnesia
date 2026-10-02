@@ -181,6 +181,7 @@ python -m memory_gateway vault-check --compare before.json   # exit 1 if any .md
 # lint the vault convention: frontmatter, area, naming, wikilinks (read-only, no LLM)
 python -m memory_gateway vault-lint --vault "$MEMORY_GATEWAY_VAULT"
 python -m memory_gateway vault-lint --json                    # exit 1 if any item
+python -m memory_gateway vault-lint -v                        # list every item, not the summary
 ```
 
 ### Tests

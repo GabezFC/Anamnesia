@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.services.obsidian import ObsidianVault
-from app.services.vault_lint import CATEGORIES, MAX_NOTE_CHARS, lint
+from app.services.vault_lint import CATEGORIES, MAX_NOTE_CHARS, SUMMARY_EXAMPLES, lint
 
 FULL_FM = """---
 id: 20260912-1443
@@ -288,6 +288,79 @@ def test_raiz_com_arquivos_ocultos_e_ignorada(tmp_path):
     assert _cat(lint(v), "arquivo_nao_md_raiz") == []
 
 
+# -- render: resumo por padrão, tudo com -v ------------------------------------------------------
+
+def test_render_resumido_lista_no_maximo_3_exemplos_por_categoria(tmp_path):
+    v = _clean_vault(tmp_path)
+    for i in range(6):
+        _mk(v, f"30-Projetos/Exemplo/orfa-{i}.md")
+    report = lint(v)
+    out = report.render()
+    orfas = sorted(f.path for f in report.findings if f.category == "orfa")
+    assert len(orfas) == 6
+    linhas = [ln for ln in out.splitlines() if ln.startswith("  - ")]
+    assert len(linhas) == SUMMARY_EXAMPLES, out
+    assert orfas[0] in linhas[0]  # os mesmos 3 primeiros, em ordem
+    assert "... (+3 mais" in out
+    assert "[orfa] nota orfa (sem link de entrada) (6)" in out
+
+
+def test_render_verbose_lista_todos_os_itens(tmp_path):
+    v = _clean_vault(tmp_path)
+    for i in range(6):
+        _mk(v, f"30-Projetos/Exemplo/orfa-{i}.md")
+    out = lint(v).render(verbose=True)
+    assert len([ln for ln in out.splitlines() if ln.startswith("  - ")]) == 6
+    assert "mais" not in out
+
+
+def test_categoria_com_ate_3_itens_e_mostrada_inteira(tmp_path):
+    v = _clean_vault(tmp_path)
+    _mk(v, "30-Projetos/Exemplo/a.md")
+    _mk(v, "30-Projetos/Exemplo/b.md")
+    out = lint(v).render()
+    assert len([ln for ln in out.splitlines() if ln.startswith("  - ")]) == 2
+    assert "... (+" not in out
+
+
+def test_render_padrao_e_mais_curto_que_o_verbose(tmp_path):
+    v = _clean_vault(tmp_path)
+    for i in range(30):
+        _mk(v, f"30-Projetos/Exemplo/orfa-{i}.md")
+    report = lint(v)
+    assert len(report.render()) < len(report.render(verbose=True))
+
+
+def test_render_do_vault_limpo_igual_em_verbose(tmp_path):
+    report = lint(_clean_vault(tmp_path))
+    assert report.render() == report.render(verbose=True) == report.render(verbose=False)
+
+
+def test_render_resumido_ainda_mostra_todas_as_categorias(tmp_path):
+    v = _clean_vault(tmp_path)
+    _write(v, "20-Dev-IA/quebrado.md", "[[nao-existe]]\n")
+    _mk(v, "30-Projetos/Exemplo/orfa.md")
+    out = lint(v).render()
+    assert "[wikilink_sem_alvo]" in out and "[orfa]" in out
+
+
+def test_funcao_render_do_moduloaceita_verbose(tmp_path):
+    from app.services import vault_lint as vl
+    report = lint(_clean_vault(tmp_path))
+    assert vl.render(report) == report.render()
+    assert vl.render(report, verbose=True) == report.render(verbose=True)
+
+
+def test_json_continua_completo_com_o_resumo_no_texto(tmp_path):
+    v = _clean_vault(tmp_path)
+    for i in range(6):
+        _mk(v, f"30-Projetos/Exemplo/orfa-{i}.md")
+    report = lint(v)
+    payload = json.loads(json.dumps(report.to_dict(), ensure_ascii=False))
+    assert payload["counts"]["orfa"] == 6
+    assert len([f for f in payload["findings"] if f["category"] == "orfa"]) == 6
+
+
 # -- read-only guarantee ------------------------------------------------------------------------
 
 def test_lint_nao_modifica_o_vault(tmp_path):
@@ -347,3 +420,91 @@ def test_vault_lint_default_e_zero(tmp_path, capsys):
         main(["vault-lint", "--vault", str(v), "--json"])
     assert exc.value.code == 0
     assert json.loads(capsys.readouterr().out)["total"] == 0
+
+
+def test_registra_a_flag_verbose():
+    from app.cli.main import build_parser
+    for argv in (["vault-lint", "-v"], ["vault-lint", "--verbose"]):
+        assert build_parser().parse_args(argv).verbose is True
+    assert build_parser().parse_args(["vault-lint"]).verbose is False
+
+
+def _script_module():
+    import sys
+    if str(Path(__file__).resolve().parents[1] / "scripts") not in sys.path:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import vault_lint as script
+    return script
+
+
+def test_script_verbose_lista_tudo(tmp_path, capsys):
+    script = _script_module()
+    v = _clean_vault(tmp_path)
+    for i in range(6):
+        _mk(v, f"30-Projetos/Exemplo/orfa-{i}.md")
+    assert script.main(["--vault", str(v)]) == 1
+    resumo = capsys.readouterr().out
+    assert len([ln for ln in resumo.splitlines() if ln.startswith("  - ")]) == SUMMARY_EXAMPLES
+    assert script.main(["--vault", str(v), "-v"]) == 1
+    assert len([ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("  - ")]) == 6
+
+
+def test_cli_verbose_lista_tudo(tmp_path, capsys):
+    from app.cli.main import main
+    v = _clean_vault(tmp_path)
+    for i in range(6):
+        _mk(v, f"30-Projetos/Exemplo/orfa-{i}.md")
+    with pytest.raises(SystemExit):
+        main(["vault-lint", "--vault", str(v), "--verbose"])
+    assert len([ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("  - ")]) == 6
+
+
+# -- aviso do vault sintético --------------------------------------------------------------------
+
+def _sem_variaveis_de_vault(monkeypatch):
+    from config import retrieval
+    monkeypatch.delenv(retrieval.VAULT_ENV_VAR, raising=False)
+    monkeypatch.delenv(retrieval.LEGACY_VAULT_ENV_VAR, raising=False)
+    monkeypatch.setattr(retrieval, "env_str", lambda *_a, **_k: "")
+
+
+def test_fell_back_to_default_só_sem_var_ou_env(monkeypatch):
+    from config import retrieval
+    _sem_variaveis_de_vault(monkeypatch)
+    assert retrieval.fell_back_to_default(None) is True
+    assert retrieval.fell_back_to_default(retrieval.DEFAULT_VAULT) is False
+
+
+def test_fell_back_to_default_falso_quando_o_env_aponta_para_o_vault(tmp_path, monkeypatch):
+    from config import retrieval
+    monkeypatch.delenv(retrieval.LEGACY_VAULT_ENV_VAR, raising=False)
+    monkeypatch.setattr(retrieval, "env_str",
+                        lambda name, default="": str(tmp_path) if name == retrieval.VAULT_ENV_VAR else default)
+    assert retrieval.fell_back_to_default(None) is False
+
+
+def test_script_avisa_em_stderr_quando_usa_o_vault_sintetico(capsys, monkeypatch):
+    from config import retrieval
+    _sem_variaveis_de_vault(monkeypatch)
+    script = _script_module()
+    # sem --vault: resolve para o corpus sintético que vem com o repositório (READ ONLY)
+    assert script.main(["--json"]) in (0, 1)
+    assert "vault-lint: usando o vault sintético (passe --vault)" in capsys.readouterr().err
+
+
+def test_script_nao_avisa_quando_o_vault_foi_passado(tmp_path, capsys, monkeypatch):
+    _sem_variaveis_de_vault(monkeypatch)
+    script = _script_module()
+    assert script.main(["--vault", str(_clean_vault(tmp_path)), "--json"]) == 0
+    assert "vault sintético" not in capsys.readouterr().err
+
+
+def test_cli_avisa_em_stderr_quando_usa_o_vault_sintetico(capsys, monkeypatch):
+    from config import retrieval
+    from app.cli.main import main
+    _sem_variaveis_de_vault(monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["vault-lint", "--json"])
+    assert exc.value.code in (0, 1)
+    assert "vault sintético" in capsys.readouterr().err
+

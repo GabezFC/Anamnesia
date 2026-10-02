@@ -148,15 +148,17 @@ def cmd_vault_check(a):
 
 
 def cmd_vault_lint(a):
-    from config.retrieval import resolve_vault_path, validate_vault_path
+    from config.retrieval import fell_back_to_default, resolve_vault_path, validate_vault_path
     from app.services.vault_lint import MAX_NOTE_CHARS, lint
+    if fell_back_to_default(a.vault):
+        print("vault-lint: usando o vault sintético (passe --vault)", file=sys.stderr)
     try:
         vault = validate_vault_path(resolve_vault_path(a.vault))
     except (FileNotFoundError, NotADirectoryError) as exc:
         sys.exit(str(exc))
     report = lint(vault, max_note_chars=a.max_note_chars or MAX_NOTE_CHARS)
     if not _print(report.to_dict(), a.json):
-        print(report.render())
+        print(report.render(verbose=a.verbose))
     sys.exit(0 if report.total == 0 else 1)
 
 
@@ -232,6 +234,8 @@ def build_parser() -> argparse.ArgumentParser:
     vl.add_argument("--vault", help="caminho do vault (default: vault configurado no projeto)")
     vl.add_argument("--max-note-chars", type=int, help=f"limite de tamanho de nota (default {MAX_NOTE_CHARS_LITERAL})")
     vl.add_argument("--json", action="store_true")
+    vl.add_argument("-v", "--verbose", action="store_true",
+                    help="lista todos os itens em vez do resumo por categoria")
     vl.set_defaults(fn=cmd_vault_lint)
     return p
 
