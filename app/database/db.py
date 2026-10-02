@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 CREATE INDEX IF NOT EXISTS runs_session ON runs(session_id);
 CREATE INDEX IF NOT EXISTS runs_created ON runs(created_at);
+CREATE INDEX IF NOT EXISTS runs_session_created ON runs(session_id, created_at);
 CREATE INDEX IF NOT EXISTS runs_pipeline_warmup ON runs(pipeline, warmup);
 CREATE TABLE IF NOT EXISTS candidates (
   run_id TEXT, candidate_id TEXT, source_file TEXT, section TEXT, score REAL,
@@ -175,7 +176,7 @@ class Database:
 
     @staticmethod
     def _run_filters(session_id: str | None, agent: str | None, q: str | None, since: float | None,
-                      adhoc_only: bool) -> tuple[list[str], list[Any]]:
+                      adhoc_only: bool, until: float | None = None) -> tuple[list[str], list[Any]]:
         where: list[str] = []
         args: list[Any] = []
         # adhoc_only is its own tab (session_id == "adhoc"): it wins over an explicit session_id.
@@ -189,6 +190,9 @@ class Database:
         if since is not None:
             where.append("created_at>=?")
             args.append(since)
+        if until is not None:
+            where.append("created_at<=?")
+            args.append(until)
         if q:
             where.append("query LIKE ?")
             args.append(f"%{q}%")
@@ -196,26 +200,93 @@ class Database:
 
     def list_runs(self, limit: int = 100, offset: int = 0, session_id: str | None = None,
                   agent: str | None = None, q: str | None = None, since: float | None = None,
-                  adhoc_only: bool = False, full: bool = False) -> list[dict]:
+                  adhoc_only: bool = False, full: bool = False, until: float | None = None) -> list[dict]:
         cols = LIST_COLUMNS + (FULL_EXTRA_COLUMNS if full else "")
         sql = f"SELECT {cols} FROM runs"
-        where, args = self._run_filters(session_id, agent, q, since, adhoc_only)
+        where, args = self._run_filters(session_id, agent, q, since, adhoc_only, until)
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
         return [self._decode(r) for r in self.query(sql, tuple(args) + (limit, offset))]
 
     def count_runs(self, session_id: str | None = None, agent: str | None = None, q: str | None = None,
-                   since: float | None = None, adhoc_only: bool = False) -> int:
+                   since: float | None = None, adhoc_only: bool = False, until: float | None = None) -> int:
         sql = "SELECT COUNT(*) n FROM runs"
-        where, args = self._run_filters(session_id, agent, q, since, adhoc_only)
+        where, args = self._run_filters(session_id, agent, q, since, adhoc_only, until)
         if where:
             sql += " WHERE " + " AND ".join(where)
         return self.query(sql, tuple(args))[0]["n"]
 
-    def list_sessions(self, limit: int = 50) -> list[dict]:
-        return self.query("SELECT s.*, (SELECT COUNT(*) FROM runs r WHERE r.session_id=s.session_id) AS runs"
-                          " FROM sessions s ORDER BY created_at DESC LIMIT ?", (limit,))
+    # A usable epoch-seconds timestamp: numeric storage class and not in milliseconds.
+    _VALID_TS = "typeof(created_at) IN ('real','integer') AND created_at > 0 AND created_at <= 1e12"
+
+    def list_sessions(self, limit: int = 50, offset: int = 0) -> list[dict]:
+        """Sessions ordered by LAST ACTIVITY (newest run), not by when the row was first inserted.
+
+        `create_session` is INSERT OR IGNORE, so a long-lived session such as "adhoc" keeps its
+        original `created_at` forever; the real recency lives in `runs`. session_ids that exist only
+        in `runs` are included too. Recorded timestamps are never altered.
+        """
+        return self.query(f"""
+            WITH agg AS (
+              SELECT session_id, COUNT(*) AS runs,
+                     MIN(CASE WHEN {self._VALID_TS} THEN created_at END) AS first_run_at,
+                     MAX(CASE WHEN {self._VALID_TS} THEN created_at END) AS last_run_at
+              FROM runs WHERE session_id IS NOT NULL GROUP BY session_id
+            ), allsess AS (
+              SELECT s.session_id, s.created_at, s.kind, s.config_json, s.notes,
+                     a.first_run_at, a.last_run_at, COALESCE(a.runs, 0) AS runs
+              FROM sessions s LEFT JOIN agg a ON a.session_id = s.session_id
+              UNION ALL
+              SELECT a.session_id, NULL, NULL, NULL, NULL, a.first_run_at, a.last_run_at, a.runs
+              FROM agg a WHERE a.session_id NOT IN (SELECT session_id FROM sessions)
+            )
+            SELECT * FROM allsess
+            ORDER BY COALESCE(last_run_at, created_at) DESC, session_id
+            LIMIT ? OFFSET ?""", (limit, offset))
+
+    def count_sessions(self) -> int:
+        return self.query("""SELECT COUNT(*) n FROM (
+            SELECT session_id FROM sessions
+            UNION SELECT session_id FROM runs WHERE session_id IS NOT NULL)""")[0]["n"]
+
+    def history_summary(self) -> dict:
+        """Observability for the whole history (§35): what is stored, over which span, and what is
+        malformed. Counts everything in `runs`, warm-ups and ad-hoc included."""
+        valid = self._VALID_TS
+        head = self.query(f"""SELECT COUNT(*) AS total_runs,
+              SUM(CASE WHEN session_id='adhoc' THEN 1 ELSE 0 END) AS adhoc_runs,
+              SUM(CASE WHEN COALESCE(warmup,0)=1 OR mode='warmup' THEN 1 ELSE 0 END) AS warmup_runs,
+              SUM(CASE WHEN NOT ({valid}) THEN 1 ELSE 0 END) AS invalid_timestamps,
+              MIN(CASE WHEN {valid} THEN created_at END) AS oldest_run_at,
+              MAX(CASE WHEN {valid} THEN created_at END) AS newest_run_at FROM runs""")[0]
+        per_day = {}
+        for label, mod in (("local", "'unixepoch','localtime'"), ("utc", "'unixepoch'")):
+            rows = self.query(f"""SELECT date(created_at, {mod}) AS day, COUNT(*) AS runs FROM runs
+                                  WHERE {valid} GROUP BY day ORDER BY day""")
+            per_day[label] = {r["day"]: r["runs"] for r in rows}
+        return {
+            "total_runs": head["total_runs"] or 0,
+            "total_sessions": self.count_sessions(),
+            "oldest_run_at": head["oldest_run_at"],
+            "newest_run_at": head["newest_run_at"],
+            "runs_por_dia": per_day["local"],
+            "runs_por_dia_utc": per_day["utc"],
+            "adhoc_runs": head["adhoc_runs"] or 0,
+            "warmup_runs": head["warmup_runs"] or 0,
+            "invalid_timestamps": head["invalid_timestamps"] or 0,
+        }
+
+    def series_rows(self, pipeline: str | None = None) -> list[dict]:
+        """Every non-warm-up run reduced to what a time series needs. No cap: the caller filters by
+        time AFTER normalising timestamps, because stored values may be seconds, ms or text."""
+        sql = ("SELECT run_id, session_id, created_at, pipeline, metrics_json FROM runs"
+               " WHERE COALESCE(warmup,0)=0 AND COALESCE(mode,'')<>'warmup'")
+        args: tuple = ()
+        if pipeline:
+            sql += " AND pipeline=?"
+            args = (pipeline,)
+        return self.query(sql, args)
 
     # maintenance (§5.3) -------------------------------------------------------
     def prune(self, keep_days: int, keep_sessions: list[str] | None = None, dry_run: bool = False) -> dict:

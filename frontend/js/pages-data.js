@@ -4,11 +4,11 @@
 import { lineChart } from './charts.js';
 import {
   PIPELINES, PIPELINE_LABEL, PIPELINE_SHORT, PIPELINE_COLOR, esc, fmtNum, fmtCompact, fmtMs, fmtCost,
-  fmtPct, fmtAmp, fmtDate, fmtDateShort, get, num, realRuns, metricsOf, totalTokens, tokenAmplification,
+  fmtPct, fmtAmp, fmtDate, get, num, realRuns, metricsOf, totalTokens, tokenAmplification,
   recallOf, precisionOf, costOf, mean, safePath, armOf, judgeTokens, savedTokens,
 } from './format.js';
 import {
-  AGG_MODES, AGG_LABEL, AGG_HINT, RUN_POINT_CAP, aggregateRuns, bucketTicks,
+  AGG_MODES, AGG_LABEL, AGG_HINT, serverPoints, timeAxis, zoomRange, periodRange, fmtFullDate, HIST_FORMAT,
 } from './series.js';
 import {
   metricCard, panel, emptyState, notWiredState, notMeasuredState, table, segmented, kvTable,
@@ -31,30 +31,12 @@ const HIST_SERIES = {
 };
 
 export function renderHistory(ctx) {
-  const rs = realRuns(ctx.runs);
-  if (!rs.length) {
-    return emptyState('Nenhuma run registrada',
-      '<p class="state-body">O histórico aparece após o primeiro benchmark.</p>');
-  }
   const key = HIST_SERIES[ctx.state.histSeries] ? ctx.state.histSeries : 'tokens';
-  const [label, , , unit, tipKey] = HIST_SERIES[key];
+  const [label, , , unit] = HIST_SERIES[key];
   const agg = AGG_MODES.includes(ctx.state.histAgg) ? ctx.state.histAgg : 'day';
   const scale = ctx.state.histScale === 'log' ? 'log' : 'linear';
-  const sessions = ctx.sessions || [];
-
-  const sessionRows = sessions.map((s) => {
-    const sr = rs.filter((r) => r.session_id === s.session_id);
-    const tt = mean(sr.map((r) => totalTokens(metricsOf(r))));
-    return `<tr>
-      <td><button type="button" class="linkish" data-session="${esc(s.session_id)}">${esc(String(s.session_id).slice(0, 22))}</button></td>
-      <td>${esc(s.kind || '—')}</td>
-      <td class="num">${fmtNum(s.runs)}</td>
-      <td class="num">${fmtCompact(tt)}</td>
-      <td class="num">${fmtMs(mean(sr.map((r) => num(get(metricsOf(r), 'total_latency_ms')))))}</td>
-      <td class="num">${fmtCost(mean(sr.map((r) => costOf(metricsOf(r)))))}</td>
-      <td class="muted">${fmtDate(s.created_at)}</td>
-    </tr>`;
-  });
+  const period = PERIODS.some(([k]) => k === ctx.state.histPeriod) ? ctx.state.histPeriod : 'all';
+  const custom = period === 'custom';
 
   return `
     <div class="page-toolbar">
@@ -66,16 +48,25 @@ export function renderHistory(ctx) {
       ${segmented('histAgg', AGG_MODES.map((m) => [m, AGG_LABEL[m]]), agg)}
       <span class="muted">Escala:</span>
       ${segmented('histScale', [['linear', 'Linear'], ['log', 'Log']], scale)}
+      <span class="muted">Período:</span>
+      ${segmented('histPeriod', PERIODS, period)}
     </div>
-    ${panel(`${label} ao longo do tempo`, '<div class="chart-wrap" data-chart="hist-line"></div>',
-    { sub: `${rs.length} runs ordenadas por created_at · ${AGG_HINT[agg]} · unidade: ${unit}`, prov: 'experimental' })}
-    ${panel('Sessões', table([
-    { label: 'Sessão' }, { label: 'Tipo' }, { label: 'Runs', num: true },
-    { label: 'Tokens gastos', num: true, tipKey: 'total_tokens' },
-    { label: 'Latência', num: true, tipKey: 'total_latency_ms' },
-    { label: 'Custo', num: true, tipKey: 'total_cost' }, { label: 'Criada em' },
-  ], sessionRows, { emptyDetail: 'GET /benchmark/sessions não retornou sessões' }),
-  { sub: `${sessions.length} sessões · clique para detalhar`, prov: 'experimental' })}
+    ${panel(`${label} ao longo do tempo`, `
+      <div class="hist-controls">
+        ${custom ? `<label>de <input type="date" data-hist-since value="${esc(histView.since)}"></label>
+        <label>até <input type="date" data-hist-until value="${esc(histView.until)}"></label>
+        <button type="button" data-hist-apply>aplicar</button>` : ''}
+        <button type="button" data-hist-zoom="0.5" title="aproximar">+</button>
+        <button type="button" data-hist-zoom="2" title="afastar">−</button>
+        <button type="button" data-hist-zoom-reset ${histView.zoom ? '' : 'disabled'}>resetar zoom</button>
+        <label><input type="checkbox" data-hist-band ${histView.band ? 'checked' : ''}> faixa p25–p75</label>
+        <span class="muted">arraste sobre o gráfico para dar zoom no período</span>
+      </div>
+      <p class="hist-summary" id="hist-summary" aria-live="polite">carregando o histórico completo…</p>
+      <div class="chart-wrap" data-chart="hist-line"></div>`,
+    { sub: `calculado no servidor sobre todas as runs do período · ${AGG_HINT[agg]} · unidade: ${unit}`, prov: 'experimental' })}
+    ${panel('Sessões', `<div id="sessions-slot">${skeletonTable(6)}</div>`,
+    { sub: 'GET /benchmark/sessions — ordenadas por última atividade · clique para detalhar', prov: 'experimental' })}
     <div id="session-detail"></div>
     ${panel('Runs recentes', `
       <div class="page-toolbar runs-toolbar">
@@ -93,6 +84,9 @@ export function renderHistory(ctx) {
           value="${esc(histRunsState.session)}">
         <input type="search" data-hist-filter="q" placeholder="buscar na pergunta…"
           value="${esc(histRunsState.q)}">
+        <span class="runs-filter-dates">de <input type="date" data-hist-filter="since" aria-label="runs desde"
+          value="${esc(histRunsState.since)}"> até <input type="date" data-hist-filter="until" aria-label="runs até"
+          value="${esc(histRunsState.until)}"></span>
         <button type="button" data-hist-refresh>Atualizar</button>
         <label class="muted"><input type="checkbox" data-hist-autorefresh
           ${histRunsState.autoRefresh ? 'checked' : ''}> auto-atualizar (10s)</label>
@@ -103,10 +97,32 @@ export function renderHistory(ctx) {
   `;
 }
 
+const PERIODS = [['7d', '7 dias'], ['30d', '30 dias'], ['all', 'Tudo'], ['custom', 'Personalizado']];
+/** Chart-only UI state (not in ctx.state: zoom/dates are not toggles that re-render the whole page). */
+const histView = { since: '', until: '', zoom: null, band: false, sessOffset: 0, sessLimit: 25, last: null };
+let histSeq = 0;
+let histSessSeq = 0;
+
+/** Local calendar date (YYYY-MM-DD from <input type=date>) → epoch seconds; `end` = end of that day. */
+const dateToEpoch = (s, end = false) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  if (!m) return null;
+  const d = end ? new Date(+m[1], +m[2] - 1, +m[3], 23, 59, 59) : new Date(+m[1], +m[2] - 1, +m[3]);
+  return d.getTime() / 1000;
+};
+
+/** since/until currently requested: the zoom wins over the period buttons. */
+function currentRange(ctx) {
+  if (histView.zoom) return { since: histView.zoom[0], until: histView.zoom[1] };
+  const period = ctx.state.histPeriod;
+  const custom = { since: dateToEpoch(histView.since), until: dateToEpoch(histView.until, true) };
+  return periodRange(period, Date.now() / 1000, custom);
+}
+
 /** Table-only UI state for the "Runs recentes" widget. Not part of ctx.state: it drives its own
  * server fetch (getRunsPage), independent of the RUN_LIMIT=5000 preload used by every other page. */
 const histRunsState = {
-  tab: 'all', agent: '', session: '', q: '', offset: 0, limit: 50, autoRefresh: false,
+  tab: 'all', agent: '', session: '', q: '', since: '', until: '', offset: 0, limit: 50, autoRefresh: false,
 };
 let histRunsSeq = 0;
 let histRunsTimer = null;
@@ -165,6 +181,8 @@ async function refreshRunsTable(root, ctx) {
       sessionId: histRunsState.session || undefined,
       agent: histRunsState.agent || undefined,
       q: histRunsState.q || undefined,
+      since: dateToEpoch(histRunsState.since) || undefined,
+      until: dateToEpoch(histRunsState.until, true) || undefined,
       adhocOnly: histRunsState.tab === 'adhoc',
     });
     if (seq !== histRunsSeq) return;
@@ -224,7 +242,7 @@ function bindRunsToolbar(root, ctx) {
       debounceTimer = setTimeout(() => refreshRunsTable(root, ctx), 300);
     });
   });
-  root.querySelector('[data-hist-refresh]')?.addEventListener('click', () => refreshRunsTable(root, ctx));
+  root.querySelector('[data-hist-refresh]')?.addEventListener('click', () => refreshHistory(root, ctx, { core: true }));
   const auto = root.querySelector('[data-hist-autorefresh]');
   auto?.addEventListener('change', () => {
     histRunsState.autoRefresh = auto.checked;
@@ -234,7 +252,7 @@ function bindRunsToolbar(root, ctx) {
 
 function setupAutoRefresh(root, ctx) {
   clearInterval(histRunsTimer);
-  histRunsTimer = histRunsState.autoRefresh ? setInterval(() => refreshRunsTable(root, ctx), 10000) : null;
+  histRunsTimer = histRunsState.autoRefresh ? setInterval(() => refreshHistory(root, ctx), 10000) : null;
 }
 
 /** Called by the router before leaving the History page, so the auto-refresh timer never keeps
@@ -244,46 +262,134 @@ export function unmountHistory() {
   histRunsTimer = null;
 }
 
+/** Chart: GET /benchmark/timeseries over every run in the range. The server sorts, dedups, aggregates
+ * and downsamples (only after sorting); the browser only cuts the line at gaps and formats. */
+async function loadHistChart(root, ctx) {
+  const w = root.querySelector('[data-chart="hist-line"]');
+  const sum = root.querySelector('#hist-summary');
+  if (!w) return;
+  const key = HIST_SERIES[ctx.state.histSeries] ? ctx.state.histSeries : 'tokens';
+  const [label, , , unit] = HIST_SERIES[key];
+  const agg = AGG_MODES.includes(ctx.state.histAgg) ? ctx.state.histAgg : 'day';
+  const { since, until } = currentRange(ctx);
+  const seq = ++histSeq;
+  let res;
+  try {
+    res = await ctx.api.getTimeseries({ metric: key, agg, since, until });
+  } catch (e) {
+    if (seq !== histSeq) return;
+    if (sum) sum.textContent = '';
+    w.innerHTML = `<div class="state error"><div class="state-title">Não foi possível carregar a série</div>
+      <code>${esc(e && e.message ? e.message : String(e))}</code></div>`;
+    return;
+  }
+  if (seq !== histSeq) return;
+  histView.last = res;
+  const fmt = HIST_FORMAT[key] || String;
+  const series = PIPELINES.map((p) => {
+    const sr = res.series && res.series[p];
+    const pts = sr ? serverPoints(sr.points, agg) : [];
+    return pts.length ? { label: PIPELINE_SHORT[p] || p, color: PIPELINE_COLOR[p], points: pts } : null;
+  }).filter(Boolean);
+  const first = res.range && res.range.first;
+  const last = res.range && res.range.last;
+  const x0 = since ?? first;
+  const x1 = until ?? last;
+  const dom = x0 !== null && x0 !== undefined && x1 !== null && x1 !== undefined && x1 > x0 ? [x0, x1] : null;
+  const axis = dom ? timeAxis(dom[0], dom[1]) : null;
+  if (sum) {
+    const span = first !== null && first !== undefined
+      ? ` · de ${fmtFullDate(first)} a ${fmtFullDate(last)}` : '';
+    sum.innerHTML = `histórico completo: <b>${fmtNum(res.total_runs_in_range)}</b> runs · `
+      + `pontos desenhados: <b>${fmtNum(res.points_returned)}</b> · `
+      + `amostrado: <b>${res.sampled ? 'sim' : 'não'}</b>${res.sampled ? ' (só a visualização; nenhum dado foi removido)' : ''}${span}`
+      + (res.invalid_dropped ? ` · <span class="warn">${fmtNum(res.invalid_dropped)} runs com timestamp inválido descartadas</span>` : '');
+  }
+  const rzoom = root.querySelector('[data-hist-zoom-reset]');
+  if (rzoom) rzoom.disabled = !histView.zoom;
+  lineChart(w, {
+    series, unit, fmt,
+    xFmt: axis ? axis.fmt : fmtFullDate, tipXFmt: fmtFullDate,
+    logScale: ctx.state.histScale === 'log',
+    xTicks: axis ? axis.ticks : null, xDomain: dom, band: histView.band,
+    onBrush: (a, b) => { histView.zoom = [a, b]; loadHistChart(root, ctx); },
+    tableLabel: `${label} — ${AGG_HINT[agg]}`,
+    ariaTitle: `${label} ao longo do tempo (${AGG_HINT[agg]})`,
+    notes: res.sampled ? [`amostrado para ${res.max_points} pontos por pipeline (LTTB, depois de ordenar por tempo); o total de runs acima é o real`] : [],
+    emptyMsg: `nenhuma run no período tem a métrica "${label}"`,
+  });
+}
+
+/** Sessions by last activity, paginated on the server. */
+async function loadSessions(root, ctx) {
+  const slot = root.querySelector('#sessions-slot');
+  if (!slot) return;
+  const seq = ++histSessSeq;
+  try {
+    const { rows, total } = await ctx.api.getSessionsPage({ limit: histView.sessLimit, offset: histView.sessOffset });
+    if (seq !== histSessSeq) return;
+    const body = rows.map((s) => `<tr>
+      <td><button type="button" class="linkish" data-session="${esc(s.session_id)}">${esc(String(s.session_id).slice(0, 22))}</button></td>
+      <td>${esc(s.kind || '—')}</td>
+      <td class="num">${fmtNum(s.runs)}</td>
+      <td class="muted">${s.first_run_at ? fmtFullDate(s.first_run_at) : '—'}</td>
+      <td class="muted">${s.last_run_at ? fmtFullDate(s.last_run_at) : '—'}</td>
+      <td class="muted">${s.created_at ? fmtFullDate(s.created_at) : '—'}</td>
+    </tr>`);
+    const off = histView.sessOffset;
+    slot.innerHTML = `${table([
+      { label: 'Sessão' }, { label: 'Tipo' }, { label: 'Runs', num: true },
+      { label: 'Primeira run' }, { label: 'Última run' }, { label: 'Registrada em' },
+    ], body, { emptyDetail: 'GET /benchmark/sessions não retornou sessões' })}
+      <div class="runs-pager">
+        <span class="muted">${total ? off + 1 : 0}–${off + rows.length} de ${fmtNum(total)} sessões</span>
+        <button type="button" data-sess-page="-1" ${off <= 0 ? 'disabled' : ''}>◀ anterior</button>
+        <button type="button" data-sess-page="1" ${off + rows.length >= total ? 'disabled' : ''}>próxima ▶</button>
+      </div>`;
+    slot.querySelectorAll('[data-sess-page]').forEach((b) => b.addEventListener('click', () => {
+      histView.sessOffset = Math.max(0, off + Number(b.dataset.sessPage) * histView.sessLimit);
+      loadSessions(root, ctx);
+    }));
+  } catch (e) {
+    if (seq !== histSessSeq) return;
+    slot.innerHTML = `<div class="state error"><div class="state-title">Não foi possível carregar as sessões</div>
+      <code>${esc(e && e.message ? e.message : String(e))}</code></div>`;
+  }
+}
+
+/** Manual "Atualizar" and the auto-refresh timer: every history route is re-fetched (none of them
+ * is memoised) and the memoised GETs are dropped. Only the manual button also reloads the 5000-run
+ * preload used by the other pages. */
+function refreshHistory(root, ctx, { core = false } = {}) {
+  ctx.api.invalidate();
+  if (core) ctx.refreshCore?.().catch(() => {});
+  loadHistChart(root, ctx);
+  loadSessions(root, ctx);
+  refreshRunsTable(root, ctx);
+}
+
 export function mountHistory(root, ctx) {
   unmountHistory();
-  const rs = realRuns(ctx.runs);
-  const key = HIST_SERIES[ctx.state.histSeries] ? ctx.state.histSeries : 'tokens';
-  const [label, valFn, fmt, unit] = HIST_SERIES[key];
-  const agg = AGG_MODES.includes(ctx.state.histAgg) ? ctx.state.histAgg : 'day';
-  const logScale = ctx.state.histScale === 'log';
-  const w = root.querySelector('[data-chart="hist-line"]');
-  if (w) {
-    // Runs are NOT plotted raw by default: one line per pipeline would join
-    // thousands of runs of different sessions across days with no data in
-    // between. Aggregating first (median per day / per session) keeps the shape
-    // honest; the raw view is opt-in and capped.
-    const notes = [];
-    const built = PIPELINES.map((p) => {
-      const a = aggregateRuns(rs.filter((r) => r.pipeline === p), {
-        mode: agg, valFn, maxPoints: RUN_POINT_CAP,
-      });
-      if (!a.points.length) return null;
-      if (a.truncated > 0) {
-        notes.push(`${PIPELINE_SHORT[p] || p}: amostra de ${a.points.length} de ${a.total} runs`);
-      }
-      return {
-        label: PIPELINE_SHORT[p] || p,
-        color: PIPELINE_COLOR[p],
-        points: a.points,
-      };
-    }).filter(Boolean);
-    lineChart(w, {
-      series: built,
-      unit, fmt, xFmt: agg === 'session' ? fmtDate : fmtDateShort,
-      logScale,
-      xTicks: bucketTicks(built.flatMap((s) => s.points)),
-      tableLabel: `${label} — ${AGG_HINT[agg]}`,
-      ariaTitle: `${label} ao longo do tempo (${AGG_HINT[agg]})`,
-      notes,
-      emptyMsg: `nenhuma run carregada tem a métrica "${label}"`,
-    });
-  }
+  const rerender = () => loadHistChart(root, ctx);
+  root.querySelector('[data-hist-apply]')?.addEventListener('click', () => {
+    histView.since = root.querySelector('[data-hist-since]')?.value || '';
+    histView.until = root.querySelector('[data-hist-until]')?.value || '';
+    histView.zoom = null;
+    rerender();
+  });
+  root.querySelectorAll('[data-hist-zoom]').forEach((b) => b.addEventListener('click', () => {
+    const r = histView.last && histView.last.range;
+    const cur = histView.zoom || (r && r.first !== null && r.first !== undefined ? [r.first, r.last] : null);
+    if (!cur || !(cur[1] > cur[0])) return;
+    histView.zoom = zoomRange(cur, Number(b.dataset.histZoom));
+    rerender();
+  }));
+  root.querySelector('[data-hist-zoom-reset]')?.addEventListener('click', () => { histView.zoom = null; rerender(); });
+  root.querySelector('[data-hist-band]')?.addEventListener('change', (e) => { histView.band = e.target.checked; rerender(); });
+
   bindRunsToolbar(root, ctx);
+  loadHistChart(root, ctx);
+  loadSessions(root, ctx);
   refreshRunsTable(root, ctx);
   setupAutoRefresh(root, ctx);
 }
