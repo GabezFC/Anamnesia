@@ -413,7 +413,7 @@ def test_search_delivers_provenance_and_the_history_metrics(tmp_path, vault):
     from config.retrieval import RetrievalConfig
     gw = MemoryGateway(retrieval_cfg=RetrievalConfig(vault_path=vault, data_dir=tmp_path / "d"),
                        bench_cfg=BenchmarkConfig(db_path=str(tmp_path / "b.db")),
-                       optimizer_cfg=OptimizerConfig())
+                       optimizer_cfg=OptimizerConfig().with_(provenance=True))
     gw.warm()
     r = gw.search("decisão do cache", "baseline", 5, persist=False)
     assert "[fonte:" in r.context

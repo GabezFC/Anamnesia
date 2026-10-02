@@ -234,4 +234,8 @@ def test_flags_can_default_off_in_a_block(vault):
 
 def test_frozen_pipeline_is_a_noop_even_with_every_flag_on():
     assert "graphify_jev" in FROZEN_PIPELINES
-    assert OptimizerConfig().provenance and OptimizerConfig().temporal_demote
+    assert OptimizerConfig().temporal_demote and OptimizerConfig().conflict_check
+
+def test_provenance_is_off_by_default():
+    # +23.6% context tokens for no measured recall/fact gain (bench 2026-10-02): opt-in only.
+    assert OptimizerConfig().provenance is False

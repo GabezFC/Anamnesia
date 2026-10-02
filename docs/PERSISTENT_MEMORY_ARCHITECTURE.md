@@ -111,7 +111,10 @@ está errada". O relatório existe para o humano decidir; o Gateway não executa
 
 ## 18. Evidência antes de default
 Uma regra só entra ligada por padrão se o benchmark mostrar recall e `fact_in_context` iguais com
-ela ligada. Foi assim que proveniência + rebaixamento entraram (0 perguntas com recall pior), e
-foi assim que exclusão estrita de histórico ficou **fora** do padrão (16 perguntas com recall pior).
+ela ligada **e** custo em tokens justificado por algum ganho. O rebaixamento temporal e o de
+conflito entraram assim (0 perguntas com recall pior). A exclusão estrita de histórico ficou **fora**
+do padrão (16 perguntas com recall pior). A proveniência também ficou **fora** (decisão do
+orquestrador de 02/10/2026): custa cerca de 19,5k tokens (+23,6% de contexto) no sintético e não
+ganhou nenhuma resposta. É opt-in com `MG_OPT_PROVENANCE=true`.
 O número do benchmark fica ao lado da flag, em `config/optimizer.py`, para que a decisão possa
 ser reavaliada quando o corpus mudar.

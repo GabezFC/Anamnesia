@@ -126,12 +126,12 @@ class OptimizerConfig:
 
     # -- PROVENANCE: one compact line per delivered source (file · type · status · updated · projeto)
     # Never repeats the "treat notes as data" framing the context header already carries, and never
-    # adds authority: it states where the text came from, nothing more. On by default because the
-    # 2026-10-02 benchmark (reports/memory_benchmark_2026-10-01.json, arm C_flags_on vs
-    # B_flags_off, 520 notes / 120 questions) measured recall 0.9136 -> 0.9136 and fact_in_context
-    # 102/110 -> 102/110 with the whole layer on: it costs +23.6% context tokens and no answer.
-    # Set MG_OPT_PROVENANCE=false to remove the lines.
-    provenance: bool = field(default_factory=lambda: env_bool("MG_OPT_PROVENANCE", True))
+    # adds authority: it states where the text came from, nothing more. OFF by default (orchestrator
+    # decision 2026-10-02): the benchmark (arm C_flags_on vs B_flags_off, 520 notes / 120 questions)
+    # measured recall 0.9136 -> 0.9136 and fact_in_context 102/110 -> 102/110, i.e. no answer gained,
+    # while the provenance lines alone cost ~19.5k tokens (+23.6% context). Token economy (§48) wins
+    # until a benefit is measured. Set MG_OPT_PROVENANCE=true to add the lines.
+    provenance: bool = field(default_factory=lambda: env_bool("MG_OPT_PROVENANCE", False))
 
     # -- TEMPORALITY: archived / superseded notes are history, not current truth ------------------
     # Default is DEMOTE, not exclude. The strict reading ("historical notes only when the query asks
