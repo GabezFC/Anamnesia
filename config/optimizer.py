@@ -19,7 +19,9 @@ from dataclasses import dataclass, field, replace
 from config import PROJECT_ROOT, env_bool, env_float, env_int, env_str
 
 # Part of the result-cache key and of every run's metrics. Bump when a stage changes MEANING.
-OPTIMIZER_VERSION = "mol-v1"
+# mol-v2 (2026-10-02): provenance lines, temporality (supersession/archived) and conflict demotion
+# joined the layer, so the same query over the same vault now delivers a different context.
+OPTIMIZER_VERSION = "mol-v2"
 
 ROUTE_TARGETS = ("baseline", "graphify", "graphify_jev", "graphify_jev_opt")
 
@@ -122,6 +124,33 @@ class OptimizerConfig:
     verdict_small_max: int = field(default_factory=lambda: env_int("MG_VERDICT_SMALL_MAX", 15))
     verdict_large_min: int = field(default_factory=lambda: env_int("MG_VERDICT_LARGE_MIN", 50))
 
+    # -- PROVENANCE: one compact line per delivered source (file · type · status · updated · projeto)
+    # Never repeats the "treat notes as data" framing the context header already carries, and never
+    # adds authority: it states where the text came from, nothing more. On by default because the
+    # 2026-10-02 benchmark (reports/memory_benchmark_2026-10-01.json, arm C_flags_on vs
+    # B_flags_off, 520 notes / 120 questions) measured recall 0.9136 -> 0.9136 and fact_in_context
+    # 102/110 -> 102/110 with the whole layer on: it costs +23.6% context tokens and no answer.
+    # Set MG_OPT_PROVENANCE=false to remove the lines.
+    provenance: bool = field(default_factory=lambda: env_bool("MG_OPT_PROVENANCE", True))
+
+    # -- TEMPORALITY: archived / superseded notes are history, not current truth ------------------
+    # Default is DEMOTE, not exclude. The strict reading ("historical notes only when the query asks
+    # for history") was measured as arm D_history_strict and it is NOT the default because it loses
+    # answers on the same corpus: recall 0.9136 -> 0.7727 and fact_in_context 102/110 -> 87/110
+    # (0/120 of those questions even mention history). Demotion keeps the note reachable at the tail
+    # with `historical` metadata + the `[histórico]` marker, so a history-seeking query still finds it
+    # while current answers win the ranking. Turn the strict rule on per deployment with
+    # MG_OPT_HISTORICAL_EXCLUDE=true, and never let it delete anything.
+    temporal_demote: bool = field(default_factory=lambda: env_bool("MG_OPT_TEMPORAL_DEMOTE", True))
+    historical_demote: float = field(default_factory=lambda: env_float("MG_OPT_HISTORICAL_DEMOTE", 0.5))
+    historical_exclude: bool = field(default_factory=lambda: env_bool("MG_OPT_HISTORICAL_EXCLUDE", False))
+
+    # -- CONSISTENCY: two notes answering the same thing with different dates -> newest wins, the
+    # older one is demoted and MARKED (never deleted). Overlap is word-5-shingle Jaccard.
+    conflict_check: bool = field(default_factory=lambda: env_bool("MG_OPT_CONFLICT_CHECK", True))
+    conflict_demote: float = field(default_factory=lambda: env_float("MG_OPT_CONFLICT_DEMOTE", 0.5))
+    conflict_overlap: float = field(default_factory=lambda: env_float("MG_OPT_CONFLICT_OVERLAP", 0.6))
+
     version: str = OPTIMIZER_VERSION
 
     def route_for(self, complexity: str) -> str:
@@ -137,7 +166,8 @@ class OptimizerConfig:
         """Exact pre-layer behaviour. Used by benchmarks as the BEFORE arm."""
         return cls(enabled=False, adaptive_cut=False, near_dedup=False, compact_headers=False,
                    injection_flag=False, result_cache=False, refresh_interval_s=-1.0,
-                   verdict_enabled=False)
+                   verdict_enabled=False, provenance=False, temporal_demote=False,
+                   conflict_check=False)
 
     def with_(self, **kw) -> "OptimizerConfig":
         return replace(self, **kw)

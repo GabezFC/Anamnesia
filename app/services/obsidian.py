@@ -155,3 +155,48 @@ def frontmatter_status(text: str) -> str | None:
     fm, _ = split_frontmatter(text)
     m = re.search(r"^status:\s*(\S+)", fm, re.M)
     return m.group(1) if m else None
+
+
+_FM_KEY = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(.*)$")
+# YAML null spellings, so `projeto: null` never becomes the project literally named "null".
+_FM_NULL = {"", "null", "none", "~", "nil"}
+_FM_TRUE = {"true", "yes", "on"}
+_FM_FALSE = {"false", "no", "off"}
+
+
+def frontmatter_fields(text: str) -> dict:
+    """Parse the note's YAML-ish frontmatter into a plain dict (deterministic, no yaml dependency).
+
+    Only what the vault actually uses is supported: `key: value`, inline `[a, b]` lists and quoted
+    scalars. Nested mappings and block lists are NOT parsed -- an unparseable line is skipped, so a
+    richer frontmatter degrades to "that field is missing" instead of raising. Every consumer that
+    needs frontmatter values (the memory audit, the provenance line) parses it HERE so the two can
+    never disagree about what a note declares.
+    """
+    fm, _ = split_frontmatter(text)
+    out: dict = {}
+    if not fm or not fm.startswith("---"):
+        return out
+    for line in fm.splitlines()[1:]:
+        if line.strip() == "---":
+            break
+        m = _FM_KEY.match(line)
+        if not m:
+            continue
+        key, value = m.group(1).strip().lower(), m.group(2).strip()
+        if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1].strip()
+        if value.startswith("[") and value.endswith("]"):
+            inner = value[1:-1].strip()
+            out[key] = [i.strip().strip("'\"") for i in inner.split(",") if i.strip()] if inner else []
+            continue
+        low = value.lower()
+        if low in _FM_NULL:
+            out[key] = None
+        elif low in _FM_TRUE:
+            out[key] = True
+        elif low in _FM_FALSE:
+            out[key] = False
+        else:
+            out[key] = value
+    return out
