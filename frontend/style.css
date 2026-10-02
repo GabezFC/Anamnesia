@@ -423,9 +423,38 @@ table.kv td { white-space: normal; word-break: break-word; }
   font-variant-numeric: tabular-nums; transition: opacity .1s;
 }
 .chart-tip b { color: var(--text-1); font-weight: 550; }
-text.axis { fill: var(--text-2); font-size: 10px; }
+text.axis { fill: var(--text-1); font-size: 10px; }   /* text-1 on bg-1 >= 7:1 (AA); text-2 was ~4.3:1 */
 text.axis-val { fill: var(--text-1); font-size: 10px; font-variant-numeric: tabular-nums; }
 line.grid-line { stroke: var(--line-0); }
+
+/* History view: clickable legend, brush selection, p25-p75 band, period/zoom controls, summary line. */
+.chart-legend .legend-toggle {
+  display: inline-flex; align-items: center; gap: var(--s2); background: none; border: 1px solid transparent;
+  border-radius: var(--radius-sm); color: var(--text-0); font: inherit; padding: 2px var(--s2); cursor: pointer;
+}
+.chart-legend .legend-toggle:hover { border-color: var(--line-2); }
+.chart-legend .legend-toggle:focus-visible { outline: 2px solid var(--text-0); outline-offset: 1px; }
+.chart-legend .legend-toggle.off { opacity: .55; text-decoration: line-through; }
+rect.brush-hit { cursor: crosshair; }
+rect.brush-sel { fill: rgba(139, 92, 246, .22); stroke: #A78BFA; stroke-width: 1; pointer-events: none; }
+.hist-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); margin-bottom: var(--s3); }
+.hist-controls input[type="date"] {
+  background: var(--bg-2); color: var(--text-0); border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm); padding: var(--s1) var(--s2); font: inherit; color-scheme: dark;
+}
+.hist-controls button {
+  background: var(--bg-2); color: var(--text-0); border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm); padding: var(--s1) var(--s3); font: inherit; cursor: pointer;
+}
+.hist-controls button:hover:not(:disabled) { border-color: var(--text-1); }
+.hist-controls button:disabled { opacity: .5; cursor: default; }
+.hist-controls label { color: var(--text-1); font-size: var(--fs-sm); display: inline-flex; gap: var(--s2); align-items: center; }
+.hist-summary { margin: 0 0 var(--s3); font-size: var(--fs-sm); color: var(--text-0); font-variant-numeric: tabular-nums; }
+.hist-summary b { color: var(--text-0); }
+.hist-summary .warn { color: var(--warn, #F2B84B); }
+.runs-filter-dates { display: inline-flex; gap: var(--s2); align-items: center; color: var(--text-1); font-size: var(--fs-sm); }
+.runs-filter-dates input { background: var(--bg-2); color: var(--text-0); border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: var(--s1) var(--s2); font: inherit; color-scheme: dark; }
+@media (max-width: 640px) { .hist-controls { gap: var(--s2); } }
 
 /* Accessible line chart: legend key, value labels, table toggle and its notes. */
 svg.chart-key { display: inline-block; vertical-align: -2px; overflow: visible; }

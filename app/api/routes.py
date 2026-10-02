@@ -12,13 +12,14 @@ import uuid
 from dataclasses import replace as dc_replace
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from app.adapters.registry import detect_all
 from app.benchmark.evaluator import validate_evaluation, validate_label
 from app.benchmark.runner import BenchmarkRunner, estimate_plan, load_questions
 from app.benchmark.statistics import aggregate_stats
+from app.benchmark.timeseries import DEFAULT_MAX_POINTS, MAX_POINTS_CEILING, build_timeseries
 from app.schemas.models import DEFAULT_EXPLICIT_PIPELINE, PIPELINES
 from app.services import security
 from app.services.envfile import set_env_var
@@ -200,7 +201,7 @@ def threshold_sweep(req: BenchmarkRequest):
 @router.get("/benchmark/runs")
 def benchmark_runs(response: Response, limit: int = 100, offset: int = 0, session_id: str | None = None,
                    agent: str | None = None, q: str | None = None, since: float | None = None,
-                   adhoc_only: bool = False, full: bool = False):
+                   adhoc_only: bool = False, full: bool = False, until: float | None = None):
     """Server-side paginated/filtered run list (§4, §5.1).
 
     Returns a bare list (never `{runs:[...]}`) so existing frontend callers that do
@@ -210,9 +211,9 @@ def benchmark_runs(response: Response, limit: int = 100, offset: int = 0, sessio
     """
     db = gw().db
     rows = db.list_runs(limit=limit, offset=offset, session_id=session_id, agent=agent, q=q,
-                        since=since, adhoc_only=adhoc_only, full=full)
+                        since=since, adhoc_only=adhoc_only, full=full, until=until)
     response.headers["X-Total-Count"] = str(db.count_runs(session_id=session_id, agent=agent, q=q,
-                                                           since=since, adhoc_only=adhoc_only))
+                                                           since=since, adhoc_only=adhoc_only, until=until))
     return rows
 
 
@@ -225,8 +226,31 @@ def benchmark_run_detail(run_id: str):
 
 
 @router.get("/benchmark/sessions")
-def benchmark_sessions(limit: int = 50):
-    return gw().db.list_sessions(limit)
+def benchmark_sessions(response: Response, limit: int = Query(50, ge=1, le=1000), offset: int = Query(0, ge=0)):
+    """Sessions by last activity (newest run first), with first_run_at / last_run_at / runs."""
+    db = gw().db
+    response.headers["X-Total-Count"] = str(db.count_sessions())
+    return db.list_sessions(limit, offset)
+
+
+@router.get("/benchmark/history/summary")
+def benchmark_history_summary():
+    """What the history really contains (§35): totals, span, runs per day (local + UTC), malformed timestamps."""
+    return gw().db.history_summary()
+
+
+@router.get("/benchmark/timeseries")
+def benchmark_timeseries(metric: str = "tokens", agg: str = "day", since: str | None = None,
+                         until: str | None = None, pipeline: str | None = None,
+                         max_points: int = Query(DEFAULT_MAX_POINTS, ge=3, le=MAX_POINTS_CEILING),
+                         tz: Literal["local", "utc"] = "local"):
+    """Series computed on the server over ALL runs in range (no 5000-run ceiling). Points are ASC by
+    time; `sampled` is true only when the view had to be downsampled (after sorting) to `max_points`."""
+    try:
+        return build_timeseries(gw().db.series_rows(pipeline), metric, agg, since, until, max_points,
+                                utc=tz == "utc")
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.get("/benchmark/stats")

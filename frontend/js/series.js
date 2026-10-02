@@ -255,3 +255,139 @@ export const markerFor = (i) => SERIES_MARKER[((i % SERIES_MARKER.length) + SERI
 export const MARKER_NAME = {
   circle: 'círculo', square: 'quadrado', triangle: 'triângulo', diamond: 'losango',
 };
+/* ---- server time series (GET /benchmark/timeseries) ---------------------------------------- */
+// The history chart no longer aggregates in the browser: the server already sorted, deduplicated,
+// aggregated and (only if needed) downsampled the points. What is left to do here is deciding where
+// the line must be cut, laying out a readable time axis and formatting values.
+
+const pad2 = (n) => String(n).padStart(2, '0');
+/** Local dd/MM. */
+export const fmtDayMonth = (x) => { const d = new Date(x * 1000); return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`; };
+/** Local HH:mm. */
+export const fmtHourMin = (x) => { const d = new Date(x * 1000); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+/** Local dd/MM/yyyy HH:mm — the full date shown in tooltips and in the table. */
+export const fmtFullDate = (x) => {
+  const d = new Date(x * 1000);
+  return `${fmtDayMonth(x)}/${d.getFullYear()} ${fmtHourMin(x)}`;
+};
+
+/** Days since epoch of a YYYY-MM-DD key (UTC arithmetic, so it never depends on DST). */
+const dayKeyNumber = (k) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(k || ''));
+  return m ? Math.floor(Date.UTC(+m[1], +m[2] - 1, +m[3]) / DAY_MS) : null;
+};
+
+/**
+ * Turn the points of one server series into chart points, stamping `breakBefore` (never join across a
+ * hole). Input must already be ASC; this re-sorts defensively and NEVER links points out of order.
+ * mode 'session' → every point is its own segment; 'day' → a missing calendar day cuts the line;
+ * 'run' → a session change or a hole longer than `gapSeconds` cuts it.
+ */
+export function serverPoints(points, mode, { gapSeconds = GAP_SECONDS } = {}) {
+  const out = (points || [])
+    .filter((p) => num(p && p.x) !== null && num(p && p.y) !== null)
+    .map((p) => ({ ...p }))
+    .sort((a, b) => a.x - b.x);
+  let prev = null;
+  for (const p of out) {
+    let brk = prev === null;
+    if (!brk) {
+      if (mode === 'session') brk = true;
+      else if (mode === 'day') {
+        const a = dayKeyNumber(prev.day); const b = dayKeyNumber(p.day);
+        brk = a === null || b === null ? (p.x - prev.x) > 2 * 86400 : b - a > 1;
+      } else brk = prev.bucket !== p.bucket || (p.x - prev.x) > gapSeconds;
+    }
+    p.breakBefore = brk;
+    prev = p;
+  }
+  return out;
+}
+
+const HOUR = 3600;
+const HOUR_STEPS = [1, 2, 3, 6, 12];
+const DAY_STEPS = [1, 2, 3, 7, 14, 30, 60, 90];
+
+/**
+ * Readable time axis for [x0, x1] (epoch seconds, local time). Interval < 2 days → HH:mm ticks on
+ * round hours (dd/MM HH:mm at midnight); otherwise dd/MM ticks at local midnight. At most `maxTicks`.
+ */
+export function timeAxis(x0, x1, { maxTicks = 7 } = {}) {
+  const span = x1 - x0;
+  const short = span < 2 * 86400;
+  const fmtTick = short
+    ? (x) => (fmtHourMin(x) === '00:00' ? `${fmtDayMonth(x)} 00:00` : fmtHourMin(x))
+    : fmtDayMonth;
+  if (!(span > 0)) return { ticks: [x0], fmt: fmtTick, short };
+  const ticks = [];
+  if (short) {
+    const step = HOUR_STEPS.find((h) => span / (h * HOUR) <= maxTicks) || 12;
+    const d = new Date(x0 * 1000);
+    d.setMinutes(0, 0, 0);
+    d.setHours(Math.floor(d.getHours() / step) * step);
+    while (d.getTime() / 1000 < x0) d.setHours(d.getHours() + step);
+    for (; d.getTime() / 1000 <= x1; d.setHours(d.getHours() + step)) ticks.push(d.getTime() / 1000);
+  } else {
+    const step = DAY_STEPS.find((n) => span / (n * 86400) <= maxTicks) || 180;
+    const d = new Date(x0 * 1000);
+    d.setHours(0, 0, 0, 0);
+    if (d.getTime() / 1000 < x0) d.setDate(d.getDate() + 1);
+    for (; d.getTime() / 1000 <= x1; d.setDate(d.getDate() + step)) ticks.push(d.getTime() / 1000);
+  }
+  return { ticks: ticks.length >= 2 ? ticks : [x0, x1], fmt: fmtTick, short };
+}
+
+/** Zoom a visible range by `factor` (<1 in, >1 out) around `center` (defaults to its midpoint). */
+export function zoomRange([a, b], factor, center = (a + b) / 2) {
+  const w = Math.max(60, (b - a) * factor);            // never narrower than a minute
+  const c = Math.min(b, Math.max(a, center));
+  const lo = c - w * ((c - a) / ((b - a) || 1));       // keep `center` at the same relative position
+  return [lo, lo + w];
+}
+
+/** since/until (epoch seconds, null = open) for a period button. `custom` = {since, until}. */
+export function periodRange(period, now, custom = {}) {
+  if (period === '7d') return { since: now - 7 * 86400, until: null };
+  if (period === '30d') return { since: now - 30 * 86400, until: null };
+  if (period === 'custom') return { since: num(custom.since), until: num(custom.until) };
+  return { since: null, until: null };
+}
+
+/* ---- pt-BR value formatting for the history chart ------------------------------------------- */
+const brDecimal = (s) => String(s).replace('.', ',');
+/** 1234 → "1,2k"; 12 345 → "12k"; 1 500 000 → "1,5M"; < 1000 → plain. */
+export function fmtTokensBR(v) {
+  const n = num(v);
+  if (n === null) return '—';
+  const a = Math.abs(n);
+  const trim = (x, digits) => brDecimal(x.toFixed(digits).replace(/\.0+$/, ''));
+  if (a >= 1e6) return `${trim(n / 1e6, a >= 1e7 ? 0 : 1)}M`;
+  if (a >= 1e3) return `${trim(n / 1e3, a >= 1e4 ? 0 : 1)}k`;
+  return brDecimal(String(Math.round(n * 10) / 10));
+}
+/** USD: "US$ 0" / "US$ 0,0021" / "US$ 1,25". */
+export function fmtUSD(v) {
+  const n = num(v);
+  if (n === null) return '—';
+  if (n === 0) return 'US$ 0';
+  const a = Math.abs(n);
+  const s = a >= 1 ? n.toFixed(2) : a >= 0.01 ? n.toFixed(3) : n.toFixed(5).replace(/0+$/, '').replace(/\.$/, '');
+  return `US$ ${brDecimal(s)}`;
+}
+/** ms → "850 ms", "1,2 s", "2,5 min". */
+export function fmtMsBR(v) {
+  const n = num(v);
+  if (n === null) return '—';
+  if (n >= 60000) return `${brDecimal((n / 60000).toFixed(1))} min`;
+  if (n >= 1000) return `${brDecimal((n / 1000).toFixed(n >= 10000 ? 0 : 1))} s`;
+  return `${brDecimal(String(Math.round(n * 10) / 10))} ms`;
+}
+export const fmtAmpBR = (v) => (num(v) === null ? '—' : `${brDecimal(num(v).toFixed(num(v) >= 10 ? 1 : 2))}×`);
+export const fmtFracBR = (v) => (num(v) === null ? '—' : `${brDecimal((num(v) * 100).toFixed(0))}%`);
+
+/** Axis/tooltip formatter per HIST_SERIES key. */
+export const HIST_FORMAT = {
+  tokens: fmtTokensBR, judge: fmtTokensBR, context: fmtTokensBR, saved: fmtTokensBR,
+  amplification: fmtAmpBR, latency: fmtMsBR, cost: fmtUSD, documents: fmtTokensBR,
+  recall: fmtFracBR, precision: fmtFracBR,
+};

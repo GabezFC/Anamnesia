@@ -5,6 +5,7 @@ import {
   AGG_MODES, AGG_LABEL, AGG_HINT, RUN_POINT_CAP, GAP_SECONDS,
   aggregateRuns, bucketTicks, downsample, localDayNumber, metricsVersion, splitSegments,
   valueScale, dashFor, markerFor, MARKER_NAME, SERIES_DASH, SERIES_MARKER, niceMax,
+  serverPoints, timeAxis, zoomRange, periodRange, fmtTokensBR, fmtUSD, fmtMsBR, fmtFullDate,
 } from '../frontend/js/series.js';
 
 let fail = 0;
@@ -207,6 +208,45 @@ for (const mod of PARSEABLE) {
     parsed = e.message;
   }
   ok(parsed === null, `frontend/js/${mod}.js compila e importa sem erro`, parsed ? parsed : '');
+}
+
+/* ---- M1: server time series (serverPoints / timeAxis / zoomRange / periodRange / formatters) ---- */
+{
+  const pts = [
+    { x: day(2) + 3600, y: 5, day: 'd2' }, { x: day(0) + 3600, y: 1, day: 'd0' }, { x: day(1) + 3600, y: 2, day: 'd1' },
+    { x: day(6) + 3600, y: 9, day: 'd6' },
+  ];
+  const sp = serverPoints(pts.map((p, i) => ({ ...p, day: ['2025-09-15', '2025-09-13', '2025-09-14', '2025-09-19'][i] })), 'day');
+  ok(sp.every((p, i) => i === 0 || sp[i - 1].x < p.x), 'serverPoints: sempre ASC, mesmo com entrada fora de ordem');
+  ok(sp[0].breakBefore && !sp[1].breakBefore && !sp[2].breakBefore && sp[3].breakBefore,
+    'serverPoints(dia): dia ausente quebra a linha, dias seguidos ligam');
+  ok(serverPoints(pts, 'session').every((p) => p.breakBefore), 'serverPoints(sessão): cada ponto é um trecho');
+  const rp = serverPoints([{ x: 100, y: 1, bucket: 'a' }, { x: 160, y: 2, bucket: 'a' }, { x: 220, y: 3, bucket: 'b' },
+    { x: 220 + GAP_SECONDS + 1, y: 4, bucket: 'b' }], 'run');
+  ok(!rp[1].breakBefore && rp[2].breakBefore && rp[3].breakBefore, 'serverPoints(run): troca de sessão e buraco > gap quebram');
+  ok(serverPoints([{ x: 1, y: null }, { x: NaN, y: 2 }, { x: 3, y: 3 }], 'run').length === 1, 'serverPoints: descarta y/x inválidos');
+
+  const short = timeAxis(day(0), day(0) + 6 * 3600);
+  ok(short.short && short.ticks.length >= 2 && short.ticks.length <= 7 && /^\d\d:\d\d$/.test(short.fmt(short.ticks[1]) ) || short.fmt(short.ticks[1]).includes('00:00'),
+    'timeAxis: intervalo < 2 dias usa HH:mm', short.ticks.map(short.fmt).join(' '));
+  const long = timeAxis(day(0), day(20));
+  ok(!long.short && long.ticks.length <= 7 && /^\d\d\/\d\d$/.test(long.fmt(long.ticks[0])), 'timeAxis: intervalo longo usa dd/MM',
+    long.ticks.map(long.fmt).join(' '));
+  ok(long.ticks.every((t, i) => i === 0 || t > long.ticks[i - 1]), 'timeAxis: ticks crescentes');
+
+  const z = zoomRange([0, 1000], 0.5);
+  ok(z[0] === 250 && z[1] === 750, 'zoomRange: aproxima mantendo o centro', JSON.stringify(z));
+  const zo = zoomRange([0, 1000], 2);
+  ok(zo[0] === -500 && zo[1] === 1500, 'zoomRange: afasta mantendo o centro', JSON.stringify(zo));
+  ok(periodRange('7d', 1e9).since === 1e9 - 7 * 86400 && periodRange('all', 1e9).since === null, 'periodRange: 7d e tudo');
+  const cr = periodRange('custom', 1e9, { since: 5, until: 9 });
+  ok(cr.since === 5 && cr.until === 9, 'periodRange: personalizado');
+
+  ok(fmtTokensBR(1234) === '1,2k' && fmtTokensBR(950) === '950' && fmtTokensBR(1500000) === '1,5M', 'fmtTokensBR: 1,2k / 950 / 1,5M',
+    `${fmtTokensBR(1234)} ${fmtTokensBR(950)} ${fmtTokensBR(1500000)}`);
+  ok(fmtUSD(0.0021) === 'US$ 0,0021' && fmtUSD(1.25) === 'US$ 1,25', 'fmtUSD', `${fmtUSD(0.0021)} ${fmtUSD(1.25)}`);
+  ok(fmtMsBR(850) === '850 ms' && fmtMsBR(1200) === '1,2 s', 'fmtMsBR', `${fmtMsBR(850)} ${fmtMsBR(1200)}`);
+  ok(fmtFullDate(day(0) + 3600 * 13 + 60 * 5).endsWith('13:05'), 'fmtFullDate: dd/MM/yyyy HH:mm');
 }
 
 console.log(fail ? `\n${fail} FAILURES` : '\nall chart invariants passed');

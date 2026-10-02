@@ -3,6 +3,7 @@
 // Routes actually used by this dashboard (all GET except where noted):
 //   /health  /system/info  /system/integrations  /system/projects
 //   /benchmark/runs  /benchmark/runs/{id}  /benchmark/sessions  /benchmark/stats  /benchmark/questions
+//   /benchmark/history/summary  /benchmark/timeseries   (history view: never cached, always fresh)
 //   /openapi.json (FastAPI, for the app version)
 // The POST routes (/memory/search*, /benchmark/run*, /benchmark/threshold-sweep, /feedback/*)
 // exist in the API but are deliberately NOT called: this is a read-only observability UI.
@@ -105,13 +106,14 @@ export const getOpenApi = () => cached('openapi', () => api('/openapi.json'));
  * that caller is untouched; this is an additive way to get real pagination.
  */
 export async function getRunsPage({
-  limit = 100, offset = 0, sessionId, agent, q, since, adhocOnly, full,
+  limit = 100, offset = 0, sessionId, agent, q, since, until, adhocOnly, full,
 } = {}) {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (sessionId) params.set('session_id', sessionId);
   if (agent) params.set('agent', agent);
   if (q) params.set('q', q);
   if (since) params.set('since', String(since));
+  if (until) params.set('until', String(until));
   if (adhocOnly) params.set('adhoc_only', '1');
   if (full) params.set('full', '1');
   const path = `/benchmark/runs?${params.toString()}`;
@@ -132,6 +134,37 @@ export async function getRunsPage({
   const runs = await r.json();
   const total = Number(r.headers.get('X-Total-Count'));
   return { runs: Array.isArray(runs) ? runs : [], total: Number.isFinite(total) ? total : runs.length };
+}
+
+/** GET + `X-Total-Count` for a list route that paginates on the server. Never cached. */
+async function getListWithTotal(path) {
+  let r;
+  try {
+    r = await fetch(path, { cache: 'no-store' });
+  } catch (e) {
+    throw new ApiError(0, 'network error', path, e && e.message ? e.message : 'fetch falhou');
+  }
+  if (!r.ok) throw new ApiError(r.status, r.statusText, path, null);
+  const rows = await r.json();
+  const total = Number(r.headers.get('X-Total-Count'));
+  return { rows: Array.isArray(rows) ? rows : [], total: Number.isFinite(total) ? total : rows.length };
+}
+
+/** Sessions by last activity, paginated on the server (GET /benchmark/sessions). */
+export const getSessionsPage = ({ limit = 25, offset = 0 } = {}) =>
+  getListWithTotal(`/benchmark/sessions?limit=${limit}&offset=${offset}`);
+
+/** GET /benchmark/history/summary — totals, span, runs per day, malformed timestamps. */
+export const getHistorySummary = () => api('/benchmark/history/summary');
+
+/** GET /benchmark/timeseries — computed on the server over every run in range (no 5000-run ceiling). */
+export function getTimeseries({ metric, agg, since, until, pipeline, maxPoints } = {}) {
+  const params = new URLSearchParams({ metric: metric || 'tokens', agg: agg || 'day' });
+  if (since) params.set('since', String(since));
+  if (until) params.set('until', String(until));
+  if (pipeline) params.set('pipeline', pipeline);
+  if (maxPoints) params.set('max_points', String(maxPoints));
+  return api(`/benchmark/timeseries?${params.toString()}`);
 }
 
 /** Fetch run details in bounded-concurrency batches (needed for sources/candidates). */

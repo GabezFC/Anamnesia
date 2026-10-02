@@ -103,11 +103,18 @@ const PAGES = {
 /** UI state persisted across navigation (toggles). */
 const state = {
   pipeline: 'graphify_jev_opt', tokenView: 'total', costView: 'total',
-  histSeries: 'tokens', histAgg: 'day', histScale: 'linear',
+  histSeries: 'tokens', histAgg: 'day', histScale: 'linear', histPeriod: 'all',
 };
 const ctx = {
   runs: [], sessions: [], stats: null, details: [], systemInfo: null, questions: [],
   projects: null, health: null, latestRunDetail: null, state, api: API,
+};
+
+/** Manual refresh: drop every memoised GET and reload the 5000-run preload + header totals. */
+ctx.refreshCore = async () => {
+  API.invalidate();
+  corePromise = null;
+  await ensure(['core']);
 };
 
 const $ = (s) => document.querySelector(s);
@@ -185,6 +192,18 @@ async function refreshHeader() {
   } catch { /* optional */ }
 }
 
+/** Header totals come from the history summary (the whole database), not from the 5000-run preload. */
+async function refreshHistoryTotals() {
+  try {
+    const s = await API.getHistorySummary();
+    const runsEl = $('#hdr-runs');
+    if (runsEl) runsEl.textContent = s.total_runs ? fmtInt(s.total_runs) : 'nenhuma';
+    const lastEl = $('#hdr-last');
+    if (lastEl) lastEl.textContent = s.newest_run_at ? fmtDate(s.newest_run_at) : 'nenhum';
+  } catch { /* keep the preload-derived values */ }
+}
+const fmtInt = (n) => Number(n).toLocaleString('pt-BR');
+
 function updateHeaderCounts() {
   const rs = realRuns(ctx.runs);
   const runsEl = $('#hdr-runs');
@@ -202,6 +221,7 @@ async function ensure(needs) {
       corePromise = loadCore().then((d) => {
         ctx.runs = d.runs; ctx.sessions = d.sessions; ctx.stats = d.stats;
         updateHeaderCounts();
+        refreshHistoryTotals();
       }).catch((e) => { corePromise = null; throw e; });
     }
     await corePromise;
@@ -276,8 +296,14 @@ function bindToggles(root) {
 
 /** Session drill-down. Rendered into a dedicated slot; failures are shown, never swallowed. */
 function bindSessionLinks(root) {
-  root.querySelectorAll('[data-session]').forEach((a) => {
-    a.addEventListener('click', async () => {
+  // Delegated, and bound once per root: the sessions table is painted asynchronously and re-painted
+  // on every page change/refresh, so per-button listeners would be lost or duplicated.
+  if (root._sessionDelegated) return;
+  root._sessionDelegated = true;
+  root.addEventListener('click', async (ev) => {
+    const a = ev.target.closest('[data-session]');
+    if (!a) return;
+    {
       const box = root.querySelector('#session-detail');
       if (!box) return;
       const sid = a.dataset.session;
@@ -299,7 +325,7 @@ function bindSessionLinks(root) {
             <code>${esc(e && e.message ? e.message : String(e))}</code></div>`);
       }
       box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
+    }
   });
 }
 
@@ -318,3 +344,4 @@ window.addEventListener('hashchange', navigate);
 refreshHeader();
 navigate();
 setInterval(refreshHeader, 30000);
+setInterval(refreshHistoryTotals, 30000);
