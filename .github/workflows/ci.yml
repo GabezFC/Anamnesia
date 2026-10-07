@@ -25,7 +25,10 @@ jobs:
       - name: Python tests
         # tests/conftest.py: no network, no TypeSafe API, no graphify binary, no real vault —
         # everything is mocked, so this runs unmodified in CI.
-        run: pytest tests -q
+        run: pytest tests -q --junitxml=junit.xml
+      - name: Annotate failing tests
+        if: failure()
+        run: python scripts/ci_annotate_failures.py junit.xml
 
       - uses: actions/setup-node@v4
         with:
