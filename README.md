@@ -1,4 +1,6 @@
-# Anamnésia
+<p align="center">
+  <img src="assets/logo.png" width="100%">
+</p>
 
 **A local workspace where your AI agents never start from zero.**
 
