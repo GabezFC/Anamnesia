@@ -48,6 +48,11 @@ async def lifespan(_app: FastAPI):
     # ~9 s on network probes, exactly when the dashboard is being opened.
     warm_detection()
     yield
+    try:  # never leave PTY child processes behind when the server stops
+        from app.api.workspace import get_manager
+        get_manager().close_all()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 _CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
@@ -91,6 +96,12 @@ def create_app() -> FastAPI:
     app.include_router(routes.router)
     from app.api import costs as costs_api  # Anamnesia costs ledger (read-only + guarded budget)
     app.include_router(costs_api.router)
+    from app.api import connections as connections_api  # Fase 9
+    from app.api import orchestration as orchestration_api  # Fase 11
+    from app.api import workspace as workspace_api  # Fase 10 (terminals: loopback-only gate inside)
+    app.include_router(connections_api.router)
+    app.include_router(orchestration_api.router)
+    app.include_router(workspace_api.router)
     if FRONTEND.exists():
         app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 
