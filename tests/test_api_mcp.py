@@ -80,7 +80,20 @@ def client(tiny_vault, tmp_path):
 def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "vault_exists": True}
+    body = r.json()
+    assert body["status"] == "ok" and body["vault_exists"] is True
+    assert isinstance(body["warnings"], list)  # T0.3: missing optional stages are visible
+
+
+def test_health_warns_when_jev_key_is_missing(client, monkeypatch):
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    codes = {(w["component"], w["code"]) for w in client.get("/health").json()["warnings"]}
+    assert ("jev", "api_key_missing") in codes
+
+
+def test_health_has_no_jev_warning_when_key_is_set(client, monkeypatch):
+    monkeypatch.setenv("TYPESAFE_API_KEY", "x")
+    assert all(w["component"] != "jev" for w in client.get("/health").json()["warnings"])
 
 
 @pytest.mark.parametrize("pipeline", ["baseline", "graphify", "graphify_jev", "graphify_jev_opt"])

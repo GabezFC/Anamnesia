@@ -103,10 +103,29 @@ def _search(req: SearchRequest, pipeline: str):
     return r.to_dict(include_candidates=req.include_candidates)
 
 
+def _health_warnings(g) -> list[dict]:
+    """T0.3: optional stages that are missing are reported, never silent. No network, no subprocess."""
+    import os
+    import shutil
+    out: list[dict] = []
+    if g is not None:
+        binary = getattr(getattr(g, "graphify", None), "bin", None)
+        if binary and not shutil.which(str(binary)) and not os.path.exists(str(binary)):
+            out.append({"component": "graphify", "code": "binary_missing",
+                        "message": "Graphify not found: graph pipelines degrade; default 'auto' keeps working.",
+                        "hint": "Install graphify or ignore: the baseline pipeline does not need it."})
+    if not os.getenv("TYPESAFE_API_KEY"):
+        out.append({"component": "jev", "code": "api_key_missing",
+                    "message": "JEV key not set: JEV pipelines are unavailable; 'auto'/baseline keep working.",
+                    "hint": "Set TYPESAFE_API_KEY in .env (each user brings their own key)."})
+    return out
+
+
 @router.get("/health")
 def health():
     g = _state["gateway"]
-    return {"status": "ok" if g else "starting", "vault_exists": bool(g and g.vault.exists())}
+    return {"status": "ok" if g else "starting", "vault_exists": bool(g and g.vault.exists()),
+            "warnings": _health_warnings(g)}
 
 
 @router.post("/memory/search")

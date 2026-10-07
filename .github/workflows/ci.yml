@@ -8,13 +8,18 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # T0.2: the project declares Python >= 3.14 (requirements.txt); CI used 3.11. "Supported" = green here.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.14'
       - name: Install Python dependencies
         run: pip install -r requirements.txt -r requirements-dev.txt
       - name: Python tests
