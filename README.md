@@ -136,8 +136,8 @@ and ranking caches. Keys are namespaced so a benchmark arm can never read anothe
 ## 4. Installation
 
 ```bash
-git clone https://github.com/GabezFC/Memory_Gateway.git
-cd Memory_Gateway
+git clone https://github.com/GabezFC/Anamnesia.git
+cd Anamnesia
 
 python -m venv .venv
 # Linux / macOS:
