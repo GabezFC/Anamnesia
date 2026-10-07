@@ -96,6 +96,8 @@ def create_app() -> FastAPI:
     app.include_router(routes.router)
     from app.api import costs as costs_api  # Anamnesia costs ledger (read-only + guarded budget)
     app.include_router(costs_api.router)
+    from app.api import costs_routing as costs_routing_api  # R7 Model Routing summary (read-only)
+    app.include_router(costs_routing_api.router)
     from app.api import connections as connections_api  # Fase 9
     from app.api import orchestration as orchestration_api  # Fase 11
     from app.api import workspace as workspace_api  # Fase 10 (terminals: loopback-only gate inside)

@@ -51,6 +51,16 @@ CREATE TABLE IF NOT EXISTS evaluations (
 CREATE TABLE IF NOT EXISTS jev_cache (key TEXT PRIMARY KEY, value TEXT, created_at REAL);
 CREATE TABLE IF NOT EXISTS configs (hash TEXT PRIMARY KEY, json TEXT);
 CREATE TABLE IF NOT EXISTS budgets (period TEXT PRIMARY KEY, ceiling_usd REAL, updated_at REAL);
+CREATE TABLE IF NOT EXISTS routing_decisions (
+  run_id TEXT, policy_version TEXT, registry_version TEXT, complexity REAL, risk TEXT, tier INTEGER,
+  model TEXT, effort TEXT, verify TEXT, reason_codes TEXT, router_tokens INTEGER, router_cost REAL,
+  latency_ms REAL
+);
+CREATE INDEX IF NOT EXISTS routing_decisions_run ON routing_decisions(run_id);
+CREATE TABLE IF NOT EXISTS verification_results (
+  run_id TEXT, attempt INTEGER, level TEXT, passed INTEGER, tokens INTEGER, cost REAL, failure_code TEXT
+);
+CREATE INDEX IF NOT EXISTS verification_results_run ON verification_results(run_id);
 """
 # Columns added after the original schema shipped (§5.3). Added via ALTER TABLE, guarded by
 # PRAGMA table_info so existing databases migrate in place without losing data:
@@ -62,7 +72,10 @@ CREATE TABLE IF NOT EXISTS budgets (period TEXT PRIMARY KEY, ceiling_usd REAL, u
 #                        project from the search scope, terminal session from env MG_TERMINAL_SESSION,
 #                        cost_origin = measured | estimated | unavailable.
 RUNS_MIGRATED_COLUMNS = (("config_hash", "TEXT"), ("context_encoding", "TEXT"),
-                         ("project", "TEXT"), ("terminal_session_id", "TEXT"), ("cost_origin", "TEXT"))
+                         ("project", "TEXT"), ("terminal_session_id", "TEXT"), ("cost_origin", "TEXT"),
+                         # model routing (R5): NULL for runs that did not go through the router/benchmark
+                         ("initial_model", "TEXT"), ("final_model", "TEXT"), ("escalation_count", "INTEGER"),
+                         ("retry_count", "INTEGER"), ("routing_strategy", "TEXT"))
 
 LIST_COLUMNS = ("run_id, session_id, created_at, question_id, query, pipeline, agent, provider, model, mode,"
                 " repetition, warmup, threshold, jev_mode, error, metrics_json")
@@ -92,6 +105,7 @@ class Database:
         # indexes on migrated columns can only be created after the ALTER above
         self._exec("CREATE INDEX IF NOT EXISTS runs_project_created ON runs(project, created_at)")
         self._exec("CREATE INDEX IF NOT EXISTS runs_created_at ON runs(created_at)")
+        self._exec("CREATE INDEX IF NOT EXISTS runs_routing_strategy ON runs(routing_strategy)")
 
     def _exec(self, sql: str, args: tuple = ()) -> sqlite3.Cursor:
         with self._lock:
@@ -157,7 +171,8 @@ class Database:
                 "model", "mode", "repetition", "warmup", "order_index", "threshold", "jev_mode", "jev_model",
                 "cache_enabled", "config_json", "config_hash", "metrics_json", "sources_json",
                 "context", "context_encoding", "answer", "error",
-                "project", "terminal_session_id", "cost_origin"]
+                "project", "terminal_session_id", "cost_origin",
+                "initial_model", "final_model", "escalation_count", "retry_count", "routing_strategy"]
         vals = []
         for c in cols:
             v = row.get(c)
@@ -501,6 +516,59 @@ class Database:
 
     def max_run_rowid(self) -> int:
         return int(self.query("SELECT COALESCE(MAX(rowid), 0) AS m FROM runs")[0]["m"])
+
+    # model routing helpers (R5, additive) ---------------------------------------
+    def set_run_routing(self, run_id: str, initial_model: str | None, final_model: str | None,
+                        escalation_count: int | None, retry_count: int | None,
+                        routing_strategy: str | None) -> None:
+        """Routing columns of an existing run (save_run's INSERT OR REPLACE resets them: call this after)."""
+        self._exec("UPDATE runs SET initial_model=?, final_model=?, escalation_count=?, retry_count=?,"
+                   " routing_strategy=? WHERE run_id=?",
+                   (initial_model, final_model, escalation_count, retry_count, routing_strategy, run_id))
+
+    def insert_routing_decision(self, run_id: str, d: dict) -> None:
+        """One decision per run (replaced when called again). Unmeasured fields stay NULL."""
+        codes = d.get("reason_codes")
+        if codes is not None and not isinstance(codes, str):
+            codes = json.dumps(list(codes), ensure_ascii=False)
+        self._exec("DELETE FROM routing_decisions WHERE run_id=?", (run_id,))
+        self._exec("INSERT INTO routing_decisions (run_id, policy_version, registry_version, complexity, risk, tier,"
+                   " model, effort, verify, reason_codes, router_tokens, router_cost, latency_ms)"
+                   " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (run_id, d.get("policy_version"), d.get("registry_version"), d.get("complexity"), d.get("risk"),
+                    d.get("tier"), d.get("model"), d.get("effort"), d.get("verify"), codes,
+                    d.get("router_tokens"), d.get("router_cost"), d.get("latency_ms")))
+
+    def insert_verification_result(self, run_id: str, attempt: int, level: str | None, passed: bool | None,
+                                   tokens: int | None = None, cost: float | None = None,
+                                   failure_code: str | None = None) -> None:
+        self._exec("INSERT INTO verification_results (run_id, attempt, level, passed, tokens, cost, failure_code)"
+                   " VALUES (?,?,?,?,?,?,?)",
+                   (run_id, attempt, level, None if passed is None else int(bool(passed)), tokens, cost, failure_code))
+
+    def routing_decision(self, run_id: str) -> dict | None:
+        rows = self.query("SELECT * FROM routing_decisions WHERE run_id=?", (run_id,))
+        if not rows:
+            return None
+        r = rows[0]
+        try:
+            r["reason_codes"] = json.loads(r["reason_codes"]) if r.get("reason_codes") else []
+        except ValueError:
+            pass
+        return r
+
+    def verification_results(self, run_id: str) -> list[dict]:
+        rows = self.query("SELECT * FROM verification_results WHERE run_id=? ORDER BY attempt", (run_id,))
+        for r in rows:
+            if r["passed"] is not None:
+                r["passed"] = bool(r["passed"])
+        return rows
+
+    def routing_runs(self) -> list[dict]:
+        """Runs produced by the routing benchmark/router (routing_strategy IS NOT NULL), oldest first."""
+        return self.query("SELECT run_id, session_id, created_at, question_id, model, initial_model, final_model,"
+                          " escalation_count, retry_count, routing_strategy, metrics_json FROM runs"
+                          " WHERE routing_strategy IS NOT NULL ORDER BY created_at ASC, run_id ASC")
 
     def get_budgets(self) -> dict[str, float | None]:
         return {r["period"]: r["ceiling_usd"] for r in self.query("SELECT period, ceiling_usd FROM budgets")}
