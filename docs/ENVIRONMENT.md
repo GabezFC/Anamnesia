@@ -60,3 +60,13 @@ Venv separado (nunca o `.venv` do projeto): Python 3.11.16, torch 2.6.0+cu124 (R
 transformers **4.57.6** (<5 obrigatório para `mxbai-rerank` 0.1.6), sentence-transformers 6.1.0, llmlingua 0.2.2,
 nltk 3.10.3 (+ `punkt_tab` para o Provence). Preset `OPT_STAGES_PRESET=off|free|approved` (padrão `free`).
 Medições, versões e licenças: `docs/OPTIONAL_STAGES_BENCHMARK.md`; stack opcional **não validado em Python 3.14**.
+
+## Retenção do benchmark.db (`db-maintenance`)
+
+Opt-in, nunca automático. Padrão é **dry-run** (só relata linhas/tamanhos); `--apply` é obrigatório para alterar.
+
+```
+python -m memory_gateway db-maintenance [--older-than-days 90] [--db PATH] [--apply] [--vacuum]
+```
+
+Com `--apply`: zera `context`, `answer` e `sources_json` das runs mais antigas que N dias (ids, `metrics_json`, config e demais colunas ficam, então o histórico de custo sobrevive), apaga `jev_cache` mais antigo que N dias e `candidates` órfãos. `--vacuum` (só com `--apply`) devolve o espaço ao disco. Idempotente. Faça backup antes do primeiro `--apply`.

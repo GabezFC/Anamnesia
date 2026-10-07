@@ -9,6 +9,7 @@
   python -m memory_gateway vault-lint [--vault PATH] [--json]
   python -m memory_gateway memory-audit [--vault PATH] [--db benchmark.db] [--json] [-v]
   python -m memory_gateway index
+  python -m memory_gateway db-maintenance [--older-than-days N] [--db PATH] [--apply] [--vacuum]
   python -m memory_gateway db-prune --keep-days N [--keep-sessions s1,s2] [--dry-run] [--vacuum]
 """
 from __future__ import annotations
@@ -249,6 +250,32 @@ def cmd_db_prune(a):
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+def _fmt_bytes(n: int) -> str:
+    return f"{n / 1048576:.2f} MB"
+
+
+def cmd_db_maintenance(a):
+    """T0.4: opt-in retention. Default = dry run (reports only); --apply is required to change data."""
+    from app.database.db import Database
+    from config.benchmark import BenchmarkConfig
+
+    bc = BenchmarkConfig()
+    db = Database(a.db or bc.db_path, compress_context=bc.db_compress_context)
+    r = db.maintenance(a.older_than_days, apply=a.apply, vacuum=a.vacuum)
+    f = r["found"]
+    print(f"db-maintenance [{'APPLY' if a.apply else 'DRY-RUN'}] older_than_days={a.older_than_days} db={db.path}")
+    print(f"{'item':<36}{'rows':>8}{'size':>14}")
+    print(f"{'runs: context/answer/sources_json':<36}{f['runs_heavy_rows']:>8}{_fmt_bytes(f['runs_heavy_bytes']):>14}")
+    print(f"{'jev_cache (old)':<36}{f['jev_cache_rows']:>8}{_fmt_bytes(f['jev_cache_bytes']):>14}")
+    print(f"{'candidates (orphan)':<36}{f['orphan_candidates']:>8}{'-':>14}")
+    print(f"{'file before':<36}{'':>8}{_fmt_bytes(r['size_before']):>14}")
+    print(f"{'file after':<36}{'':>8}{_fmt_bytes(r['size_after']):>14}")
+    if not a.apply:
+        print("dry-run: nada foi alterado. Use --apply para executar (--vacuum só vale com --apply).")
+    elif not a.vacuum:
+        print("espaço só é devolvido ao disco com --vacuum.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="memory_gateway", description="Memory Gateway CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -288,6 +315,12 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--compare")
     v.set_defaults(fn=cmd_vault_check)
     sub.add_parser("index").set_defaults(fn=cmd_index)
+    dm = sub.add_parser("db-maintenance", help="retenção opt-in de benchmark.db (dry-run por padrão; --apply altera)")
+    dm.add_argument("--older-than-days", type=int, default=90, help="idade (dias) a partir da qual limpar (padrão 90)")
+    dm.add_argument("--db", help="caminho do banco (padrão: config)")
+    dm.add_argument("--apply", action="store_true", help="executa de fato (sem isso só relata)")
+    dm.add_argument("--vacuum", action="store_true", help="VACUUM após aplicar (exige --apply)")
+    dm.set_defaults(fn=cmd_db_maintenance)
     dp = sub.add_parser("db-prune", help="remove runs antigas de benchmark.db (nunca as sessões protegidas)")
     dp.add_argument("--keep-days", type=int, required=True, help="idade máxima (dias) das runs mantidas")
     dp.add_argument("--keep-sessions", help="session_ids (separados por vírgula) que nunca são apagados")

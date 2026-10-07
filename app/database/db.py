@@ -345,6 +345,58 @@ class Database:
                 break
         return {"configs_deduped": configs_deduped, "context_compressed": context_compressed}
 
+    # opt-in retention (T0.4) --------------------------------------------------
+    HEAVY_RUN_COLUMNS = ("context", "answer", "sources_json")
+
+    def _file_bytes(self) -> int:
+        total = 0
+        for suffix in ("", "-wal"):
+            try:
+                total += Path(self.path + suffix).stat().st_size
+            except OSError:
+                pass
+        return total
+
+    def _retention_stats(self, cutoff: float) -> dict:
+        heavy_len = " + ".join(f"COALESCE(LENGTH({c}),0)" for c in self.HEAVY_RUN_COLUMNS)
+        heavy_any = " OR ".join(f"{c} IS NOT NULL" for c in self.HEAVY_RUN_COLUMNS)
+        r = self.query(f"SELECT COUNT(*) AS n, COALESCE(SUM({heavy_len}),0) AS b FROM runs"
+                       f" WHERE created_at < ? AND ({heavy_any})", (cutoff,))[0]
+        c = self.query("SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(key)+LENGTH(value)),0) AS b"
+                       " FROM jev_cache WHERE created_at < ?", (cutoff,))[0]
+        o = self.query("SELECT COUNT(*) AS n FROM candidates WHERE run_id NOT IN (SELECT run_id FROM runs)")[0]
+        return {"runs_heavy_rows": r["n"], "runs_heavy_bytes": r["b"],
+                "jev_cache_rows": c["n"], "jev_cache_bytes": c["b"], "orphan_candidates": o["n"]}
+
+    def maintenance(self, older_than_days: int, apply: bool = False, vacuum: bool = False) -> dict:
+        """Opt-in retention. Default is a dry run that only REPORTS. With apply=True it:
+          * sets context/answer/sources_json to NULL on runs older than `older_than_days`
+            (ids, metrics_json, config and every other column are kept, so cost history survives);
+          * deletes jev_cache entries older than the same cutoff;
+          * deletes candidates whose run no longer exists.
+        VACUUM only runs with apply=True and vacuum=True. Idempotent. Never called automatically."""
+        if older_than_days < 0:
+            raise ValueError("older_than_days must be >= 0")
+        cutoff = time.time() - older_than_days * 86400
+        size_before = self._file_bytes()
+        found = self._retention_stats(cutoff)
+        result: dict[str, Any] = {"dry_run": not apply, "cutoff": cutoff, "older_than_days": older_than_days,
+                                  "found": found, "size_before": size_before, "vacuumed": False}
+        if apply:
+            heavy_any = " OR ".join(f"{c} IS NOT NULL" for c in self.HEAVY_RUN_COLUMNS)
+            nulls = ", ".join(f"{c}=NULL" for c in self.HEAVY_RUN_COLUMNS)
+            runs = self._exec(f"UPDATE runs SET {nulls} WHERE created_at < ? AND ({heavy_any})", (cutoff,)).rowcount
+            cache = self._exec("DELETE FROM jev_cache WHERE created_at < ?", (cutoff,)).rowcount
+            orph = self._exec("DELETE FROM candidates WHERE run_id NOT IN (SELECT run_id FROM runs)").rowcount
+            result["applied"] = {"runs_stripped": runs, "jev_cache_deleted": cache, "orphan_candidates_deleted": orph}
+            if vacuum:
+                self.vacuum()
+                with self._lock:
+                    self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+                result["vacuumed"] = True
+        result["size_after"] = self._file_bytes() if apply else size_before
+        return result
+
     def vacuum(self) -> None:
         with self._lock:
             self.conn.commit()
