@@ -22,6 +22,7 @@ from config.optimization import OptimizationConfig, OptionalStagesConfig
 from config.optimizer import OptimizerConfig
 from config.retrieval import RetrievalConfig
 from app.database.db import Database
+from app.gateway.budget_guard import BudgetGuard
 from app.gateway.context_builder import ModelContextBuilder
 from app.gateway.optimizer import MemoryOptimizer
 from app.retrieval.baseline import BaselineIndex
@@ -75,6 +76,7 @@ class MemoryGateway:
         self.optional_stages_cfg = optional_stages_cfg or OptionalStagesConfig()
         # Automatic Memory Optimization Layer: runs inside EVERY search() (app/gateway/optimizer.py).
         self.optimizer = MemoryOptimizer(optimizer_cfg or OptimizerConfig())
+        self.budget_guard = BudgetGuard()  # T6.4, inert unless ANAMNESIA_BUDGET_ENFORCE=1
         # Cache isolation handle. "" in production; a benchmark sets it so its arms cannot read
         # judgements cached by a previous run (see app/services/jev.py cache_key).
         self.cache_namespace = ""
@@ -214,6 +216,9 @@ class MemoryGateway:
         except Exception as exc:  # noqa: BLE001 — a failed freshness check never blocks a search
             pre["optimizer_errors"] = [f"freshness:{type(exc).__name__}"]
         plan = opt.plan(query, pipeline, self)
+        # T6.4: no-op unless ANAMNESIA_BUDGET_ENFORCE=1 (then may degrade a paid plan to baseline)
+        plan, budget_m = self.budget_guard.apply(plan, self.db)
+        pre.update(budget_m)
         pipeline = plan.pipeline
         cache_on = self.bench_cfg.cache_enabled
         ckey = opt.cache_key(plan, max_results, parsed_scope.label(), context_budget, jev_overrides) \
