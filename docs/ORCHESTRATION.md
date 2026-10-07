@@ -54,6 +54,23 @@ não reportados = `null`). Para ligar ao Terminal Manager basta implementar `lau
 
 Hook para `memory_search mode='delegate'`: `Orchestrator.submit(task, preset, project_path) -> run_id`.
 
+## TerminalLauncher e `mode='delegate'` (E13)
+- `TerminalLauncher(manager, profiles, default_profile_id, max_session_s=900)` (`launchers.py`) implementa `SessionLauncher`
+  sobre o `TerminalManager`: `launch` cria uma sessão no `cwd` do projeto com o perfil e injeta **só** variáveis
+  `ANAMNESIA_*` (outras → `ValueError`) no spawn; `send` escreve o prompt + Enter; `is_alive` é falso se o processo saiu,
+  a sessão sumiu ou passou de `max_session_s` (a sessão é fechada na hora); `close` é idempotente. Falha em
+  `launch/send`, timeout de etapa, cancelamento ou erro nunca deixam sessão aberta. Resultados vêm só de
+  `result.md`/`status.json` do diretório da etapa (nada é lido da saída do terminal).
+- `app/orchestration/delegate.py`: `run_delegate(query, scope, preset, project_path) -> {run_id, state, preset, project_path}` e
+  `get_delegate_status(run_id, project_path)`. Launcher padrão = headless in-process; `ANAMNESIA_DELEGATE_LAUNCHER=terminal`
+  usa `TerminalLauncher` (perfil `ANAMNESIA_DELEGATE_PROFILE`, padrão `shell`).
+- `memory_search mode='delegate'` (REST e MCP): com `ANAMNESIA_DELEGATE=1` **e** projeto resolvível (projeto registrado cujo
+  nome/id = slug de `projeto:<slug>`, ou `MG_PROJECT_PATH` existente) devolve `mode_used='delegate'` e
+  `delegate: {run_id, state, preset}` (preset: `ANAMNESIA_DELEGATE_PRESET`, padrão `balanced`) mais o contexto recuperado.
+  Caso contrário cai para `context`: desligado → `fallback_reason='delegate_not_implemented'` (valor legado mantido) +
+  `delegate_status='delegate_disabled'`; sem projeto → `delegate_no_project`; erro no submit → `delegate_error:<Tipo>`.
+  Acompanhar via `GET /api/orchestration/runs/{run_id}?path=`.
+
 ## Experimento (seção 5)
 `python scripts/orchestration_experiment.py [--reps 3] [--task ...]` roda 3 predefinições × N repetições com launcher
 **stub** (tokens sintéticos, rotulado) e imprime tokens/custo por papel (`measured`/`unavailable`). `--real` só chama

@@ -236,12 +236,38 @@ def apply_mode(gateway, result, mode: str, risk: str = "medium", task_kind: str 
     extras: dict = {"mode_requested": mode, "mode_used": "context", "routing": None, "grounding": None,
                     "attempts": []}
     if mode == "delegate":
-        extras["fallback_reason"] = "delegate_not_implemented"       # Phase 11
+        extras = _delegate(result, extras)
         _persist(gateway, result, extras)
         return _public(extras)
     extras = _answer(gateway, result, risk, task_kind, extras)
     _persist(gateway, result, extras)
     return _public(extras)
+
+
+def _delegate(result, extras: dict) -> dict:
+    """mode='delegate': with ANAMNESIA_DELEGATE=1 and a resolvable project, submit the query to the
+    orchestrator (background run) and answer with its run id; the retrieved context stays in the response.
+    Otherwise context fallback: disabled keeps the legacy `fallback_reason` (+ `delegate_status`),
+    `delegate_no_project` / `delegate_error:<Tipo>` are new. No model is called here."""
+    from app.orchestration import delegate as dg
+    if not dg.delegate_enabled():
+        extras["fallback_reason"] = "delegate_not_implemented"      # legacy value kept for clients
+        extras["delegate_status"] = "delegate_disabled"
+        return extras
+    scope = (result.metrics or {}).get("scope")
+    path = dg.resolve_project_path(scope)
+    if not path:
+        extras["fallback_reason"] = "delegate_no_project"
+        return extras
+    try:
+        info = dg.run_delegate(result.query, scope, None, path)
+    except Exception as exc:  # noqa: BLE001 - never break the search response
+        extras["fallback_reason"] = f"delegate_error:{type(exc).__name__}"
+        return extras
+    extras["mode_used"] = "delegate"
+    extras["delegate"] = {"run_id": info["run_id"], "state": info["state"], "preset": info["preset"]}
+    extras.pop("fallback_reason", None)
+    return extras
 
 
 def _public(extras: dict) -> dict:

@@ -105,7 +105,8 @@ def memory_search(query: str, pipeline: PipelineT = "auto", max_results: int = 1
     scope: opcional, ex. "projeto:<slug>" ou "area:<Area>".
     client: opcional, identifica quem chamou (ex. "hermes", "claude_code", "codex", "opencode").
     mode: context (padrão, contexto compacto), answer (resposta curta com fontes por modelo escolhido
-    pelo router; cai para context se não houver modelo/fundamentação) ou delegate (ainda = context)."""
+    pelo router; cai para context se não houver modelo/fundamentação) ou delegate (com ANAMNESIA_DELEGATE=1 e
+    projeto resolvível cria um run do orquestrador e devolve `delegate.run_id`; senão = context)."""
     return _search(query, pipeline, max_results, scope, client=client, mode=mode)
 
 

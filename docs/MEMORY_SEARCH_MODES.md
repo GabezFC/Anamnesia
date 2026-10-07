@@ -6,7 +6,7 @@ Implementação: `app/routing/answer.py`. Spec: nota do vault `anamnesia-model-r
 |---|---|
 | `context` (padrão) | Idêntico ao anterior. Nenhum código de routing é carregado; chaves de resposta inalteradas. |
 | `answer` | Recuperação normal → router escolhe modelo **usável** → resposta curta com fontes `[n]` → checagem de fundamentação sem LLM → escalonamento → fallback para contexto. |
-| `delegate` | Por ora `mode_used='context'`, `fallback_reason='delegate_not_implemented'` (Fase 11). |
+| `delegate` | Com `ANAMNESIA_DELEGATE=1` + projeto resolvível: `mode_used='delegate'`, `delegate.run_id` (ver ORCHESTRATION.md). Senão `mode_used='context'`, `fallback_reason='delegate_not_implemented'` (+ `delegate_status='delegate_disabled'`), `delegate_no_project` ou `delegate_error:<Tipo>`. |
 
 ## Interfaces
 - **MCP**: `memory_search(query, pipeline, max_results, scope, client, mode='context')` — `mode` é o único campo novo, opcional; o toolset padrão continua com 1 tool.

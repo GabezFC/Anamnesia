@@ -150,3 +150,107 @@ class InProcessModelLauncher:
 
     def is_alive(self, session_id: str) -> bool:
         return bool(self.sessions.get(session_id, {}).get("alive"))
+
+
+class _EnvInjectingBackend:
+    """Wraps a PtyBackend so ONE spawn can receive extra env vars (thread-local, set by TerminalLauncher
+    around `TerminalManager.create`, which has no env-override parameter). Delegates everything else."""
+
+    def __init__(self, inner):
+        self._inner = inner
+        self._tls = threading.local()
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def spawn(self, argv, cwd, env, rows, cols):
+        extra = getattr(self._tls, "extra", None) or {}
+        return self._inner.spawn(argv, cwd, {**env, **extra}, rows, cols)
+
+
+class TerminalLauncher:
+    """SessionLauncher over `app.terminals.manager.TerminalManager` (one PTY session per step attempt).
+
+    - launch(): creates a session in `cwd` for the profile (`profile_id`, else `default_profile_id`), injecting
+      ONLY `ANAMNESIA_*` env overrides (anything else is refused: no secret/env smuggling). Session limit or
+      missing profile/command raise (the orchestrator turns that into a failed attempt).
+    - send(): writes the prompt followed by `submit` (default Enter). The role answers through the step
+      directory (`result.md` + `status.json`, see module docstring); nothing is parsed from terminal output.
+    - is_alive(): False once the process exited, the session vanished, or it ran past `max_session_s`
+      (the over-age session is closed on the spot, so a hung agent cannot leak a PTY).
+    - Any failure inside launch/send closes the session before re-raising; close() is idempotent.
+    """
+
+    ENV_PREFIX = "ANAMNESIA_"
+
+    def __init__(self, manager, profiles: dict | None = None, default_profile_id: str | None = "shell",
+                 max_session_s: float | None = 900.0, submit: str = "\r", clock=time.monotonic):
+        self.manager = manager
+        if not isinstance(getattr(manager, "backend", None), _EnvInjectingBackend):
+            manager.backend = _EnvInjectingBackend(manager.backend)
+        self._backend: _EnvInjectingBackend = manager.backend
+        self._profiles = profiles
+        self.default_profile_id = default_profile_id
+        self.max_session_s = max_session_s
+        self.submit = submit
+        self._clock = clock
+        self._started: dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def _profile(self, profile_id):
+        if self._profiles is None:
+            from app.terminals.profiles import load_profiles
+            self._profiles = load_profiles()
+        pid = profile_id or self.default_profile_id
+        if pid not in self._profiles:
+            raise ValueError(f"unknown terminal profile: {pid}")
+        return self._profiles[pid]
+
+    def launch(self, project_id, profile_id, env_overrides, cwd) -> str:
+        bad = [k for k in env_overrides if not str(k).startswith(self.ENV_PREFIX)]
+        if bad:
+            raise ValueError(f"env override outside {self.ENV_PREFIX}*: {sorted(bad)}")
+        from app.terminals.projects import Project
+        import os
+        profile = self._profile(profile_id)
+        project = Project(project_id or "orchestration", os.path.basename(os.path.normpath(cwd)) or "project",
+                          str(cwd), time.time())
+        self._backend._tls.extra = {str(k): str(v) for k, v in env_overrides.items()}
+        try:
+            session = self.manager.create(project, profile)
+        finally:
+            self._backend._tls.extra = None
+        sid = session.id
+        with self._lock:
+            self._started[sid] = self._clock()
+        return sid
+
+    def send(self, session_id: str, text: str) -> None:
+        try:
+            if not self.is_alive(session_id):
+                raise RuntimeError("terminal session is not alive")
+            self.manager.write(session_id, text.replace("\r\n", "\n").rstrip("\n") + self.submit)
+        except Exception:
+            self.close(session_id)
+            raise
+
+    def is_alive(self, session_id: str) -> bool:
+        try:
+            s = self.manager.get(session_id)
+        except KeyError:
+            return False
+        if s.state != "active":
+            return False
+        started = self._started.get(session_id)
+        if self.max_session_s is not None and started is not None and self._clock() - started > self.max_session_s:
+            self.close(session_id)
+            return False
+        return True
+
+    def close(self, session_id: str) -> None:
+        try:
+            self.manager.close(session_id, "orchestration")
+        except Exception:  # noqa: BLE001 - closing must never raise into the orchestrator
+            pass
+        with self._lock:
+            self._started.pop(session_id, None)
