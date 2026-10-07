@@ -58,7 +58,7 @@ let tokenPromise = null;
 /** GET /config/token is loopback-only (require_localhost): it only ever succeeds when this
  * dashboard is itself being served from 127.0.0.1/::1, which is exactly the caller the write path
  * below exists for. Fetched once per page load and reused for every subsequent write. */
-function getLocalToken() {
+export function getLocalToken() {
   if (!tokenPromise) tokenPromise = api('/config/token').then((r) => r.token)
     .catch((e) => { tokenPromise = null; throw e; });
   return tokenPromise;

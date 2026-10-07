@@ -17,23 +17,57 @@ import {
 } from './pages-data.js';
 import { renderConfig, renderResults } from './pages-config.js';
 import { mountSetup, renderSetup } from './pages-setup.js';
+import { renderWorkspace, mountWorkspace, unmountWorkspace, workspaceActions } from './pages-workspace.js';
+import { renderConnections, mountConnections, unmountConnections } from './pages-connections.js';
+import { renderOrchestration, mountOrchestration, unmountOrchestration } from './pages-orchestration.js';
+import { renderAnaCosts, mountAnaCosts, unmountAnaCosts } from './pages-anacosts.js';
+import { renderHealthBanner, installPalette } from './shell-extras.js';
 
+// Anamnesia shell: Workspace is the home page. The four top entries are the product; every
+// pre-existing benchmark/observability page is kept and re-routed under Custos > "Benchmark avançado".
+const NAV_MAIN = [
+  ['workspace', 'Workspace', '▦'], ['connections', 'Conexões', '⇌'], ['config', 'Config', '⚙'], ['costs', 'Custos', '$'],
+];
+// Config-adjacent gateway pages (formerly "Configuração" and "Setup").
+const NAV_CONFIG_SUB = [['setup', 'Setup do gateway', '⚒'], ['config-active', 'Configuração ativa', '☰']];
 const NAV = [
   ['dashboard', 'Dashboard', '◎'], ['benchmarks', 'Benchmarks', '⇄'], ['pipeline', 'Pipeline', '⇉'],
-  ['tokens', 'Tokens', '▤'], ['latency', 'Latência', '◷'], ['costs', 'Custos', '$'],
+  ['tokens', 'Tokens', '▤'], ['latency', 'Latência', '◷'], ['costs-model', 'Custo por modelo', '$'],
   ['results', 'Resultados', '✓'],
   ['projects', 'Projetos', '▣'], ['memory', 'Memória', '❖'], ['agents', 'Agentes', '◈'],
   ['models', 'Modelos', '◐'],
-  ['history', 'Histórico', '↻'], ['config', 'Configuração', '⚙'], ['setup', 'Setup', '⚒'],
+  ['history', 'Histórico', '↻'],
 ];
 const NAV_GROUPS = [
   ['Observabilidade', 0, 6],
   ['Evidência', 6, 7],
   ['Entidades', 7, 11],
-  ['Sistema', 11, 14],
+  ['Sistema', 11, 12],
 ];
+// Old hash ids that moved: keep bookmarks working where the meaning is unchanged.
+const ALIASES = { 'bench-costs': 'costs-model' };
 
 const PAGES = {
+  workspace: {
+    title: 'Workspace', wide: true,
+    sub: 'Projetos, terminais e arquivos no mesmo lugar. Os terminais continuam rodando no servidor ao trocar de página.',
+    render: renderWorkspace, mount: mountWorkspace, unmount: unmountWorkspace, needs: [],
+  },
+  connections: {
+    title: 'Conexões',
+    sub: 'Agentes, modelos e servidores MCP. As chaves são enviadas uma vez ao servidor e nunca são exibidas de volta.',
+    render: renderConnections, mount: mountConnections, unmount: unmountConnections, needs: [],
+  },
+  config: {
+    title: 'Config',
+    sub: 'Predefinições de subagentes: quais classes de modelo cada papel usa.',
+    render: renderOrchestration, mount: mountOrchestration, unmount: unmountOrchestration, needs: [],
+  },
+  costs: {
+    title: 'Custos',
+    sub: 'Livro de custos por chamada do Memory Gateway: medido, estimado ou indisponível — nunca inventado.',
+    render: renderAnaCosts, mount: mountAnaCosts, unmount: unmountAnaCosts, needs: [],
+  },
   dashboard: {
     title: 'Dashboard',
     sub: 'Visão geral dos pipelines de retrieval, com gasto real de tokens e comparação Baseline vs Otimizado.',
@@ -58,8 +92,8 @@ const PAGES = {
     title: 'Latência', sub: 'Decomposição por estágio do pipeline.',
     render: renderLatency, mount: mountLatency, needs: ['core'],
   },
-  costs: {
-    title: 'Custos', sub: 'Custo do modelo consumidor, do juiz, por query e por 1K tokens.',
+  'costs-model': {
+    title: 'Custo por modelo', sub: 'Benchmark avançado — custo do modelo consumidor, do juiz, por query e por 1K tokens.',
     render: renderCosts, mount: mountCosts, needs: ['core'],
   },
   results: {
@@ -88,8 +122,8 @@ const PAGES = {
     title: 'Histórico', sub: 'Séries temporais por sessão e run, ordenadas por created_at.',
     render: renderHistory, mount: mountHistory, unmount: unmountHistory, needs: ['core'],
   },
-  config: {
-    title: 'Configuração',
+  'config-active': {
+    title: 'Configuração ativa',
     sub: 'Configuração ativa, pipeline selecionado, flags de otimização, dataset e estado das runs.',
     render: renderConfig, needs: ['core', 'system', 'questions', 'latestRun'],
   },
@@ -118,7 +152,11 @@ ctx.refreshCore = async () => {
 };
 
 const $ = (s) => document.querySelector(s);
-const route = () => (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0];
+const route = () => {
+  const id = (location.hash.replace(/^#\/?/, '') || 'workspace').split('?')[0];
+  return ALIASES[id] || id;
+};
+const BENCH_IDS = NAV.map((n) => n[0]);
 
 /* ---------------------------------------------------------------- shell */
 function renderShell() {
@@ -139,13 +177,17 @@ function renderShell() {
         </div>
       </header>
       <nav id="sidebar" aria-label="Navegação principal">
+        <div class="nav-group">Anamnesia</div>
+        ${NAV_MAIN.map(navLink).join('')}
         ${NAV_GROUPS.map(([label, a, b]) =>
-    `<div class="nav-group">${esc(label)}</div>${NAV.slice(a, b).map(navLink).join('')}`).join('')}
-        <div class="nav-foot">Somente leitura · nenhum dado é inventado</div>
+    `<div class="nav-group nav-sub">Benchmark avançado · ${esc(label)}</div>${NAV.slice(a, b).map(navLink).join('')}`).join('')}
+        <div class="nav-group nav-sub">Benchmark avançado · Gateway</div>${NAV_CONFIG_SUB.map(navLink).join('')}
+        <div class="nav-foot">Atalhos: Ctrl+K (fora do terminal)</div>
       </nav>
       <div id="scrim"></div>
       <main id="main" tabindex="-1">
-        <div class="page-head"><h1 id="page-title">…</h1><p id="page-sub"></p></div>
+        <div id="health-banner" class="health-banner" role="region" aria-label="Avisos do servidor" aria-live="polite" hidden></div>
+        <div class="page-head" id="page-head"><h1 id="page-title">…</h1><p id="page-sub"></p></div>
         <div id="page-body"></div>
       </main>
     </div>`;
@@ -169,6 +211,7 @@ async function refreshHeader() {
   try {
     const h = await API.getHealth();
     ctx.health = h;
+    renderHealthBanner(h.warnings);
     const ok = h.status === 'ok' && h.vault_exists !== false;
     pill.className = `pill ${ok ? 'ok' : 'warn'}`;
     pill.innerHTML = `<span class="dot"></span>${esc(h.status)}${h.vault_exists === false ? ' · vault ausente' : ''}`;
@@ -245,11 +288,15 @@ let activePage = null;
 async function navigate() {
   const id = route();
   const known = Boolean(PAGES[id]);
-  const page = PAGES[id] || PAGES.dashboard;
+  const page = PAGES[id] || PAGES.workspace;
   const token = ++rendering;
 
-  document.querySelectorAll('[data-nav]').forEach((a) =>
-    a.classList.toggle('active', a.dataset.nav === (known ? id : 'dashboard')));
+  document.querySelectorAll('[data-nav]').forEach((a) => {
+    const on = a.dataset.nav === (known ? id : 'workspace');
+    a.classList.toggle('active', on);
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  document.body.classList.toggle('page-wide', Boolean(page.wide));
   $('#page-title').textContent = page.title;
   $('#page-sub').textContent = page.sub;
   document.body.classList.remove('nav-open');
@@ -340,6 +387,11 @@ window.addEventListener('unhandledrejection', (ev) => {
 });
 
 renderShell();
+installPalette(() => [
+  ...NAV_MAIN.map(([id, label]) => ({ id: `go-${id}`, label: `Ir para ${label}`, run: () => { location.hash = `#/${id}`; } })),
+  ...NAV.map(([id, label]) => ({ id: `go-${id}`, label: `Benchmark avançado: ${label}`, run: () => { location.hash = `#/${id}`; } })),
+  ...(activePage === PAGES.workspace ? workspaceActions() : []),
+]);
 window.addEventListener('hashchange', navigate);
 refreshHeader();
 navigate();
