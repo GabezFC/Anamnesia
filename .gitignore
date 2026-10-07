@@ -127,3 +127,4 @@ reports/
 spikes/**/vendor/
 spikes/**/shots/
 spikes/**/node_modules/
+spikes/**/run*.log

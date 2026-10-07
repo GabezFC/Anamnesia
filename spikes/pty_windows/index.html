@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><title>pty spike</title>
+<link rel="stylesheet" href="/vendor/xterm.css">
+<style>html,body{margin:0;height:100%;background:#000}#t{position:absolute;inset:0}</style></head>
+<body><div id="t"></div>
+<script src="/vendor/xterm.js"></script><script src="/vendor/addon-fit.js"></script>
+<script>
+const q=new URLSearchParams(location.search), tok=q.get('t'), cmd=q.get('cmd')||'cmd';
+const term=new Terminal({fontFamily:'Consolas, monospace',fontSize:14,cursorBlink:true,allowProposedApi:true});
+const fit=new FitAddon.FitAddon(); term.loadAddon(fit); term.open(document.getElementById('t')); fit.fit();
+window.term=term; window.fit=fit; window.wsState='connecting'; window.rx=0; window.closeInfo=null;
+const ws=new WebSocket('ws://127.0.0.1:'+location.port+'/ws?cmd='+encodeURIComponent(cmd)+'&rows='+term.rows+'&cols='+term.cols,['tok.'+tok]);
+ws.binaryType='arraybuffer'; window.ws=ws;
+const dec=new TextDecoder();
+ws.onopen=()=>{window.wsState='open'};
+ws.onmessage=e=>{window.rx+=1; term.write(typeof e.data==='string'?e.data:new Uint8Array(e.data))};
+ws.onclose=e=>{window.wsState='closed';window.closeInfo=[e.code,e.reason]};
+term.onData(d=>{if(ws.readyState===1)ws.send(JSON.stringify({t:'in',d}))});
+function sendSize(){fit.fit(); if(ws.readyState===1)ws.send(JSON.stringify({t:'rs',rows:term.rows,cols:term.cols}))}
+window.addEventListener('resize',sendSize); window.sendSize=sendSize;
+</script></body></html>
