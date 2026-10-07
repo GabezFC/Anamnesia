@@ -1,6 +1,6 @@
 # R1 — Pesquisa externa: memória, contexto e economia de tokens
 
-**Escopo:** só pesquisa (sem código). Vault `C:/Users/fonse/Cérebro_AI` e repo `C:/Users/fonse/Projetos_AI/Memory_Gateway` são somente leitura.
+**Escopo:** só pesquisa (sem código). Vault `<HOME>/Cérebro_AI` e repo `<HOME>/Projetos_AI/Memory_Gateway` são somente leitura.
 **Hardware:** RTX 3060 12 GB + Ollama local. **Prioridade:** barato, local, sem LLM pago primeiro.
 **Regra de evidência:** tudo que não foi confirmado na fonte está marcado **NÃO VERIFICADO**. Nenhuma estrela/data/licença inventada.
 **Data da coleta:** 02/10/2026.

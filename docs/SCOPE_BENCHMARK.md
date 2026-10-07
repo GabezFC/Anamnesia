@@ -2,7 +2,7 @@
 
 Gerado em 2026-09-29, worktree `h1-bench`. Dados de duas fontes, ambas read-only:
 
-1. `benchmark.db` principal (`C:\Users\fonse\Projetos_AI\Memory_Gateway\benchmark.db`, 6.011 runs,
+1. `benchmark.db` principal (`<HOME>\Projetos_AI\Memory_Gateway\benchmark.db`, 6.011 runs,
    118 MB) — via `scripts/audit_pipeline_by_scope.py` (novo, ao lado de `scripts/audit_pipeline.py`,
    reaproveita a mesma lógica de back-fill de `total_tokens_spent`/`token_amplification`).
 2. Runs novos, **zero custo de API**, gerados agora com `scripts/bench_optimizer.py` nos dois
@@ -110,8 +110,8 @@ python scripts/bench_optimizer.py \
 # vault=data/synthetic_vault (520 notas), 120 perguntas (110 respondíveis), 4 arms x 120 = 480 buscas
 
 python scripts/bench_optimizer.py \
-  --vault "C:\Users\fonse\Cérebro_AI" \
-  --questions "C:\Users\fonse\Projetos_AI\Memory_Gateway\benchmark\questions.json" \
+  --vault "<HOME>\Cérebro_AI" \
+  --questions "<HOME>\Projetos_AI\Memory_Gateway\benchmark\questions.json" \
   --out reports/bench_optimizer_real.json
 # vault real, 92 notas, 12 perguntas (10 respondíveis) — amostra pequena, ver aviso abaixo
 ```

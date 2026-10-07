@@ -128,3 +128,6 @@ spikes/**/vendor/
 spikes/**/shots/
 spikes/**/node_modules/
 spikes/**/run*.log
+
+# private-vault derived artifact (found by the publication scan): keep local only
+docs/jev_snippet_check.json

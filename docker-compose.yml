@@ -1,0 +1,27 @@
+# Local use only. The port is published on the HOST loopback (127.0.0.1) and nowhere else.
+# Do NOT change it to "8000:8000" (that exposes the service to your whole network).
+services:
+  anamnesia:
+    build: .
+    image: anamnesia:local
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      # Bound to 0.0.0.0 INSIDE the container (needed for the port mapping); the host side is loopback-only.
+      MG_HOST: "0.0.0.0"
+      # Host-header guard (DNS-rebinding protection) accepts these names. Add yours only if you know why.
+      MG_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      ANAMNESIA_HOME: /data
+      # Terminals are DISABLED by default here: the app only enables them on a loopback bind, and the
+      # container binds 0.0.0.0. Do not set ANAMNESIA_ALLOW_REMOTE_TERMINALS=1 unless you accept
+      # shell access for anything that can reach the published port.
+      # TYPESAFE_API_KEY: ""        # optional, only for the paid judge; prefer an env_file you keep private
+      # MEMORY_GATEWAY_VAULT: /vault
+    volumes:
+      - anamnesia-data:/data
+      # Your own vault, read-only. Uncomment BOTH this line and MEMORY_GATEWAY_VAULT above:
+      # - /path/to/your/vault:/vault:ro
+    restart: unless-stopped
+
+volumes:
+  anamnesia-data:

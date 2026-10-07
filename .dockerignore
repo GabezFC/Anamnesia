@@ -1,0 +1,14 @@
+# Docker build context: allow-list style. Nothing private (vault-derived data, DBs, logs, secrets) may enter an image.
+**
+!app/
+!config/
+!memory_gateway/
+!anamnesia/
+!frontend/
+!data/synthetic_vault/
+!pyproject.toml
+!README.md
+!LICENSE
+!requirements.txt
+**/__pycache__/
+**/*.pyc

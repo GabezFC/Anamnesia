@@ -13,13 +13,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.12', '3.14']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.14'
+          python-version: ${{ matrix.python }}
       - name: Install Python dependencies
         run: pip install -r requirements.txt -r requirements-dev.txt
       - name: Python tests

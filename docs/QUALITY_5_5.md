@@ -8,7 +8,7 @@ onde algo não foi medido, está escrito "não medido". JSON bruto de cada corri
 Corpora usados:
 - **synthetic** — `data/synthetic_vault` (bundled) + `benchmark/synthetic_questions.json` (120
   perguntas, 110 respondíveis, 10 `qclass=multi_hop`).
-- **real** — vault `C:/Users/fonse/Cérebro_AI` (somente leitura) + `benchmark/questions.json` do
+- **real** — vault `<HOME>/Cérebro_AI` (somente leitura) + `benchmark/questions.json` do
   repositório principal (12 perguntas, 10 respondíveis, 1 "cruzamento"/multi-fonte: q09).
 
 Bug encontrado e corrigido durante a medição: `data/vault_mirror` é compartilhado entre qualquer

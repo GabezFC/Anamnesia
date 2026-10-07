@@ -123,7 +123,7 @@ and ranking caches. Keys are namespaced so a benchmark arm can never read anothe
 
 ## 3. Requirements
 
-- **Python 3.14** (`requirements.txt` versions are pinned and verified against it)
+- **Python 3.12 or newer** (the full test suite passes on 3.12 and 3.14; `requirements.txt` versions are pinned)
 - A **JEV / TypeSafe API key** — only needed for the pipelines that use the paid judge. The
   baseline pipeline, the whole test suite and the free-stage validator run without any key.
 - Optional: [`graphify`](https://pypi.org/project/graphify/) CLI for graph extraction; the
