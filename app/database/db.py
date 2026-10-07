@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
 );
 CREATE TABLE IF NOT EXISTS jev_cache (key TEXT PRIMARY KEY, value TEXT, created_at REAL);
 CREATE TABLE IF NOT EXISTS configs (hash TEXT PRIMARY KEY, json TEXT);
+CREATE TABLE IF NOT EXISTS budgets (period TEXT PRIMARY KEY, ceiling_usd REAL, updated_at REAL);
 """
 # Columns added after the original schema shipped (§5.3). Added via ALTER TABLE, guarded by
 # PRAGMA table_info so existing databases migrate in place without losing data:
@@ -57,7 +58,11 @@ CREATE TABLE IF NOT EXISTS configs (hash TEXT PRIMARY KEY, json TEXT);
 #                        written before this migration) OR config_hash (new rows), never both.
 #   context_encoding  -> NULL/"" for plain text (old rows, or compression disabled), "zlib+b64"
 #                        when `context` holds base64(zlib(text)).
-RUNS_MIGRATED_COLUMNS = (("config_hash", "TEXT"), ("context_encoding", "TEXT"))
+#   project / terminal_session_id / cost_origin -> per-call cost ledger (Anamnesia "Custos"):
+#                        project from the search scope, terminal session from env MG_TERMINAL_SESSION,
+#                        cost_origin = measured | estimated | unavailable.
+RUNS_MIGRATED_COLUMNS = (("config_hash", "TEXT"), ("context_encoding", "TEXT"),
+                         ("project", "TEXT"), ("terminal_session_id", "TEXT"), ("cost_origin", "TEXT"))
 
 LIST_COLUMNS = ("run_id, session_id, created_at, question_id, query, pipeline, agent, provider, model, mode,"
                 " repetition, warmup, threshold, jev_mode, error, metrics_json")
@@ -84,6 +89,9 @@ class Database:
         for col, decl in RUNS_MIGRATED_COLUMNS:
             if col not in existing:
                 self._exec(f"ALTER TABLE runs ADD COLUMN {col} {decl}")
+        # indexes on migrated columns can only be created after the ALTER above
+        self._exec("CREATE INDEX IF NOT EXISTS runs_project_created ON runs(project, created_at)")
+        self._exec("CREATE INDEX IF NOT EXISTS runs_created_at ON runs(created_at)")
 
     def _exec(self, sql: str, args: tuple = ()) -> sqlite3.Cursor:
         with self._lock:
@@ -120,14 +128,36 @@ class Database:
         else:
             row.setdefault("context_encoding", None)
 
+    @staticmethod
+    def _fill_ledger_fields(row: dict[str, Any]) -> None:
+        """Derive project / terminal_session_id / cost_origin when the caller did not set them."""
+        import os
+
+        from app.services.costs import cost_origin_for, project_from_scope
+        m = row.get("metrics_json")
+        if isinstance(m, str):
+            try:
+                m = json.loads(m)
+            except ValueError:
+                m = None
+        m = m if isinstance(m, dict) else {}
+        if row.get("project") is None:
+            row["project"] = project_from_scope(m.get("scope"))
+        if row.get("terminal_session_id") is None:
+            row["terminal_session_id"] = os.environ.get("MG_TERMINAL_SESSION") or None
+        if row.get("cost_origin") is None:
+            row["cost_origin"] = cost_origin_for(m, row.get("pipeline"))
+
     def save_run(self, row: dict[str, Any], candidates: list[dict] | None = None) -> None:
         row = dict(row)
+        self._fill_ledger_fields(row)
         self._dedup_config(row)
         self._maybe_compress_context(row)
         cols = ["run_id", "session_id", "created_at", "question_id", "query", "pipeline", "agent", "provider",
                 "model", "mode", "repetition", "warmup", "order_index", "threshold", "jev_mode", "jev_model",
                 "cache_enabled", "config_json", "config_hash", "metrics_json", "sources_json",
-                "context", "context_encoding", "answer", "error"]
+                "context", "context_encoding", "answer", "error",
+                "project", "terminal_session_id", "cost_origin"]
         vals = []
         for c in cols:
             v = row.get(c)
@@ -441,3 +471,43 @@ class Database:
 
     def cache_put(self, key: str, value: dict) -> None:
         self._exec("INSERT OR REPLACE INTO jev_cache VALUES (?,?,?)", (key, json.dumps(value), time.time()))
+
+    # costs ledger read helpers (additive) ---------------------------------------
+    COST_COLUMNS = ("rowid AS _rowid, run_id, created_at, project, terminal_session_id, cost_origin, agent, "
+                    "provider, model, mode, pipeline, jev_model, query, error, metrics_json")
+
+    def cost_rows(self, since: float | None = None, project: str | None = None,
+                  limit: int | None = None, before: tuple[float, str] | None = None,
+                  ascending: bool = False) -> list[dict]:
+        """Runs for the ledger, newest first. `before` = keyset cursor (created_at, run_id)."""
+        where, args = [], []
+        if since is not None:
+            where.append("created_at >= ?"); args.append(since)
+        if project:
+            where.append("project = ?"); args.append(project)
+        if before is not None:
+            where.append("(created_at < ? OR (created_at = ? AND run_id < ?))")
+            args += [before[0], before[0], before[1]]
+        sql = f"SELECT {self.COST_COLUMNS} FROM runs"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY created_at ASC, run_id ASC" if ascending else " ORDER BY created_at DESC, run_id DESC"
+        if limit is not None:
+            sql += " LIMIT ?"; args.append(int(limit))
+        return self.query(sql, tuple(args))
+
+    def cost_rows_after_rowid(self, rowid: int) -> list[dict]:
+        return self.query(f"SELECT {self.COST_COLUMNS} FROM runs WHERE rowid > ? ORDER BY rowid ASC", (rowid,))
+
+    def max_run_rowid(self) -> int:
+        return int(self.query("SELECT COALESCE(MAX(rowid), 0) AS m FROM runs")[0]["m"])
+
+    def get_budgets(self) -> dict[str, float | None]:
+        return {r["period"]: r["ceiling_usd"] for r in self.query("SELECT period, ceiling_usd FROM budgets")}
+
+    def set_budget(self, period: str, ceiling_usd: float | None) -> None:
+        if ceiling_usd is None:
+            self._exec("DELETE FROM budgets WHERE period=?", (period,))
+        else:
+            self._exec("INSERT OR REPLACE INTO budgets (period, ceiling_usd, updated_at) VALUES (?,?,?)",
+                       (period, float(ceiling_usd), time.time()))

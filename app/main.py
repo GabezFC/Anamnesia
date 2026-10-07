@@ -89,6 +89,8 @@ def create_app() -> FastAPI:
         return resp
 
     app.include_router(routes.router)
+    from app.api import costs as costs_api  # Anamnesia costs ledger (read-only + guarded budget)
+    app.include_router(costs_api.router)
     if FRONTEND.exists():
         app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 
