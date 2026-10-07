@@ -173,6 +173,49 @@ class _PosixPtyHandle:
         with self._lock:
             return not self._reap(False)
 
+    def _snapshot_tree(self) -> set[int]:
+        """PIDs belonging to this session: the descendants of the leader, plus (Linux) every process
+        whose session id is the leader's. Interactive shells run background jobs in their OWN process
+        group, so killpg(leader) alone misses them (reproduced on Linux CI)."""
+        pids: set[int] = set()
+        edges: dict[int, list[int]] = {}
+        sids: dict[int, int] = {}
+        if os.path.isdir("/proc"):
+            for name in os.listdir("/proc"):
+                if not name.isdigit():
+                    continue
+                try:
+                    with open(f"/proc/{name}/stat") as f:
+                        rest = f.read().rsplit(")", 1)[1].split()
+                    ppid, sid = int(rest[1]), int(rest[3])
+                except (OSError, ValueError, IndexError):
+                    continue
+                edges.setdefault(ppid, []).append(int(name))
+                sids[int(name)] = sid
+        else:  # macOS and other POSIX without /proc
+            import subprocess
+
+            try:
+                out = subprocess.run(["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True,
+                                     timeout=5).stdout
+            except (OSError, subprocess.SubprocessError):
+                out = ""
+            for line in out.splitlines():
+                parts = line.split()
+                if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                    edges.setdefault(int(parts[1]), []).append(int(parts[0]))
+        stack = [self.pid]
+        while stack:
+            cur = stack.pop()
+            for child in edges.get(cur, ()):
+                if child not in pids:
+                    pids.add(child)
+                    stack.append(child)
+        pids.update(p for p, s in sids.items() if s == self.pid)
+        pids.discard(self.pid)
+        pids.discard(os.getpid())
+        return pids
+
     def terminate_tree(self) -> None:
         import signal
         import time
@@ -181,6 +224,7 @@ class _PosixPtyHandle:
             if self._closed:
                 return
             self._closed = True
+            stragglers = self._snapshot_tree()  # taken BEFORE killing: orphans lose their lineage
             for sig in (signal.SIGHUP, signal.SIGKILL):
                 try:
                     os.killpg(self.pid, sig)  # child is a session leader => pgid == pid
@@ -191,8 +235,14 @@ class _PosixPtyHandle:
                     if self._reap(False):
                         break
                     time.sleep(0.02)
-                if self.exit_code is not None:
-                    break
+                # No early exit after SIGHUP: the session leader may exit on hangup while a
+                # background job in the same group survives (reproduced on Linux). The group
+                # always gets the final SIGKILL, which is harmless when it is already empty.
+            for pid in stragglers:  # background jobs in their own process group / session members
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
             try:
                 os.close(self._fd)
             except OSError:
