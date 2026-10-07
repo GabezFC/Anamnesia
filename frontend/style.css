@@ -321,6 +321,11 @@ button { cursor: pointer; }
 button:hover:not(:disabled) { background: var(--surface-2); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 button.primary { background: var(--info); border-color: var(--info); color: #061020; font-weight: 650; }
+/* The generic button:hover rule would otherwise repaint .primary with a dark surface while keeping
+   its dark text (illegible 'Salvar'); keep the accent fill and the dark ink in every state. */
+button.primary:hover:not(:disabled) { background: #7BB6FB; border-color: #7BB6FB; color: #061020; }
+button.primary:active:not(:disabled) { background: #3F86E0; border-color: #3F86E0; color: #061020; }
+button.primary:disabled { background: var(--info); border-color: var(--info); color: #061020; opacity: .55; }
 select { padding-right: var(--s5); }
 
 /* Link-styled button: used for drill-downs, keyboard accessible unlike a bare <a>. */
@@ -648,3 +653,7 @@ pre.block {
 table.data tr.row-detail td { background: var(--bg-1); white-space: normal; border-bottom: 1px solid var(--line-0); }
 .rejected-list { margin: 0; padding-left: var(--s5); color: var(--text-1); font-size: var(--fs-sm); }
 .rejected-list li { margin-bottom: var(--s2); }
+
+/* PT/EN language toggle (i18n.js) */
+#header .lang-toggle { font: inherit; font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line, #2a3340); background: transparent; color: inherit; cursor: pointer; }
+#header .lang-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

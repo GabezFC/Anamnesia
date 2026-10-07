@@ -3,6 +3,7 @@
 // "indisponível", never as 0. Query text is only present when the server is not in metrics-only mode.
 import { esc } from './format.js';
 import * as A from './anamnesia-api.js';
+import { t as tx } from './i18n.js';
 
 let alive = false;
 let S = null;
@@ -35,9 +36,9 @@ export function renderAnaCosts() {
         <div class="cs-more"><button type="button" id="cs-more" hidden>Carregar mais</button>
           <span id="cs-count" class="cs-muted" aria-live="polite"></span></div>
       </div></section>
-    <section class="panel" aria-labelledby="cs-rt-h"><div class="panel-head"><h2 id="cs-rt-h">Model Routing</h2>
-      <span class="panel-sub">só o que foi medido em benchmark — execuções simuladas não contam</span></div>
-      <div class="panel-body" id="cs-routing" aria-live="polite">Carregando…</div></section>
+    <section class="panel" aria-labelledby="cs-rt-h"><div class="panel-head"><h2 id="cs-rt-h">${esc(tx('cs.rt.title'))}</h2>
+      <span class="panel-sub">${esc(tx('cs.rt.sub'))}</span></div>
+      <div class="panel-body" id="cs-routing" aria-live="polite">${esc(tx('cs.rt.loading'))}</div></section>
     <div id="cs-drawer-slot"></div>
   </div>`;
 }
@@ -68,12 +69,12 @@ export async function mountAnaCosts(root) {
 }
 
 // ---- Model Routing (GET /api/costs/routing/summary): line comment on purpose (see tests/test_frontend_routing_section.py)
-const pct = (lv) => (A.lvValue(lv) === null ? 'indisponível' : (A.lvValue(lv) * 100).toFixed(1) + '%');
+const pct = (lv) => (A.lvValue(lv) === null ? tx('cs.rt.unavailable') : (A.lvValue(lv) * 100).toFixed(1) + '%');
 const VERDICT_CLASS = { 'SIM': 'bud-ok', 'NÃO': 'bud-exceeded' };
 
-const tierHead = (t) => '<th scope="col" class="num">Tier ' + esc(t) + '</th>';
+const tierHead = (tier) => '<th scope="col" class="num">' + esc(tx('cs.rt.tier', { t: tier })) + '</th>';
 const matrixRow = (d, label, matrix, tiers) => '<tr><th scope="row" class="rowhead">' + esc(label) + '</th>'
-  + tiers.map((t) => '<td class="num">' + esc((matrix[d] || {})[t] || 0) + '</td>').join('') + '</tr>';
+  + tiers.map((tier) => '<td class="num">' + esc((matrix[d] || {})[tier] || 0) + '</td>').join('') + '</tr>';
 const stratRow = (k, s) => '<tr><th scope="row" class="rowhead">' + esc(k) + '</th><td class="num">' + esc(s.n) + '</td>'
   + '<td>' + esc(pct(s.success_rate)) + ' ' + originChip(s.success_rate) + '</td>'
   + '<td class="num">' + esc(money(s.cost_per_solved_task)) + ' ' + originChip(s.cost_per_solved_task) + '</td>'
@@ -81,36 +82,36 @@ const stratRow = (k, s) => '<tr><th scope="row" class="rowhead">' + esc(k) + '</
 
 function routingMatrixHtml(matrix) {
   const tiers = [...new Set(Object.values(matrix).flatMap((m) => Object.keys(m || {})))].sort();
-  if (!tiers.length) return '<p class="cs-muted">matriz indisponível</p>';
-  const dtxt = { easy: 'fácil', medium: 'média', hard: 'difícil' };
+  if (!tiers.length) return '<p class="cs-muted">' + esc(tx('cs.rt.matrixNone')) + '</p>';
+  const dtxt = { easy: tx('cs.rt.diff.easy'), medium: tx('cs.rt.diff.medium'), hard: tx('cs.rt.diff.hard') };
   return '<div class="table-scroll"><table class="data" id="cs-rt-matrix">'
-    + '<caption>Tarefas por dificuldade × tier escolhido (contagem medida)</caption>'
-    + '<thead><tr><th scope="col">Dificuldade</th>' + tiers.map(tierHead).join('') + '</tr></thead><tbody>'
+    + '<caption>' + esc(tx('cs.rt.matrixCaption')) + '</caption>'
+    + '<thead><tr><th scope="col">' + esc(tx('cs.rt.difficulty')) + '</th>' + tiers.map(tierHead).join('') + '</tr></thead><tbody>'
     + ['easy', 'medium', 'hard'].map((d) => matrixRow(d, dtxt[d], matrix, tiers)).join('') + '</tbody></table></div>';
 }
 
 function routingNoData(r, v) {
   const sim = Number(r && r.simulated_records) || 0;
-  const extra = sim ? ' (' + sim + ' execução(ões) simulada(s) ignoradas)' : '';
-  return '<p class="cs-muted"><b>O router paga o próprio custo? sem dados</b></p><p class="cs-muted">'
-    + esc((v.reason || 'nenhuma execução de roteamento registrada') + extra) + '</p>';
+  const extra = sim ? tx('cs.rt.simIgnored', { n: sim }) : '';
+  return '<p class="cs-muted"><b>' + esc([tx('cs.rt.question'), tx('cs.rt.nodata')].join(' ')) + '</b></p><p class="cs-muted">'
+    + esc((v.reason || tx('cs.rt.noRecords')) + extra) + '</p>';
 }
 
 export function routingHtml(r) {
   const v = (r && r.verdict) || {};
   if (!r || !r.has_data) return routingNoData(r, v);
-  const verdict = ['SIM', 'NÃO'].includes(v.value) ? v.value : 'sem dados';
+  const verdict = ['SIM', 'NÃO'].includes(v.value) ? v.value : tx('cs.rt.nodata');
   const net = (r.break_even || {}).net_savings || null;
-  const netTxt = net ? esc(money(net)) + ' líquido ' + originChip(net) : '';
+  const netTxt = net ? esc(money(net)) + esc(tx('cs.rt.net')) + originChip(net) : '';
   const strat = Object.entries(r.strategies || {}).map(([k, s]) => stratRow(k, s)).join('');
   const stratTable = strat ? '<div class="table-scroll"><table class="data" id="cs-rt-strat">'
-    + '<caption>Estratégias (origem de cada número ao lado)</caption><thead><tr><th scope="col">Estratégia</th>'
-    + '<th scope="col" class="num">N</th><th scope="col">Resolução</th><th scope="col" class="num">Custo/resolvida</th>'
-    + '<th scope="col">Escalonamento</th></tr></thead><tbody>' + strat + '</tbody></table></div>' : '';
-  return '<div class="metric"><div class="metric-title">O router paga o próprio custo?</div>'
+    + '<caption>' + esc(tx('cs.rt.stratCaption')) + '</caption><thead><tr><th scope="col">' + esc(tx('cs.rt.strategy')) + '</th>'
+    + '<th scope="col" class="num">' + esc(tx('cs.rt.n')) + '</th><th scope="col">' + esc(tx('cs.rt.resolution')) + '</th><th scope="col" class="num">' + esc(tx('cs.rt.costPerSolved')) + '</th>'
+    + '<th scope="col">' + esc(tx('cs.rt.escalation')) + '</th></tr></thead><tbody>' + strat + '</tbody></table></div>' : '';
+  return '<div class="metric"><div class="metric-title">' + esc(tx('cs.rt.question')) + '</div>'
     + '<div class="metric-figure"><span class="metric-value ' + esc(VERDICT_CLASS[verdict] || '') + '" id="cs-rt-verdict">' + esc(verdict) + '</span></div>'
     + '<div class="metric-foot">' + netTxt + '<span class="metric-context cs-muted">' + esc(v.reason || '') + '</span></div></div>'
-    + '<div class="metric"><div class="metric-title">Taxa de escalonamento (DYNAMIC_ROUTER)</div>'
+    + '<div class="metric"><div class="metric-title">' + esc(tx('cs.rt.escRate')) + '</div>'
     + '<div class="metric-figure"><span class="metric-value">' + esc(pct(r.escalation_rate)) + '</span></div>'
     + '<div class="metric-foot">' + originChip(r.escalation_rate) + '</div></div>'
     + routingMatrixHtml(r.difficulty_tier_matrix || {}) + stratTable;
@@ -125,7 +126,7 @@ async function loadRouting() {
     box.innerHTML = routingHtml(r);
   } catch (e) {
     if (!alive || mine !== S) return;
-    box.innerHTML = '<p class="cs-muted">' + esc(A.isUnavailable(e) ? 'sem dados (rota /api/costs/routing indisponível)' : e.message) + '</p>';
+    box.innerHTML = '<p class="cs-muted">' + esc(A.isUnavailable(e) ? tx('cs.rt.routeNa') : e.message) + '</p>';
   }
 }
 

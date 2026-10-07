@@ -17,9 +17,10 @@ def src() -> str:
 
 def test_section_reads_readonly_routing_endpoint():
     s = src()
-    assert "/api/costs/routing/summary" in s and "Model Routing" in s
-    assert "O router paga o próprio custo?" in s
-    assert "sem dados" in s and "SIM" in s and "NÃO" in s
+    assert "/api/costs/routing/summary" in s and "cs.rt.title" in s
+    i18n = (JS.parent / "i18n.js").read_text(encoding="utf-8")        # visible text now lives in the i18n dictionary
+    assert "Model Routing" in i18n and "O router paga o próprio custo?" in i18n and "sem dados" in i18n
+    assert "'SIM'" in s and "'NÃO'" in s                              # verdict values are backend enums, not translated
 
 
 def test_no_inline_handlers_and_no_unescaped_dynamic_text():
@@ -38,7 +39,7 @@ def test_no_inline_handlers_and_no_unescaped_dynamic_text():
 def test_origin_label_next_to_figures_and_matrix_and_escalation():
     block = src()
     assert block.count("originChip(") >= 6
-    assert "cs-rt-matrix" in block and "Taxa de escalonamento" in block
+    assert "cs-rt-matrix" in block and "cs.rt.escRate" in block
 
 
 def test_node_can_parse_module():

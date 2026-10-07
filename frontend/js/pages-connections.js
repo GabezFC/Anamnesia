@@ -6,6 +6,7 @@
 //   * the value is never stored (no localStorage/sessionStorage, no module variable), never logged,
 //     never rendered back. Only the server's `masked` hint (e.g. "••••abcd") is displayed.
 import { esc } from './format.js';
+import { t } from './i18n.js';
 import * as A from './anamnesia-api.js';
 
 let alive = false;
@@ -28,8 +29,8 @@ export async function mountConnections(root) {
     if (!alive) return;
     list.setAttribute('aria-busy', 'false');
     if (!items.length) {
-      list.innerHTML = `<div class="state"><div class="state-title">Nenhuma conexão cadastrada</div>
-        <p class="state-body">O catálogo de conexões está vazio.</p></div>`;
+      list.innerHTML = `<div class="state"><div class="state-title">${esc(t('cx.empty.title'))}</div>
+        <p class="state-body">${esc(t('cx.empty.body'))}</p></div>`;
       return;
     }
     list.innerHTML = items.map(card).join('');
@@ -38,9 +39,9 @@ export async function mountConnections(root) {
     if (!alive) return;
     list.setAttribute('aria-busy', 'false');
     list.innerHTML = A.isUnavailable(e)
-      ? `<div class="state"><div class="state-title">Backend de conexões ainda não disponível</div>
-         <p class="state-body">A rota <code>/api/connections</code> não respondeu. Assim que o backend estiver no ar, os cartões aparecem aqui.</p></div>`
-      : `<div class="state error"><div class="state-title">Não foi possível carregar as conexões</div><code>${esc(e.message)}</code></div>`;
+      ? `<div class="state"><div class="state-title">${esc(t('cx.na.title'))}</div>
+         <p class="state-body">${t('cx.na.body')}</p></div>`
+      : `<div class="state error"><div class="state-title">${esc(t('cx.err.title'))}</div><code>${esc(e.message)}</code></div>`;
   }
 }
 
@@ -50,9 +51,9 @@ function safeHref(u) {
 
 function statusChips(c) {
   const chips = [];
-  chips.push(`<span class="chip ${c.detected ? 'chip-on' : 'chip-off'}"><span class="dot"></span>${c.detected ? 'detectado' : 'não detectado'}</span>`);
+  chips.push(`<span class="chip ${c.detected ? 'chip-on' : 'chip-off'}"><span class="dot"></span>${esc(c.detected ? t('cx.chip.detected') : t('cx.chip.notDetected'))}</span>`);
   if ((c.env_keys || []).length) {
-    chips.push(`<span class="chip ${c.has_key ? 'chip-on' : 'chip-off'}"><span class="dot"></span>${c.has_key ? 'chave configurada' : 'sem chave'}</span>`);
+    chips.push(`<span class="chip ${c.has_key ? 'chip-on' : 'chip-off'}"><span class="dot"></span>${esc(c.has_key ? t('cx.chip.hasKey') : t('cx.chip.noKey'))}</span>`);
   }
   if (c.status) chips.push(`<span class="chip"><span class="dot"></span>${esc(c.status)}</span>`);
   return chips.join('');
@@ -62,11 +63,11 @@ function keyRow(c, envKey, k) {
   const id = `cx-${esc(c.id)}-${esc(envKey)}`;
   return `<form class="cx-key" data-cid="${esc(c.id)}" data-env="${esc(envKey)}" autocomplete="off">
     <label for="${id}">${esc(envKey)}</label>
-    <span class="cx-masked" id="${id}-m">${k && k.has_key ? `atual: <code>${esc(k.masked || '••••')}</code>` : 'não definida'}</span>
+    <span class="cx-masked" id="${id}-m">${k && k.has_key ? t('cx.key.current', { m: `<code>${esc(k.masked || '••••')}</code>` }) : esc(t('cx.key.unset'))}</span>
     <input id="${id}" type="password" autocomplete="new-password" spellcheck="false" autocapitalize="off"
-      placeholder="${k && k.has_key ? 'nova chave (substitui a atual)' : 'cole a chave aqui'}" aria-describedby="${id}-m">
-    <button type="submit" class="primary">Salvar</button>
-    <button type="button" data-remove${k && k.has_key ? '' : ' disabled'}>Remover</button>
+      placeholder="${esc(k && k.has_key ? t('cx.key.ph.replace') : t('cx.key.ph.new'))}" aria-describedby="${id}-m">
+    <button type="submit" class="primary">${esc(t('cx.key.save'))}</button>
+    <button type="button" data-remove${k && k.has_key ? '' : ' disabled'}>${esc(t('cx.key.remove'))}</button>
   </form>`;
 }
 
@@ -80,12 +81,12 @@ function card(c) {
       <span class="cx-chips">${statusChips(c)}</span>
     </div>
     <div class="panel-body">
-      ${c.command ? `<p class="cx-cmd">Comando: <code>${esc(c.command)}</code></p>` : ''}
+      ${c.command ? `<p class="cx-cmd">${t('cx.command', { c: `<code>${esc(c.command)}</code>` })}</p>` : ''}
       ${(c.env_keys || []).map((k) => keyRow(c, k, keys[k])).join('')}
       <div class="cx-actions">
-        <button type="button" data-test>Testar</button>
-        <button type="button" data-snippet aria-expanded="false" aria-controls="cx-snip-${esc(c.id)}">Ver snippet</button>
-        ${href ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">Documentação</a>` : ''}
+        <button type="button" data-test>${esc(t('cx.test'))}</button>
+        <button type="button" data-snippet aria-expanded="false" aria-controls="cx-snip-${esc(c.id)}">${esc(t('cx.snippet'))}</button>
+        ${href ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(t('cx.docs'))}</a>` : ''}
       </div>
       <div class="cx-test" role="status" aria-live="polite"></div>
       <div class="cx-snip" id="cx-snip-${esc(c.id)}" hidden></div>
@@ -108,19 +109,19 @@ function bind(root) {
         ev.preventDefault();
         const value = input.value;
         input.value = '';                               // cleared before the request even finishes
-        if (!value.trim()) { setStatus(root, 'warn', 'Digite a chave antes de salvar.'); return; }
+        if (!value.trim()) { setStatus(root, 'warn', t('cx.msg.typeFirst')); return; }
         try {
           await A.setSecret(cid, env, value);
-          setStatus(root, 'ok', `Chave ${env} salva (valor não é exibido novamente).`);
+          setStatus(root, 'ok', t('cx.msg.saved', { e: env }));
           await refreshCard(root, cid);
         } catch (e) {
-          setStatus(root, 'err', A.isUnavailable(e) ? 'Backend de conexões ainda não disponível.' : `Não foi possível salvar: ${e.message}`);
+          setStatus(root, 'err', A.isUnavailable(e) ? t('cx.msg.na') : t('cx.msg.saveFail', { m: e.message }));
         } finally { input.value = ''; }
       });
       form.querySelector('[data-remove]').addEventListener('click', async () => {
-        if (!window.confirm(`Remover a chave ${env}?`)) return;
-        try { await A.removeSecret(cid, env); setStatus(root, 'ok', `Chave ${env} removida.`); await refreshCard(root, cid); } catch (e) {
-          setStatus(root, 'err', `Não foi possível remover: ${e.message}`);
+        if (!window.confirm(t('cx.confirm.remove', { e: env }))) return;
+        try { await A.removeSecret(cid, env); setStatus(root, 'ok', t('cx.msg.removed', { e: env })); await refreshCard(root, cid); } catch (e) {
+          setStatus(root, 'err', t('cx.msg.rmFail', { m: e.message }));
         }
       });
     });
@@ -144,15 +145,15 @@ async function refreshCard(root, cid) {
 
 async function runTest(cardEl, cid) {
   const out = cardEl.querySelector('.cx-test');
-  out.textContent = 'Testando…';
+  out.textContent = t('cx.testing');
   try {
     const r = await A.testConnection(cid);
     const checks = Array.isArray(r.checks) ? r.checks : [];
-    out.innerHTML = `<span class="chip ${r.ok ? 'chip-on' : 'chip-off'}"><span class="dot"></span>${r.ok ? 'teste ok' : 'teste falhou'}</span>
-      ${checks.map((x) => `<span class="chip ${x.ok ? 'chip-on' : 'chip-off'}"><span class="dot"></span>${esc(x.name)}: ${x.ok ? 'ok' : 'falhou'}</span>`).join('')}
+    out.innerHTML = `<span class="chip ${r.ok ? 'chip-on' : 'chip-off'}"><span class="dot"></span>${esc(r.ok ? t('cx.test.ok') : t('cx.test.fail'))}</span>
+      ${checks.map((x) => `<span class="chip ${x.ok ? 'chip-on' : 'chip-off'}"><span class="dot"></span>${esc(x.name)}: ${esc(x.ok ? t('cx.check.ok') : t('cx.check.fail'))}</span>`).join('')}
       ${r.note ? `<p class="cx-note">${esc(r.note)}</p>` : ''}`;
   } catch (e) {
-    out.innerHTML = `<span class="ws-msg-err">${esc(A.isUnavailable(e) ? 'Backend de conexões ainda não disponível.' : e.message)}</span>`;
+    out.innerHTML = `<span class="ws-msg-err">${esc(A.isUnavailable(e) ? t('cx.msg.na') : e.message)}</span>`;
   }
 }
 
@@ -168,21 +169,21 @@ async function toggleSnippet(cardEl, cid, btn) {
   const box = cardEl.querySelector('.cx-snip');
   if (!box.hidden) { box.hidden = true; btn.setAttribute('aria-expanded', 'false'); return; }
   box.hidden = false; btn.setAttribute('aria-expanded', 'true');
-  box.textContent = 'Carregando…';
+  box.textContent = t('cx.loading');
   try {
     const s = await A.getSnippet(cid);
     const blocks = snippetBlocks(s);
-    if (!blocks.length) { box.innerHTML = `<p class="cx-note">${esc(s.note || 'Sem snippet aplicável.')}</p>`; return; }
+    if (!blocks.length) { box.innerHTML = `<p class="cx-note">${esc(s.note || t('cx.snip.none'))}</p>`; return; }
     box.innerHTML = `${blocks.map((b, i) => `<div class="cx-snip-block">
         <div class="cx-snip-head"><b>${esc(b.name)}</b><span class="muted">${esc(b.lang || '')}</span>
-          <button type="button" data-copy="${i}">Copiar</button></div>
+          <button type="button" data-copy="${i}">${esc(t('cx.copy'))}</button></div>
         <pre tabindex="0"><code>${esc(b.content)}</code></pre></div>`).join('')}
       ${s.note ? `<p class="cx-note">${esc(s.note)}</p>` : ''}`;
     box.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(blocks[Number(b.dataset.copy)].content); b.textContent = 'Copiado ✓'; } catch { b.textContent = 'Falhou — selecione e copie'; }
-      setTimeout(() => { b.textContent = 'Copiar'; }, 2000);
+      try { await navigator.clipboard.writeText(blocks[Number(b.dataset.copy)].content); b.textContent = t('cx.copied'); } catch { b.textContent = t('cx.copyFail'); }
+      setTimeout(() => { b.textContent = t('cx.copy'); }, 2000);
     }));
   } catch (e) {
-    box.innerHTML = `<span class="ws-msg-err">${esc(A.isUnavailable(e) ? 'Backend de conexões ainda não disponível.' : e.message)}</span>`;
+    box.innerHTML = `<span class="ws-msg-err">${esc(A.isUnavailable(e) ? t('cx.msg.na') : e.message)}</span>`;
   }
 }

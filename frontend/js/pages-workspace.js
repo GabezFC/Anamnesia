@@ -8,6 +8,7 @@ import { esc } from './format.js';
 import * as A from './anamnesia-api.js';
 import * as L from './workspace-layout.js';
 import { SessionTerminal } from './terminals.js';
+import { t as tx } from './i18n.js';
 
 const LS_LAYOUT = 'anamnesia.ws.layout.v1';
 const LS_PROJECT = 'anamnesia.ws.project.v1';
@@ -46,20 +47,20 @@ const $ = (sel) => W?.root?.querySelector(sel);
 export function renderWorkspace() {
   return `
   <div class="ws" id="ws">
-    <aside class="ws-left" aria-label="Projetos e sessões" id="ws-left"></aside>
-    <section class="ws-center" aria-label="Terminais">
-      <div class="ws-toolbar" role="toolbar" aria-label="Painéis">
-        <button type="button" id="ws-split-h" title="Dividir lado a lado (prefixo, h)">⬍ Dividir │</button>
-        <button type="button" id="ws-split-v" title="Dividir empilhado (prefixo, v)">⬌ Dividir ─</button>
-        <label class="ws-prefix-lbl" for="ws-prefix">Prefixo de atalhos
+    <aside class="ws-left" aria-label="${esc(tx('ws.aria.left'))}" id="ws-left"></aside>
+    <section class="ws-center" aria-label="${esc(tx('ws.aria.terminals'))}">
+      <div class="ws-toolbar" role="toolbar" aria-label="${esc(tx('ws.aria.panes'))}">
+        <button type="button" id="ws-split-h" title="${esc(tx('ws.splitH.title'))}">${esc(tx('ws.splitH'))}</button>
+        <button type="button" id="ws-split-v" title="${esc(tx('ws.splitV.title'))}">${esc(tx('ws.splitV'))}</button>
+        <label class="ws-prefix-lbl" for="ws-prefix">${esc(tx('ws.prefix.label'))}
           <select id="ws-prefix">${Object.keys(PREFIXES).map((k) => `<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select>
         </label>
-        <span class="ws-hint" id="ws-hint">Dentro do terminal só o prefixo é interceptado: prefixo + h/v dividir · n/p aba · o painel · x fechar aba</span>
+        <span class="ws-hint" id="ws-hint">${esc(tx('ws.hint'))}</span>
       </div>
       <div id="ws-panes" class="ws-panes"></div>
     </section>
-    <aside class="ws-right" aria-label="Arquivos do projeto" id="ws-right"></aside>
-    <footer class="ws-status" id="ws-status" aria-label="Barra de status"></footer>
+    <aside class="ws-right" aria-label="${esc(tx('ws.aria.files'))}" id="ws-right"></aside>
+    <footer class="ws-status" id="ws-status" aria-label="${esc(tx('ws.aria.status'))}"></footer>
     <div class="sr-only" id="ws-live" aria-live="polite" role="status"></div>
   </div>`;
 }
@@ -72,7 +73,7 @@ export function mountWorkspace(root) {
   const sel = $('#ws-prefix');
   if (sel) {
     sel.value = W.prefix;
-    sel.addEventListener('change', () => { W.prefix = sel.value; lsSet(LS_PREFIX, sel.value); announce(`Prefixo: ${sel.value}`); });
+    sel.addEventListener('change', () => { W.prefix = sel.value; lsSet(LS_PREFIX, sel.value); announce(tx('ws.prefix.set', { p: sel.value })); });
   }
   $('#ws-split-h').addEventListener('click', () => splitActive('h'));
   $('#ws-split-v').addEventListener('click', () => splitActive('v'));
@@ -94,7 +95,7 @@ export function unmountWorkspace() {
   W.timers.forEach(clearInterval);
   clearTimeout(W.fileTimer); clearTimeout(W.armTimer); clearTimeout(W.costTimer);
   W.costStop?.();
-  for (const t of W.terms.values()) t.dispose();      // closes sockets; sessions stay alive server-side
+  for (const term of W.terms.values()) term.dispose();      // closes sockets; sessions stay alive server-side
   W.terms.clear();
   W = null;
 }
@@ -103,9 +104,9 @@ export function unmountWorkspace() {
 export function workspaceActions() {
   if (!W) return [];
   return [
-    { id: 'ws-new', label: 'Workspace: novo terminal', run: () => newTerminal() },
-    { id: 'ws-split-h', label: 'Workspace: dividir painel lado a lado', run: () => splitActive('h') },
-    { id: 'ws-split-v', label: 'Workspace: dividir painel empilhado', run: () => splitActive('v') },
+    { id: 'ws-new', label: tx('ws.act.new'), run: () => newTerminal() },
+    { id: 'ws-split-h', label: tx('ws.act.splitH'), run: () => splitActive('h') },
+    { id: 'ws-split-v', label: tx('ws.act.splitV'), run: () => splitActive('v') },
   ];
 }
 
@@ -128,7 +129,7 @@ async function refreshAll() {
 async function refreshProjects() {
   try { W.projects = await A.listProjects(); W.projectsDown = false; } catch (e) {
     if (!W) return;
-    W.projects = []; W.projectsDown = A.isUnavailable(e) ? 'na' : (e.message || 'erro');
+    W.projects = []; W.projectsDown = A.isUnavailable(e) ? 'na' : (e.message || tx('ws.err.generic'));
   }
   if (!W) return;
   if (!W.projects.some((p) => pidOf(p) === W.project)) W.project = W.projects[0] ? pidOf(W.projects[0]) : '';
@@ -138,7 +139,7 @@ async function refreshProjects() {
 async function refreshProfiles() {
   try { W.profiles = await A.listProfiles(); W.profilesDown = false; } catch (e) {
     if (!W) return;
-    W.profiles = []; W.profilesDown = A.isUnavailable(e) ? 'na' : (e.message || 'erro');
+    W.profiles = []; W.profilesDown = A.isUnavailable(e) ? 'na' : (e.message || tx('ws.err.generic'));
   }
   if (W) paintLeft();
 }
@@ -154,7 +155,7 @@ async function refreshSessions() {
     if (JSON.stringify(pruned) !== JSON.stringify(W.layout)) { W.layout = pruned; saveLayout(); renderPanes(); }
   } catch (e) {
     if (!W) return;
-    W.sessionsDown = A.isUnavailable(e) ? 'na' : (e.message || 'erro');
+    W.sessionsDown = A.isUnavailable(e) ? 'na' : (e.message || tx('ws.err.generic'));
   }
   paintLeft(); paintStatus();
 }
@@ -162,7 +163,7 @@ async function refreshSessions() {
 async function refreshHealth() {
   try {
     const r = await fetch('/health', { cache: 'no-store' });
-    W.health = r.ok ? ((await r.json()).status || 'ok') : 'erro';
+    W.health = r.ok ? ((await r.json()).status || 'ok') : 'error';
   } catch { if (W) W.health = 'offline'; }
   if (W) paintStatus();
   fitHeight();
@@ -196,12 +197,12 @@ function paintLeft() {
   const keepAdd = box.querySelector('details.ws-add')?.open;
   let body;
   if (W.projectsDown === 'na') {
-    body = `<div class="state state-compact"><div class="state-title">Backend do Workspace ainda não disponível</div>
-      <p class="state-body">A rota <code>/api/projects</code> não respondeu (404/offline). O restante do painel continua funcionando.</p></div>`;
+    body = `<div class="state state-compact"><div class="state-title">${esc(tx('ws.na.title'))}</div>
+      <p class="state-body">${tx('ws.na.body')}</p></div>`;
   } else if (W.projectsDown) {
-    body = `<div class="state state-compact error"><div class="state-title">Falha ao listar projetos</div><code>${esc(W.projectsDown)}</code></div>`;
+    body = `<div class="state state-compact error"><div class="state-title">${esc(tx('ws.proj.fail'))}</div><code>${esc(W.projectsDown)}</code></div>`;
   } else if (!W.projects.length) {
-    body = `<p class="ws-empty">Nenhum projeto ainda. Adicione uma pasta abaixo.</p>`;
+    body = `<p class="ws-empty">${esc(tx('ws.proj.empty'))}</p>`;
   } else {
     body = `<ul class="ws-projects">${W.projects.map(projectItem).join('')}</ul>`;
   }
@@ -209,24 +210,24 @@ function paintLeft() {
   const profileOpts = W.profiles.map((p) => {
     const id = String(p.id ?? p.name ?? '');
     const off = p.available === false;
-    return `<option value="${esc(id)}"${off ? ' disabled' : ''}>${esc(p.name || p.label || id)}${off ? ' (indisponível)' : ''}</option>`;
+    return `<option value="${esc(id)}"${off ? ' disabled' : ''}>${esc(p.name || p.label || id)}${esc(off ? tx('ws.prof.unavailable') : '')}</option>`;
   }).join('');
-  const profileNote = W.profilesDown === 'na' ? 'perfis indisponíveis (backend ainda não disponível)'
-    : W.profilesDown ? `perfis: ${W.profilesDown}` : (W.profiles.length ? '' : 'nenhum perfil cadastrado');
+  const profileNote = W.profilesDown === 'na' ? tx('ws.prof.na')
+    : W.profilesDown ? tx('ws.prof.err', { m: W.profilesDown }) : (W.profiles.length ? '' : tx('ws.prof.none'));
   box.innerHTML = `
-    <h2 class="ws-h">Projetos</h2>
+    <h2 class="ws-h">${esc(tx('ws.h.projects'))}</h2>
     ${body}
-    <details class="ws-add"${keepAdd ? ' open' : ''}><summary>+ Adicionar projeto</summary>
+    <details class="ws-add"${keepAdd ? ' open' : ''}><summary>${esc(tx('ws.add.summary'))}</summary>
       <form id="ws-add-form" autocomplete="off">
-        <label for="ws-add-name">Nome</label><input id="ws-add-name" required maxlength="80">
-        <label for="ws-add-path">Pasta (caminho absoluto)</label><input id="ws-add-path" required>
-        <button type="submit" class="primary">Adicionar</button>
+        <label for="ws-add-name">${esc(tx('ws.add.name'))}</label><input id="ws-add-name" required maxlength="80">
+        <label for="ws-add-path">${esc(tx('ws.add.path'))}</label><input id="ws-add-path" required>
+        <button type="submit" class="primary">${esc(tx('ws.add.submit'))}</button>
       </form>
     </details>
     <div class="ws-newterm">
-      <label for="ws-profile">Perfil do terminal</label>
+      <label for="ws-profile">${esc(tx('ws.profile.label'))}</label>
       <select id="ws-profile"${W.profiles.length ? '' : ' disabled'}>${profileOpts}</select>
-      <button type="button" id="ws-new" class="primary"${cur && W.profiles.length ? '' : ' disabled'}>+ Terminal</button>
+      <button type="button" id="ws-new" class="primary"${cur && W.profiles.length ? '' : ' disabled'}>${esc(tx('ws.newTerm'))}</button>
       ${profileNote ? `<p class="ws-note">${esc(profileNote)}</p>` : ''}
     </div>
     <div id="ws-msg" class="ws-msg" role="status" aria-live="polite"></div>`;
@@ -254,14 +255,14 @@ function projectItem(p) {
     <div class="ws-proj-row">
       <button type="button" class="ws-proj-pick" data-pick="${esc(id)}"${on ? ' aria-current="true"' : ''}
         title="${esc(p.path || '')}">${esc(p.name || id)}</button>
-      <button type="button" class="ws-icon" data-rm="${esc(id)}" aria-label="Remover projeto ${esc(p.name || id)}">🗑</button>
+      <button type="button" class="ws-icon" data-rm="${esc(id)}" aria-label="${esc(tx('ws.proj.rm.aria', { n: p.name || id }))}">🗑</button>
     </div>
-    ${sess.length ? `<ul class="ws-sess" aria-label="Sessões de ${esc(p.name || id)}">${sess.map((s) => {
+    ${sess.length ? `<ul class="ws-sess" aria-label="${esc(tx('ws.sess.list.aria', { n: p.name || id }))}">${sess.map((s) => {
     const sid = sidOf(s);
     const open = L.leafOfSession(W.layout, sid);
     return `<li><button type="button" class="ws-sess-open" data-open="${esc(sid)}"
-        aria-label="Abrir sessão ${esc(sessionLabel(s))}${open ? ' (já aberta)' : ''}">${open ? '▣' : '▢'} ${esc(sessionLabel(s))}</button>
-        <button type="button" class="ws-icon" data-kill="${esc(sid)}" aria-label="Encerrar sessão ${esc(sessionLabel(s))}">✕</button></li>`;
+        aria-label="${esc(tx('ws.sess.open.aria', { l: sessionLabel(s) }) + (open ? tx('ws.sess.alreadyOpen') : ''))}">${open ? '▣' : '▢'} ${esc(sessionLabel(s))}</button>
+        <button type="button" class="ws-icon" data-kill="${esc(sid)}" aria-label="${esc(tx('ws.sess.kill.aria', { l: sessionLabel(s) }))}">✕</button></li>`;
   }).join('')}</ul>` : ''}
   </li>`;
 }
@@ -280,55 +281,55 @@ async function onAddProject(ev) {
     const p = await A.addProject(name, path);
     if (p && pidOf(p)) { W.project = pidOf(p); lsSet(LS_PROJECT, W.project); }
     await refreshProjects();
-    msg(`Projeto “${name}” adicionado.`, 'ok');
+    msg(tx('ws.msg.added', { n: name }), 'ok');
   } catch (e) {
-    msg(A.isUnavailable(e) ? 'Backend do Workspace ainda não disponível.' : `Não foi possível adicionar: ${e.message}`, 'err');
+    msg(A.isUnavailable(e) ? tx('ws.msg.na') : tx('ws.msg.addFail', { m: e.message }), 'err');
   }
 }
 
 async function onRemoveProject(id) {
   const p = W.projects.find((x) => pidOf(x) === id);
-  if (!window.confirm(`Remover o projeto “${p?.name || id}” da lista? Os arquivos não são apagados.`)) return;
-  try { await A.removeProject(id); await refreshProjects(); await refreshSessions(); msg('Projeto removido.', 'ok'); } catch (e) {
-    msg(A.isUnavailable(e) ? 'Backend do Workspace ainda não disponível.' : `Não foi possível remover: ${e.message}`, 'err');
+  if (!window.confirm(tx('ws.confirm.rm', { n: p?.name || id }))) return;
+  try { await A.removeProject(id); await refreshProjects(); await refreshSessions(); msg(tx('ws.msg.removed'), 'ok'); } catch (e) {
+    msg(A.isUnavailable(e) ? tx('ws.msg.na') : tx('ws.msg.rmFail', { m: e.message }), 'err');
   }
 }
 
 async function newTerminal(leafId) {
   if (!W) return;
   const ps = $('#ws-profile');
-  if (!W.project || !ps || !ps.value) { msg('Escolha um projeto e um perfil.', 'warn'); return; }
+  if (!W.project || !ps || !ps.value) { msg(tx('ws.msg.pick'), 'warn'); return; }
   const btn = $('#ws-new'); if (btn) btn.disabled = true;
   try {
     const r = await A.createSession(W.project, ps.value);
     const sid = String(r?.session_id ?? r?.id ?? '');
     await refreshSessions();
     if (sid) openSession(sid, leafId);
-    msg('Terminal criado.', 'ok');
+    msg(tx('ws.msg.created'), 'ok');
   } catch (e) {
-    msg(A.isUnavailable(e) ? 'Backend de sessões ainda não disponível.' : `Não foi possível criar o terminal: ${e.message}`, 'err');
+    msg(A.isUnavailable(e) ? tx('ws.msg.sessNa') : tx('ws.msg.createFail', { m: e.message }), 'err');
   } finally { const b = $('#ws-new'); if (b) b.disabled = false; }
 }
 
 async function onKillSession(sid) {
-  if (!window.confirm('Encerrar esta sessão? O processo do terminal será finalizado.')) return;
+  if (!window.confirm(tx('ws.confirm.kill'))) return;
   try {
     await A.deleteSession(sid);
     closeTabFor(sid);
     await refreshSessions();
-    msg('Sessão encerrada.', 'ok');
-  } catch (e) { msg(`Não foi possível encerrar: ${e.message}`, 'err'); }
+    msg(tx('ws.msg.killed'), 'ok');
+  } catch (e) { msg(tx('ws.msg.killFail', { m: e.message }), 'err'); }
 }
 
 /* ------------------------------------------------------------------ panes */
 function ensureTerm(sid) {
-  let t = W.terms.get(sid);
-  if (!t) {
-    t = new SessionTerminal(sid, { onState: onTermState, interceptKey });
-    W.terms.set(sid, t);
-    t.start();
+  let term = W.terms.get(sid);
+  if (!term) {
+    term = new SessionTerminal(sid, { onState: onTermState, interceptKey });
+    W.terms.set(sid, term);
+    term.start();
   }
-  return t;
+  return term;
 }
 
 function openSession(sid, leafId) {
@@ -339,8 +340,8 @@ function openSession(sid, leafId) {
 
 function closeTabFor(sid) {
   W.layout = L.closeTab(W.layout, sid);
-  const t = W.terms.get(sid);
-  if (t) { t.dispose(); W.terms.delete(sid); }
+  const term = W.terms.get(sid);
+  if (term) { term.dispose(); W.terms.delete(sid); }
   saveLayout(); renderPanes(); paintLeft();
 }
 
@@ -349,19 +350,20 @@ function splitActive(dir) {
   const r = L.splitLeaf(W.layout, leaf, dir);
   W.layout = r.tree; W.activeLeaf = r.newLeafId || leaf;
   saveLayout(); renderPanes();
-  announce(dir === 'h' ? 'Painel dividido lado a lado' : 'Painel dividido em pilha');
+  announce(dir === 'h' ? tx('ws.announce.splitH') : tx('ws.announce.splitV'));
 }
 
-const STATE_TXT = { connecting: 'conectando', live: 'ao vivo', reconnecting: 'reconectando', ended: 'encerrada', error: 'erro' };
+const STATE_KEYS = ['connecting', 'live', 'reconnecting', 'ended', 'error'];
+const stateTxt = (s) => (STATE_KEYS.includes(s) ? tx(`term.st.${s}`) : (s || ''));
 
-function onTermState(state, t) {
-  W?.root?.querySelectorAll(`[data-dot="${CSS.escape(t.sid)}"]`).forEach((d) => {
+function onTermState(state, term) {
+  W?.root?.querySelectorAll(`[data-dot="${CSS.escape(term.sid)}"]`).forEach((d) => {
     d.className = `ws-dot ws-dot-${state}`;
-    d.title = STATE_TXT[state] || state;
+    d.title = stateTxt(state);
   });
-  const tab = W?.root?.querySelector(`[data-sid="${CSS.escape(t.sid)}"] .ws-tab-state`);
-  if (tab) tab.textContent = STATE_TXT[state] || state;
-  if (state === 'ended' || state === 'reconnecting') announce(`Terminal ${shortId(t.sid)}: ${STATE_TXT[state]}`);
+  const tab = W?.root?.querySelector(`[data-sid="${CSS.escape(term.sid)}"] .ws-tab-state`);
+  if (tab) tab.textContent = stateTxt(state);
+  if (state === 'ended' || state === 'reconnecting') announce(tx('ws.announce.term', { id: shortId(term.sid), s: stateTxt(state) }));
   paintStatus();
 }
 
@@ -370,27 +372,27 @@ function paneHtml(node) {
     const tabs = node.tabs.map((sid) => {
       const s = W.sessions.find((x) => sidOf(x) === sid);
       const on = sid === node.active;
-      const label = s ? sessionLabel(s) : `sessão ${shortId(sid)}`;
+      const label = s ? sessionLabel(s) : tx('ws.tab.session', { id: shortId(sid) });
       return `<div class="ws-tab${on ? ' on' : ''}" role="presentation">
         <button type="button" role="tab" id="tab-${esc(sid)}" data-sid="${esc(sid)}" data-leaf="${esc(node.id)}"
           aria-selected="${on}" aria-controls="host-${esc(node.id)}" tabindex="${on ? 0 : -1}">
           <span class="ws-dot ws-dot-${esc(W.terms.get(sid)?.state || 'connecting')}" data-dot="${esc(sid)}" aria-hidden="true"></span>
-          ${esc(label)}<span class="ws-tab-state sr-only">${esc(STATE_TXT[W.terms.get(sid)?.state] || '')}</span></button>
-        <button type="button" class="ws-tab-x" data-close="${esc(sid)}" aria-label="Fechar aba ${esc(label)} (a sessão continua ativa)">×</button>
+          ${esc(label)}<span class="ws-tab-state sr-only">${esc(stateTxt(W.terms.get(sid)?.state))}</span></button>
+        <button type="button" class="ws-tab-x" data-close="${esc(sid)}" aria-label="${esc(tx('ws.tab.close.aria', { l: label }))}">×</button>
       </div>`;
     }).join('');
     return `<div class="ws-leaf${node.id === W.activeLeaf ? ' active' : ''}" data-leafbox="${esc(node.id)}">
-      <div class="ws-tabs" role="tablist" aria-label="Abas do painel ${esc(node.id)}">${tabs}</div>
+      <div class="ws-tabs" role="tablist" aria-label="${esc(tx('ws.tabs.aria', { id: node.id }))}">${tabs}</div>
       <div class="ws-host" id="host-${esc(node.id)}" role="tabpanel" data-host="${esc(node.id)}">
-        ${node.tabs.length ? '' : `<div class="ws-empty-pane"><p>Painel vazio.</p>
-          <button type="button" data-newhere="${esc(node.id)}">+ Terminal neste painel</button></div>`}
+        ${node.tabs.length ? '' : `<div class="ws-empty-pane"><p>${esc(tx('ws.pane.empty'))}</p>
+          <button type="button" data-newhere="${esc(node.id)}">${esc(tx('ws.pane.newHere'))}</button></div>`}
       </div></div>`;
   }
   const vertical = node.dir === 'h';          // side by side → the separator is a vertical bar
   return `<div class="ws-split ws-split-${esc(node.dir)}" data-splitbox="${esc(node.id)}">
     <div class="ws-cell" data-cell="a">${paneHtml(node.a)}</div>
     <div class="ws-sep" role="separator" tabindex="0" data-split="${esc(node.id)}"
-      aria-orientation="${vertical ? 'vertical' : 'horizontal'}" aria-label="Redimensionar divisão"
+      aria-orientation="${vertical ? 'vertical' : 'horizontal'}" aria-label="${esc(tx('ws.sep.aria'))}"
       aria-valuemin="15" aria-valuemax="85" aria-valuenow="${Math.round(node.ratio * 100)}"></div>
     <div class="ws-cell" data-cell="b">${paneHtml(node.b)}</div>
   </div>`;
@@ -402,7 +404,7 @@ function renderPanes(focusActive = false) {
   if (!L.findNode(W.layout, W.activeLeaf)) W.activeLeaf = L.leaves(W.layout)[0].id;
   // Park live terminals outside the tree so innerHTML replacement does not destroy them.
   const park = document.createDocumentFragment();
-  for (const t of W.terms.values()) park.appendChild(t.el);
+  for (const term of W.terms.values()) park.appendChild(term.el);
   box.innerHTML = paneHtml(W.layout);
   for (const leaf of L.leaves(W.layout)) {
     const host = box.querySelector(`[data-host="${CSS.escape(leaf.id)}"]`);
@@ -483,7 +485,7 @@ function bindSeparator(sep) {
     ev.preventDefault();
     const cur = n.ratio;
     apply(ev.key === 'Home' ? L.MIN_RATIO : ev.key === 'End' ? L.MAX_RATIO : cur + (ev.key === inc ? 0.05 : -0.05), true);
-    announce(`Divisão em ${sep.getAttribute('aria-valuenow')}%`);
+    announce(tx('ws.announce.sep', { p: sep.getAttribute('aria-valuenow') }));
   });
 }
 
@@ -504,7 +506,7 @@ function interceptKey(ev, phase) {
     if (!isPrefix) return false;
     W.armed = true;
     $('#ws-hint')?.classList.add('armed');
-    announce('Prefixo ativo: h v n p o x');
+    announce(tx('ws.announce.armed'));
     W.armTimer = setTimeout(() => { if (W) disarm(); }, 2500);
     return consume();
   }
@@ -534,10 +536,10 @@ function paintRight() {
   const box = $('#ws-right');
   if (!box) return;
   box.innerHTML = `
-    <h2 class="ws-h">Arquivos</h2>
-    <label class="sr-only" for="ws-fq">Buscar arquivo por nome</label>
-    <input id="ws-fq" type="search" placeholder="Buscar por nome…" autocomplete="off">
-    <nav class="ws-crumbs" id="ws-crumbs" aria-label="Caminho"></nav>
+    <h2 class="ws-h">${esc(tx('ws.files.h'))}</h2>
+    <label class="sr-only" for="ws-fq">${esc(tx('ws.files.search.label'))}</label>
+    <input id="ws-fq" type="search" placeholder="${esc(tx('ws.files.search.ph'))}" autocomplete="off">
+    <nav class="ws-crumbs" id="ws-crumbs" aria-label="${esc(tx('ws.files.crumbs.aria'))}"></nav>
     <div id="ws-files" class="ws-files" aria-live="polite"></div>`;
   $('#ws-fq').addEventListener('input', (ev) => {
     W.fileQ = ev.target.value.trim();
@@ -550,8 +552,8 @@ async function loadFiles() {
   const list = $('#ws-files');
   if (!list) return;
   const crumbs = $('#ws-crumbs');
-  if (!W.project) { list.innerHTML = '<p class="ws-empty">Selecione um projeto.</p>'; crumbs.innerHTML = ''; return; }
-  list.innerHTML = '<p class="ws-empty">Carregando…</p>';
+  if (!W.project) { list.innerHTML = `<p class="ws-empty">${esc(tx('ws.files.pick'))}</p>`; crumbs.innerHTML = ''; return; }
+  list.innerHTML = `<p class="ws-empty">${esc(tx('ws.loading'))}</p>`;
   const mine = W.project; const myq = W.fileQ; const myp = W.filePath;
   try {
     const files = await A.listFiles(mine, myp, myq);
@@ -559,18 +561,18 @@ async function loadFiles() {
     W.files = files; W.filesState = 'ok';
   } catch (e) {
     if (!W) return;
-    W.files = []; W.filesState = A.isUnavailable(e) ? 'na' : (e.message || 'erro');
+    W.files = []; W.filesState = A.isUnavailable(e) ? 'na' : (e.message || tx('ws.err.generic'));
   }
   const parts = W.filePath.split('/').filter(Boolean);
-  crumbs.innerHTML = `<button type="button" data-cd="">raiz</button>${parts.map((p, i) =>
+  crumbs.innerHTML = `<button type="button" data-cd="">${esc(tx('ws.files.root'))}</button>${parts.map((p, i) =>
     ` / <button type="button" data-cd="${esc(parts.slice(0, i + 1).join('/'))}">${esc(p)}</button>`).join('')}`;
   crumbs.querySelectorAll('[data-cd]').forEach((b) => b.addEventListener('click', () => { W.filePath = b.dataset.cd; loadFiles(); }));
   if (W.filesState === 'na') {
-    list.innerHTML = '<div class="state state-compact"><div class="state-title">Explorador indisponível</div><p class="state-body">Backend do Workspace ainda não disponível.</p></div>';
+    list.innerHTML = `<div class="state state-compact"><div class="state-title">${esc(tx('ws.files.na.title'))}</div><p class="state-body">${esc(tx('ws.files.na.body'))}</p></div>`;
     return;
   }
   if (W.filesState !== 'ok') { list.innerHTML = `<p class="ws-msg-err">${esc(W.filesState)}</p>`; return; }
-  if (!W.files.length) { list.innerHTML = `<p class="ws-empty">${W.fileQ ? 'Nada encontrado.' : 'Pasta vazia.'}</p>`; return; }
+  if (!W.files.length) { list.innerHTML = `<p class="ws-empty">${esc(W.fileQ ? tx('ws.files.noMatch') : tx('ws.files.emptyDir'))}</p>`; return; }
   list.innerHTML = `<ul>${W.files.map((f) => {
     const dir = f.type === 'dir' || f.type === 'directory' || f.is_dir === true;
     const path = String(f.path ?? f.name ?? '');
@@ -586,20 +588,20 @@ async function loadFiles() {
 /* ------------------------------------------------------------------ status bar */
 function costText() {
   const c = W.cost?.cost_usd;
-  if (W.costState === 'na') return 'custo MG: indisponível (backend ainda não disponível)';
-  if (!c || typeof c.value !== 'number') return 'custo MG hoje: sem medição ainda';
-  return `custo MG hoje: ${A.fmtUsd(c.value)} (${A.originLabel(c.origin)})`;
+  if (W.costState === 'na') return tx('ws.cost.na');
+  if (!c || typeof c.value !== 'number') return tx('ws.cost.none');
+  return tx('ws.cost.val', { v: A.fmtUsd(c.value), o: A.originLabel(c.origin) });
 }
 
 function paintStatus() {
   const box = $('#ws-status');
   if (!box) return;
-  const live = [...W.terms.values()].filter((t) => t.state === 'live').length;
+  const live = [...W.terms.values()].filter((term) => term.state === 'live').length;
   const hcls = W.health === 'ok' ? 'ok' : W.health === 'checking' ? 'info' : 'err';
-  const stream = { live: 'ao vivo', offline: 'sem stream', reconnecting: 'reconectando', error: 'sem stream' }[W.costState];
+  const stream = { live: tx('ws.stream.live'), offline: tx('ws.stream.none'), reconnecting: tx('ws.stream.reconnecting'), error: tx('ws.stream.none') }[W.costState];
   box.innerHTML = `
-    <span class="pill ${hcls}"><span class="dot"></span>servidor: ${esc(W.health)}</span>
-    <span aria-live="polite">sessões: <b>${W.sessions.length}</b> · abertas: <b>${W.terms.size}</b> · conectadas: <b>${live}</b></span>
+    <span class="pill ${hcls}"><span class="dot"></span>${esc(tx('ws.status.server', { h: W.health }))}</span>
+    <span aria-live="polite">${tx('ws.status.counts', { a: W.sessions.length, b: W.terms.size, c: live })}</span>
     <span aria-live="polite">${esc(costText())}</span>
     ${stream ? `<span class="ws-stream">${esc(stream)}</span>` : ''}`;
 }

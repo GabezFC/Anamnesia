@@ -3,6 +3,7 @@
 //   * Ctrl+K command palette (only when focus is OUTSIDE a terminal — xterm owns every key)
 // Every value coming from the server goes through esc() before reaching innerHTML.
 import { esc } from './format.js';
+import { t } from './i18n.js';
 
 /* ------------------------------------------------------------- health banner */
 const DISMISS_KEY = 'anamnesia.health.dismissed.v1';
@@ -26,13 +27,13 @@ export function renderHealthBanner(warnings) {
   box.hidden = false;
   const itemsHtml = list.map((w) => `
     <li class="hb-item">
-      <span class="hb-comp">${esc(w.component || 'sistema')}</span>
-      <span class="hb-msg">${esc(w.message || w.code || 'aviso')}</span>
+      <span class="hb-comp">${esc(w.component || t('sx.hb.system'))}</span>
+      <span class="hb-msg">${esc(w.message || w.code || t('sx.hb.warning'))}</span>
       ${w.hint ? `<span class="hb-hint">${esc(w.hint)}</span>` : ''}
       <button type="button" class="hb-close" data-hb-key="${esc(keyOf(w))}"
-        aria-label="Dispensar aviso: ${esc(w.component || '')} ${esc(w.code || '')}">×</button>
+        aria-label="${esc(t('sx.hb.aria.dismiss', { c: w.component || '', k: w.code || '' }))}">×</button>
     </li>`).join('');
-  box.innerHTML = `<div class="hb-title">Avisos do servidor (${list.length})</div><ul class="hb-list">${itemsHtml}</ul>`;
+  box.innerHTML = `<div class="hb-title">${esc(t('sx.hb.title', { n: list.length }))}</div><ul class="hb-list">${itemsHtml}</ul>`;
   box.querySelectorAll('[data-hb-key]').forEach((b) => b.addEventListener('click', () => {
     const d = readDismissed();
     d.push(b.dataset.hbKey);
@@ -63,9 +64,9 @@ export function openPalette(actions) {
   paletteEl = document.createElement('div');
   paletteEl.className = 'palette-scrim';
   paletteEl.innerHTML = `
-    <div class="palette" role="dialog" aria-modal="true" aria-label="Paleta de comandos">
+    <div class="palette" role="dialog" aria-modal="true" aria-label="${esc(t('sx.pal.aria'))}">
       <input id="palette-q" type="text" autocomplete="off" spellcheck="false"
-        placeholder="Digite um comando… (Esc fecha)" aria-label="Filtrar comandos"
+        placeholder="${esc(t('sx.pal.placeholder'))}" aria-label="${esc(t('sx.pal.filter'))}"
         role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list">
       <ul id="palette-list" role="listbox"></ul>
     </div>`;
@@ -78,7 +79,7 @@ export function openPalette(actions) {
     ul.innerHTML = shown.map((a, i) =>
       `<li role="option" id="pal-${i}" aria-selected="${i === sel}" data-i="${i}">${esc(a.label)}`
       + `${a.hint ? `<span class="pal-hint">${esc(a.hint)}</span>` : ''}</li>`).join('')
-      || '<li class="pal-empty" role="presentation">Nenhum comando</li>';
+      || `<li class="pal-empty" role="presentation">${esc(t('sx.pal.empty'))}</li>`;
     q.setAttribute('aria-activedescendant', shown.length ? `pal-${sel}` : '');
   };
   const run = (i) => { const a = shown[i]; closePalette(); if (a) a.run(); };

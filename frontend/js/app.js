@@ -22,6 +22,7 @@ import { renderConnections, mountConnections, unmountConnections } from './pages
 import { renderOrchestration, mountOrchestration, unmountOrchestration } from './pages-orchestration.js';
 import { renderAnaCosts, mountAnaCosts, unmountAnaCosts } from './pages-anacosts.js';
 import { renderHealthBanner, installPalette } from './shell-extras.js';
+import { installLangToggle, t } from './i18n.js';
 
 // Anamnesia shell: Workspace is the home page. The four top entries are the product; every
 // pre-existing benchmark/observability page is kept and re-routed under Custos > "Benchmark avançado".
@@ -191,6 +192,7 @@ function renderShell() {
         <div id="page-body"></div>
       </main>
     </div>`;
+  installLangToggle($('.header-meta'));
   const ham = $('#hamburger');
   ham.addEventListener('click', () => {
     const open = document.body.classList.toggle('nav-open');
@@ -285,6 +287,9 @@ async function ensure(needs) {
 /* ---------------------------------------------------------------- render */
 let rendering = 0;
 let activePage = null;
+let lastPageId = null;
+// The browser would restore a stale scroll offset on reload; the app always opens at the top.
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 async function navigate() {
   const id = route();
   const known = Boolean(PAGES[id]);
@@ -297,7 +302,12 @@ async function navigate() {
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
   document.body.classList.toggle('page-wide', Boolean(page.wide));
-  $('#page-title').textContent = page.title;
+  const pageId = known ? id : 'workspace';
+  const pageTitle = t(`page.title.${pageId}`) === `page.title.${pageId}` ? page.title : t(`page.title.${pageId}`);
+  $('#page-title').textContent = pageTitle;
+  document.title = `${pageTitle} · ${t('app.title.suffix')}`;
+  // A new route starts at the top; toggles re-render the same route and keep the scroll position.
+  if (pageId !== lastPageId) { lastPageId = pageId; window.scrollTo(0, 0); }
   $('#page-sub').textContent = page.sub;
   document.body.classList.remove('nav-open');
   $('#hamburger')?.setAttribute('aria-expanded', 'false');
