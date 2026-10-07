@@ -1,7 +1,6 @@
 <p align="center">
-  <img src="assets/logo.png" width="100%">
+  <img src="assets/logo.png" width="350">
 </p>
-
 **A local workspace where your AI agents never start from zero.**
 
 > **Project status: in transition.** Anamnésia (the opposite of *amnesia*) is the new name and
