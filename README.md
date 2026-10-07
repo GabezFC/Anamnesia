@@ -200,6 +200,14 @@ This corpus is what makes the benchmark reproducible by a stranger. It contains 
 ## 6. Running
 
 ```bash
+# `anamnesia` command (pip install . / pipx install . / uv tool install .): version | doctor | start
+anamnesia doctor   # offline environment checks; never prints secrets; exit 1 if Python/vault missing
+anamnesia start    # same as python -m app.main
+```
+
+> Packaging caveat (0.1.0): the wheel installs `app`, `config`, `frontend` and `data/synthetic_vault` at the top level of site-packages, so local state (`.env`, `benchmark.db`) lands there. Prefer running from a clone with `OBSIDIAN_VAULT_PATH`/`DB_PATH` set until this is relocated.
+
+```bash
 # REST API + dashboard on http://127.0.0.1:8000
 python -m app.main
 

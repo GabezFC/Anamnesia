@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "anamnesia"
+version = "0.1.0"
+description = "Anamnésia: persistent memory gateway (MCP + REST) over an Obsidian vault"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "typesafe-sdk==0.7.1",
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.53.0",
+    "mcp==2.2.0",
+    "httpx==0.28.1",
+    "python-dotenv==1.2.3",
+    "pydantic==2.13.5",
+    "anthropic==1.8.0",
+    "openai==3.19.2",
+]
+
+[project.scripts]
+anamnesia = "anamnesia.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "config", "memory_gateway", "anamnesia"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"frontend" = "frontend"
+"data/synthetic_vault" = "data/synthetic_vault"
