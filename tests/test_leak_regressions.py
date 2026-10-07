@@ -46,10 +46,37 @@ class RejectAllBackend:
         return answers, {"input_tokens": 10, "output_tokens": 1}, "stub-model"
 
 
+class _StubGraphify:
+    """Deterministic stand-in for the graphify service: returns every note, no subprocess."""
+
+    def __init__(self, vault_root, mirror):
+        self.vault_root = vault_root
+        self.graph_path = mirror / "graphify-out" / "graph.json"
+
+    def search(self, query, limit=100):
+        from app.services.obsidian import split_sections
+        files = sorted(p for p in self.vault_root.rglob("*.md") if ".obsidian" not in p.parts)
+        cands = []
+        for i, p in enumerate(files[:limit]):
+            rel = p.relative_to(self.vault_root).as_posix()
+            sec = split_sections(p.read_text(encoding="utf-8"))[0]
+            cands.append(Candidate(candidate_id=f"g{i:03d}:{rel}#L{sec.line}", source_file=rel,
+                                   section=sec.heading_path, snippet=sec.text, score=1.0 - i * 0.1,
+                                   origin="graphify"))
+        return cands, {"graphify_nodes_returned": len(cands)}
+
+    def build(self):
+        return {"files": 0}
+
+    def version(self):
+        return "stub-graphify 0.0"
+
+
 @pytest.fixture
 def gw(tiny_vault: Path, tmp_path: Path) -> MemoryGateway:
     rc = RetrievalConfig(vault_path=tiny_vault, data_dir=tmp_path / "data")
-    g = MemoryGateway(retrieval_cfg=rc)
+    # T0.1: never run the real `graphify` binary in tests (it is absent on a clean checkout/CI).
+    g = MemoryGateway(retrieval_cfg=rc, graphify_service=_StubGraphify(tiny_vault, rc.mirror_dir))
     g.warm()
     return g
 

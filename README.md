@@ -1,4 +1,39 @@
-# Memory Gateway
+# Anamnésia
+
+**A local workspace where your AI agents never start from zero.**
+
+> **Project status: in transition.** Anamnésia (the opposite of *amnesia*) is the new name and
+> product direction. **What is implemented and tested today is the Memory Gateway** described in
+> the rest of this README. The workspace, connections and orchestration below are **planned, not
+> built**; each item is marked with its status.
+
+## What Anamnésia is
+
+A local-first app (loopback only, your keys never leave your machine) with four areas:
+
+| Area | What it does | Status |
+| --- | --- | --- |
+| **Workspace** (home screen) | Real terminals (PTY) grouped by local project, split panels and tabs, run several agents (Hermes, Claude Code, Codex, OpenCode) in parallel | Planned |
+| **Connections** | Connect API keys for agents, models and MCP servers from a small catalog (`config/connections.yaml`) that grows over time | Planned |
+| **Config** | Pick a sub-agent orchestration preset (Economic / Balanced / Max) that routes work to cheaper models | Planned |
+| **Costs** (Memory Gateway) | See what every memory call cost: project, agent, pipeline, tokens, price, latency | Partly built (benchmark dashboard) |
+
+Planned model routing: `memory_search` keeps its name and gains a `mode` parameter:
+`context` (today's behaviour), `answer` (a router picks a cheap sub-agent that returns a short
+answer with sources) and `delegate` (full orchestrator). `answer` is only promoted to default if the
+benchmark shows it does not lose recall or facts. No saving is claimed before it is measured.
+
+Supported systems (target): Windows, Linux, macOS. Distribution (target): `git clone` + script,
+Docker (without terminals by default) and `pipx` / `uv tool`. "Supported" means green CI on that
+system; until then it is "not validated".
+
+Design documents live in the author's knowledge base (architecture, UX, data model, security
+threat model, roadmap). The roadmap order is: base cleanup, security minimum, workspace,
+cost ledger, connections, model routing, orchestration, persistent memory.
+
+---
+
+# Memory Gateway (the utility)
 
 **A retrieval gateway that measures what it costs you.**
 
