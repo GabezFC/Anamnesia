@@ -50,6 +50,12 @@ async def lifespan(_app: FastAPI):
     yield
 
 
+_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+        "frame-ancestors 'none'")
+_CSP_EXEMPT = {"/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"}
+
+
 def create_app() -> FastAPI:
     from config.benchmark import BenchmarkConfig
 
@@ -75,6 +81,11 @@ def create_app() -> FastAPI:
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        # S6: no inline/external script can run, so XSS from note content cannot steal the write
+        # token. style-src keeps 'unsafe-inline' because the UI uses style="" attributes (CSS-only).
+        # /docs, /redoc load Swagger/ReDoc from a CDN and need inline script: exempt them.
+        if request.url.path not in _CSP_EXEMPT:
+            resp.headers.setdefault("Content-Security-Policy", _CSP)
         return resp
 
     app.include_router(routes.router)
