@@ -1,5 +1,11 @@
 # AGENTS.md — Memory Gateway
 
+> **Anamnésia** é o novo nome do projeto (o oposto de amnésia: não esquece). O Memory Gateway continua
+> e agora é a *utilidade* de recuperação, gerenciamento de tokens e custo por chamada. Pacote Python,
+> servidor MCP (`memory-gateway`) e ferramenta (`memory_search`, com parâmetro `mode`) mantêm os nomes.
+> **Registro de execução:** toda alteração gera nota com os templates do Cérebro (`99-Templates/`) em
+> `30-Projetos/Anamnesia/Notes/{Notas,Decisões,Daily}` (regra do `Cérebro_AI/AGENTS.md`).
+
 Instruções para **qualquer agente** (Hermes, Claude Code, Codex, OpenCode, Cursor,
 Aider, Gemini CLI...). Gêmeo de `CLAUDE.md`: **ao alterar um, altere o outro.**
 
