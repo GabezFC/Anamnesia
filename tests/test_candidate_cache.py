@@ -5,6 +5,7 @@ nunca a recuperação real.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -121,6 +122,10 @@ def test_rebuild_do_grafo_invalida_o_cache(fake, vault):
     graph.write_text("{}", encoding="utf-8")
     cc.cached_candidates("gw", vault, "q1")
     graph.write_text('{"nodes": []}', encoding="utf-8")
+    # Deterministic: a coarse filesystem clock (seen on the Windows CI runner) can leave the mtime
+    # unchanged for two quick writes; the fingerprint is mtime-based, so force a distinct one.
+    st = graph.stat()
+    os.utime(graph, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
     cc.cached_candidates("gw", vault, "q1")
     assert len(fake.calls) == 2
 
