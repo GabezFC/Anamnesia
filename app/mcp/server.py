@@ -58,6 +58,8 @@ def gateway():
     if _gateway is None:
         from app.gateway.memory_gateway import MemoryGateway
         _gateway = MemoryGateway()
+        from app.memory_store.index import attach_saved_context
+        attach_saved_context(_gateway)  # no-op while data/saved_context is empty
         _gateway.warm()
     return _gateway
 
@@ -151,6 +153,33 @@ if TOOLSET == "full":
     def memory_stats() -> dict:
         """Estatísticas agregadas dos benchmarks (latência, tokens, custo, falsos negativos) por pipeline/consumidor."""
         return aggregate_stats(gateway().db)
+
+
+SAVE_ENABLED = env_str("MG_MCP_SAVE", "0").strip().lower() in ("1", "true", "yes", "on")
+
+if SAVE_ENABLED:
+    # OPT-IN (default OFF): one extra tool that WRITES to the Gateway-owned saved-context folder
+    # (never the user's vault). Adds ~one tool schema to every turn, hence not in the default set.
+    @server.tool()
+    def memory_save(title: str, content: str, tags: list[str] | None = None, project: str | None = None,
+                    source_agent: str | None = None) -> dict:
+        """Salva uma nota de contexto (decisão, fato, preferência) na memória própria do Gateway.
+        Segredos (chaves de API, tokens, chaves privadas) são rejeitados. Retorna {id}."""
+        from app.memory_store.index import reindex
+        from app.memory_store.store import SavedContextError, get_store
+        from app.services.security import get_or_create_local_token
+        if not get_or_create_local_token():  # the write needs the local token to exist (same-user install)
+            return {"error": "token local indisponível; salvar contexto recusado"}
+        try:
+            note_id = get_store().save(title, content, tags, project, source_agent or "mcp")
+        except SavedContextError as exc:
+            return {"error": str(exc)}
+        if _gateway is not None:
+            try:
+                reindex(_gateway)
+            except Exception:  # noqa: BLE001
+                pass
+        return {"id": note_id}
 
 
 def main():

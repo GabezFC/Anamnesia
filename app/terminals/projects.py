@@ -11,6 +11,11 @@ from pathlib import Path
 LIST_CAP = 500
 SEARCH_CAP = 200
 SCAN_CAP = 50_000
+CONTENT_RESULT_CAP = 200
+CONTENT_MAX_FILE_BYTES = 1024 * 1024
+CONTENT_MAX_TOTAL_BYTES = 64 * 1024 * 1024
+CONTENT_MAX_SECONDS = 5.0
+SNIPPET_CHARS = 160
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache", ".pytest_cache"}
 
 
@@ -114,6 +119,91 @@ def search_names(project_path: str, q: str, rel: str = "", cap: int = SEARCH_CAP
         if truncated:
             break
     return {"query": q, "results": results, "truncated": truncated}
+
+
+def search_content(project_path: str, q: str, rel: str = "", cap: int = CONTENT_RESULT_CAP,
+                   max_file_bytes: int = CONTENT_MAX_FILE_BYTES, max_total_bytes: int = CONTENT_MAX_TOTAL_BYTES,
+                   max_seconds: float = CONTENT_MAX_SECONDS, clock=time.monotonic) -> dict:
+    """Case-insensitive substring search inside text files (T10.8).
+
+    Skips SKIP_DIRS, symlinks (files and dirs, never followed), files over `max_file_bytes` and
+    binaries (NUL byte or invalid UTF-8 in the first 8 KB). Stops, flagging `truncated`, at `cap`
+    matches, `max_total_bytes` read or `max_seconds` elapsed. Each hit: path, line (1-based), a
+    snippet of at most SNIPPET_CHARS characters around the match.
+    """
+    root = Path(project_path).resolve()
+    base = safe_join(root, rel)
+    needle = q.lower()
+    if not needle:
+        return {"query": q, "mode": "content", "results": [], "truncated": False, "files_scanned": 0,
+                "bytes_scanned": 0}
+    results: list[dict] = []
+    truncated = False
+    files_scanned = bytes_scanned = 0
+    deadline = clock() + max_seconds
+    stack_walk = [base] if base.is_file() else None
+
+    def walk():
+        if stack_walk:
+            yield str(base.parent), [], [base.name]
+            return
+        yield from os.walk(base, followlinks=False)
+
+    for dirpath, dirnames, filenames in walk():
+        dirnames[:] = sorted(n for n in dirnames if n not in SKIP_DIRS
+                             and not os.path.islink(os.path.join(dirpath, n)))
+        for name in sorted(filenames):
+            if clock() > deadline or bytes_scanned >= max_total_bytes:
+                truncated = True
+                break
+            full = os.path.join(dirpath, name)
+            try:
+                if os.path.islink(full):
+                    continue
+                size = os.stat(full).st_size
+                if size > max_file_bytes or not _is_within(root, Path(full).resolve()):
+                    continue
+                with open(full, "rb") as f:
+                    data = f.read(max_file_bytes + 1)
+            except OSError:
+                continue
+            if len(data) > max_file_bytes or _looks_binary(data):
+                continue
+            files_scanned += 1
+            bytes_scanned += len(data)
+            text = data.decode("utf-8", "replace")
+            rel_path = Path(full).relative_to(root).as_posix()
+            for lineno, line in enumerate(text.splitlines(), 1):
+                idx = line.lower().find(needle)
+                if idx < 0:
+                    continue
+                if len(results) >= cap:
+                    truncated = True
+                    break
+                results.append({"path": rel_path, "line": lineno, "snippet": _snippet(line, idx, len(needle))})
+            if truncated:
+                break
+        if truncated:
+            break
+    return {"query": q, "mode": "content", "results": results, "truncated": truncated,
+            "files_scanned": files_scanned, "bytes_scanned": bytes_scanned}
+
+
+def _looks_binary(data: bytes) -> bool:
+    head = data[:8192]
+    if b"\x00" in head:
+        return True
+    try:
+        head.decode("utf-8")
+    except UnicodeDecodeError as e:
+        return e.start < len(head) - 4  # a multi-byte char cut at the sniff boundary is fine
+    return False
+
+
+def _snippet(line: str, idx: int, n: int) -> str:
+    start = max(0, idx - SNIPPET_CHARS // 3)
+    s = line[start:start + SNIPPET_CHARS].strip()
+    return ("…" if start > 0 else "") + s + ("…" if start + SNIPPET_CHARS < len(line) else "")
 
 
 class ProjectRegistry:

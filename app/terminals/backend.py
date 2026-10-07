@@ -13,12 +13,16 @@ module works on every OS and without the optional `terminal` extra.
 """
 from __future__ import annotations
 
+import logging
 import os
 import queue
 import subprocess
 import sys
 import threading
 from typing import Protocol, runtime_checkable
+
+
+log = logging.getLogger("anamnesia.terminals")
 
 
 class BackendUnavailable(RuntimeError):
@@ -44,10 +48,93 @@ class PtyBackend(Protocol):
 
 
 # ------------------------------------------------------------------ Windows (pywinpty / ConPTY)
+def _create_kill_on_close_job(pid: int | None):
+    """Put process `pid` in a new Job Object with KILL_ON_JOB_CLOSE (ctypes, no pywin32).
+
+    Returns an opaque job handle (int) or None on any failure (logged; callers fall back to
+    taskkill /T). Closing the handle, or the death of this server process, kills every process
+    still in the job, including grandchildren that taskkill's parent-PID walk would miss.
+    The job deliberately does NOT set BREAKAWAY_OK: CREATE_BREAKAWAY_FROM_JOB children then fail to
+    spawn (access denied) instead of escaping.
+    """
+    if sys.platform != "win32" or not pid:
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateJobObjectW.restype = wintypes.HANDLE
+        k32.CreateJobObjectW.argtypes = [wintypes.LPVOID, wintypes.LPCWSTR]
+        k32.OpenProcess.restype = wintypes.HANDLE
+        k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        k32.SetInformationJobObject.restype = wintypes.BOOL
+        k32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD]
+        k32.AssignProcessToJobObject.restype = wintypes.BOOL
+        k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+        class BASIC(ctypes.Structure):
+            _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                        ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                        ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
+                        ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
+                        ("SchedulingClass", wintypes.DWORD)]
+
+        class IO(ctypes.Structure):
+            _fields_ = [(n, ctypes.c_uint64) for n in
+                        ("ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+                         "ReadTransferCount", "WriteTransferCount", "OtherTransferCount")]
+
+        class EXT(ctypes.Structure):
+            _fields_ = [("BasicLimitInformation", BASIC), ("IoInfo", IO), ("ProcessMemoryLimit", ctypes.c_size_t),
+                        ("JobMemoryLimit", ctypes.c_size_t), ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                        ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+        job = k32.CreateJobObjectW(None, None)
+        if not job:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            info = EXT()
+            info.BasicLimitInformation.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            if not k32.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info)):  # ExtendedLimit
+                raise ctypes.WinError(ctypes.get_last_error())
+            proc = k32.OpenProcess(0x0100 | 0x0001, False, int(pid))  # SET_QUOTA | TERMINATE
+            if not proc:
+                raise ctypes.WinError(ctypes.get_last_error())
+            try:
+                if not k32.AssignProcessToJobObject(job, proc):
+                    raise ctypes.WinError(ctypes.get_last_error())
+            finally:
+                k32.CloseHandle(proc)
+        except BaseException:
+            k32.CloseHandle(job)
+            raise
+        return int(job)
+    except Exception as e:
+        log.warning("job object unavailable for pid %s (%s); using taskkill fallback", pid, e)
+        return None
+
+
+def _close_job(job) -> None:
+    if not job:
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        k32.CloseHandle(job)
+    except Exception:
+        log.warning("closing job object failed", exc_info=True)
+
+
 class _WinPtyHandle:
-    def __init__(self, proc):
+    def __init__(self, proc, job=None):
         self._p = proc
         self.pid = getattr(proc, "pid", None)
+        self._job = job
         self._closed = False
 
     @property
@@ -100,6 +187,8 @@ class _WinPtyHandle:
             self._p.close(force=True)
         except Exception:
             pass
+        job, self._job = self._job, None
+        _close_job(job)  # KILL_ON_JOB_CLOSE: whatever survived taskkill dies here
 
 
 class WinPtyBackend:
@@ -111,7 +200,7 @@ class WinPtyBackend:
         except ImportError as e:
             raise BackendUnavailable("pywinpty não instalado (pip install 'anamnesia[terminal]')") from e
         proc = PtyProcess.spawn(list(argv), cwd=cwd, env=dict(env), dimensions=(int(rows), int(cols)))
-        return _WinPtyHandle(proc)
+        return _WinPtyHandle(proc, _create_kill_on_close_job(getattr(proc, "pid", None)))
 
 
 # ------------------------------------------------------------------ POSIX (stdlib pty)

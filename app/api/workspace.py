@@ -24,10 +24,11 @@ from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 from app.services.security import (get_or_create_local_token, is_local_client, require_local_write,
                                    require_localhost)
+from app.terminals import worktrees as wt
 from app.terminals.manager import SessionLimitError, SessionNotFound, TerminalManager
 from app.terminals.profiles import Profile, ProfileError, ProfileUnavailable, load_profiles
 from app.terminals.projects import (PathEscapeError, ProjectError, ProjectRegistry, list_dir,
-                                    search_names)
+                                    search_content, search_names)
 
 router = APIRouter(prefix="/api")
 audit = logging.getLogger("anamnesia.terminals.audit")
@@ -127,12 +128,14 @@ def remove_project(project_id: str, reg: ProjectRegistry = Depends(get_registry)
 
 
 @router.get("/projects/{project_id}/files", dependencies=[Depends(require_local_write)])
-def project_files(project_id: str, path: str = "", q: str = "",
+def project_files(project_id: str, path: str = "", q: str = "", content: int = 0,
                   reg: ProjectRegistry = Depends(get_registry)):
     proj = reg.get(project_id)
     if proj is None:
         return _err(404, "not_found", "projeto não encontrado")
     try:
+        if q and content:
+            return search_content(proj.path, q[:200], path)
         if q:
             return search_names(proj.path, q[:200], path)
         return list_dir(proj.path, path)
@@ -140,6 +143,58 @@ def project_files(project_id: str, path: str = "", q: str = "",
         return _err(403, "path_escape", "caminho fora do projeto")
     except (ProjectError, OSError):
         return _err(404, "not_found", "diretório não encontrado")
+
+
+# ------------------------------------------------------------------ worktrees (T10.7)
+class WorktreeIn(BaseModel):
+    branch: str = Field(min_length=1, max_length=200)
+
+
+_WT_STATUS = {"not_a_git_repo": 422, "invalid_branch": 422, "not_found": 404, "conflict": 409,
+              "dirty": 409, "forbidden": 403}
+
+
+def _wt_err(e: wt.WorktreeError) -> JSONResponse:
+    return _err(_WT_STATUS.get(e.code, 422), e.code, str(e))
+
+
+@router.get("/projects/{project_id}/worktrees", dependencies=[Depends(require_local_write)])
+def list_project_worktrees(project_id: str, reg: ProjectRegistry = Depends(get_registry)):
+    proj = reg.get(project_id)
+    if proj is None:
+        return _err(404, "not_found", "projeto não encontrado")
+    try:
+        return {"worktrees": [w.to_dict() for w in wt.list_worktrees(proj.path)]}
+    except wt.WorktreeError as e:
+        return _wt_err(e)
+
+
+@router.post("/projects/{project_id}/worktrees", status_code=201, dependencies=[Depends(require_local_write)])
+def create_project_worktree(project_id: str, body: WorktreeIn, reg: ProjectRegistry = Depends(get_registry)):
+    proj = reg.get(project_id)
+    if proj is None:
+        return _err(404, "not_found", "projeto não encontrado")
+    try:
+        return wt.create_worktree(proj.path, proj.name, body.branch).to_dict()
+    except wt.WorktreeError as e:
+        return _wt_err(e)
+
+
+@router.delete("/projects/{project_id}/worktrees/{worktree_id}", dependencies=[Depends(require_local_write)])
+def delete_project_worktree(project_id: str, worktree_id: str, confirm: bool = False, force: bool = False,
+                            reg: ProjectRegistry = Depends(get_registry),
+                            mgr: TerminalManager = Depends(get_manager)):
+    proj = reg.get(project_id)
+    if proj is None:
+        return _err(404, "not_found", "projeto não encontrado")
+    try:
+        wt.delete_worktree(proj.path, worktree_id, confirm=confirm, force=force)
+    except wt.WorktreeError as e:
+        return _wt_err(e)
+    for s in mgr.list():  # sessions living inside the removed worktree are pointless now
+        if s.worktree_id == worktree_id:
+            mgr.close(s.id, "worktree_removed")
+    return {"removed": True}
 
 
 # ------------------------------------------------------------------ profiles
@@ -154,6 +209,7 @@ class SessionIn(BaseModel):
     profile: str = "shell"
     cols: int = Field(default=80, ge=1, le=500)
     rows: int = Field(default=24, ge=1, le=500)
+    worktree_id: str | None = Field(default=None, max_length=64)
 
 
 @router.post("/sessions", status_code=201, dependencies=[Depends(require_local_write)])
@@ -168,8 +224,14 @@ def create_session(body: SessionIn, mgr: TerminalManager = Depends(get_manager),
     prof = profiles.get(body.profile)
     if prof is None:
         return _err(404, "profile_not_found", "perfil não encontrado")
+    cwd = None
+    if body.worktree_id:
+        try:
+            cwd = wt.get_worktree(proj.path, body.worktree_id).path
+        except wt.WorktreeError as e:
+            return _wt_err(e)
     try:
-        s = mgr.create(proj, prof, cols=body.cols, rows=body.rows)
+        s = mgr.create(proj, prof, cols=body.cols, rows=body.rows, cwd=cwd, worktree_id=body.worktree_id)
     except ProfileUnavailable as e:
         return _err(422, "profile_unavailable", str(e), "instale a CLI ou abra o perfil 'shell'")
     except SessionLimitError as e:

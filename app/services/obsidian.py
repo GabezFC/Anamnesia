@@ -29,6 +29,47 @@ class ObsidianVault:
     def __init__(self, vault_path: Path | str, excluded_dirs: tuple[str, ...] = (".obsidian", ".trash", ".git")):
         self.root = Path(vault_path).resolve()
         self.excluded_dirs = set(excluded_dirs)
+        # Extra READ-ONLY roots exposed under a virtual path prefix (e.g. "saved_context/<file>.md",
+        # the Gateway-owned agent-saved notes, app/memory_store). Empty by default: with no extra
+        # root every method below behaves exactly as before. The user's vault is never written.
+        self.extra_roots: dict[str, Path] = {}
+
+    def add_extra_root(self, prefix: str, root: Path | str) -> None:
+        prefix = prefix.strip("/")
+        if not prefix or "/" in prefix or prefix.startswith("."):
+            raise ValueError(f"prefixo inválido para raiz extra: {prefix!r}")
+        self.extra_roots[prefix] = Path(root).resolve()
+
+    def _extra_split(self, rel: str) -> tuple[Path, str] | None:
+        """(extra_root, path inside it) when `rel` lives under an extra-root prefix, else None."""
+        head, sep, tail = rel.replace("\\", "/").partition("/")
+        if sep and head in self.extra_roots and tail:
+            return self.extra_roots[head], tail
+        return None
+
+    def _extra_markdown(self) -> list[str]:
+        out: list[str] = []
+        for prefix, root in self.extra_roots.items():
+            if not root.is_dir():
+                continue
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+                for fn in filenames:
+                    if fn.startswith(".") or not fn.lower().endswith(".md"):
+                        continue
+                    out.append(f"{prefix}/{Path(dirpath, fn).relative_to(root).as_posix()}")
+        return sorted(out)
+
+    def _abs(self, rel: str) -> Path:
+        """Absolute path of a listed markdown file (user vault or extra root), traversal-guarded."""
+        ex = self._extra_split(rel)
+        if ex is None:
+            return self.root / rel
+        root, inner = ex
+        p = (root / inner).resolve()
+        if root not in p.parents:
+            raise VaultAccessError(f"Caminho fora da raiz extra: {rel}")
+        return p
 
     # -- guards -------------------------------------------------------------
     def _guard(self, operation: str, path: Path | None = None) -> Path | None:
@@ -58,9 +99,21 @@ class ObsidianVault:
         return sorted(out)
 
     def list_markdown(self) -> list[str]:
+        """Markdown of the user's vault ONLY (lint, audit, graphify mirror, project counts)."""
         return [rel for rel in self.list_all() if rel.lower().endswith(".md")]
 
+    def list_searchable(self) -> list[str]:
+        """User markdown + extra read-only roots (agent-saved context). Used by the BM25 index and
+        the freshness fingerprint; identical to `list_markdown()` while no extra root has files."""
+        own = self.list_markdown()
+        return own + self._extra_markdown() if self.extra_roots else own
+
     def read(self, rel_path: str) -> str:
+        ex = self._extra_split(rel_path)
+        if ex is not None:
+            self._guard("read")
+            with open(self._abs(rel_path), "r", encoding="utf-8", errors="replace") as fh:
+                return fh.read()
         p = self._guard("read", Path(rel_path))
         with open(p, "r", encoding="utf-8", errors="replace") as fh:  # read-only mode
             return fh.read()
@@ -76,8 +129,8 @@ class ObsidianVault:
         n = size = 0
         newest = 0.0
         paths = hashlib.sha256()
-        for rel in self.list_markdown():
-            st = os.stat(self.root / rel)
+        for rel in self.list_searchable():
+            st = os.stat(self._abs(rel))
             n += 1
             size += st.st_size
             newest = max(newest, st.st_mtime)
@@ -88,7 +141,7 @@ class ObsidianVault:
         """sha256 per markdown file — used to prove nothing was modified (§110)."""
         self._guard("hash")
         result = {}
-        for rel in self.list_markdown():
+        for rel in self.list_markdown():  # proof about the USER vault: extra roots excluded
             p = self._guard("read", Path(rel))
             with open(p, "rb") as fh:
                 result[rel] = hashlib.sha256(fh.read()).hexdigest()

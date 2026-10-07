@@ -48,7 +48,7 @@ class BaselineIndex:
             "CREATE VIRTUAL TABLE sec USING fts5(file UNINDEXED, section, body, status UNINDEXED, line UNINDEXED,"
             " tokenize = 'unicode61 remove_diacritics 2')"
         )
-        files = self.vault.list_markdown()
+        files = self.vault.list_searchable()
         n = 0
         for rel in files:
             text = self.vault.read(rel)

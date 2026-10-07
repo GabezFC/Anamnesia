@@ -23,6 +23,7 @@ DEFAULT_MAX_SESSIONS = 8
 DEFAULT_RING_BYTES = 1024 * 1024
 DEFAULT_IDLE_SECONDS = 12 * 3600
 SUBSCRIBER_QUEUE_LIMIT = 4096
+DEFAULT_JANITOR_SECONDS = 60.0
 
 # Fixed allowlist (matched case-insensitively: Windows env names are case-insensitive).
 ENV_ALLOWLIST = ("PATH", "HOME", "USERPROFILE", "LANG", "TERM", "SystemRoot", "COMSPEC", "TEMP",
@@ -104,6 +105,7 @@ class Session:
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     thread: threading.Thread | None = field(default=None, repr=False)
     close_reason: str | None = None
+    worktree_id: str | None = None
 
     @property
     def pid(self) -> int | None:
@@ -113,13 +115,14 @@ class Session:
         return {"id": self.id, "project_id": self.project_id, "profile_id": self.profile_id,
                 "state": self.state, "pid": self.pid, "rows": self.rows, "cols": self.cols,
                 "started_at": self.started_at, "ended_at": self.ended_at, "exit_code": self.exit_code,
-                "clients": len(self.subscribers)}
+                "clients": len(self.subscribers), "worktree_id": self.worktree_id,
+                "cwd": self.project_path}
 
 
 class TerminalManager:
     def __init__(self, backend: PtyBackend | None = None, max_sessions: int | None = None,
                  ring_bytes: int | None = None, idle_seconds: float | None = None,
-                 clock=time.monotonic, environ=None):
+                 clock=time.monotonic, environ=None, janitor_interval: float = DEFAULT_JANITOR_SECONDS):
         self.backend = backend or default_backend()
         self.max_sessions = max_sessions or _env_int("ANAMNESIA_MAX_SESSIONS", DEFAULT_MAX_SESSIONS)
         self.ring_bytes = ring_bytes or DEFAULT_RING_BYTES
@@ -128,13 +131,44 @@ class TerminalManager:
         self._environ = environ  # None => os.environ at create() time
         self._sessions: dict[str, Session] = {}
         self._lock = threading.RLock()
+        self.janitor_interval = janitor_interval
+        self._janitor: threading.Thread | None = None
+        self._janitor_stop = threading.Event()
+
+    # ------------------------------------------------------------ janitor
+    def _ensure_janitor(self) -> None:
+        with self._lock:
+            if self._janitor is not None and self._janitor.is_alive():
+                return
+            self._janitor_stop = stop = threading.Event()
+            self._janitor = threading.Thread(target=self._janitor_loop, args=(stop,),
+                                             name="pty-janitor", daemon=True)
+            self._janitor.start()
+
+    def _janitor_loop(self, stop: threading.Event) -> None:
+        while not stop.wait(self.janitor_interval):
+            try:
+                gone = self.reap()
+                if gone:
+                    audit.info("janitor_reaped count=%d", len(gone))
+            except Exception:
+                log.exception("janitor tick failed")
+
+    def _stop_janitor(self) -> None:
+        with self._lock:
+            t, self._janitor = self._janitor, None
+            self._janitor_stop.set()
+        if t is not None and t is not threading.current_thread():
+            t.join(timeout=5)
 
     # ------------------------------------------------------------ lifecycle
-    def create(self, project, profile, cols: int = 80, rows: int = 24) -> Session:
-        """`project`: object with id/name/path. `profile`: app.terminals.profiles.Profile."""
+    def create(self, project, profile, cols: int = 80, rows: int = 24, cwd: str | None = None,
+               worktree_id: str | None = None) -> Session:
+        """`project`: object with id/name/path. `profile`: app.terminals.profiles.Profile.
+        `cwd` overrides the project path (used for git worktrees; the caller validated it)."""
         self.reap()
         cols, rows = self._clamp(cols, 80), self._clamp(rows, 24)
-        cwd = os.path.realpath(project.path)
+        cwd = os.path.realpath(cwd or project.path)
         if not os.path.isdir(cwd):
             raise FileNotFoundError("diretório do projeto não existe mais")
         argv = profile.argv()
@@ -145,8 +179,9 @@ class TerminalManager:
                 raise SessionLimitError(f"limite de {self.max_sessions} sessões simultâneas atingido")
             handle = self.backend.spawn(argv, cwd, env, rows, cols)
             s = Session(uuid.uuid4().hex[:12], project.id, cwd, profile.id, handle, rows, cols,
-                        time.time(), last_client_at=self._clock())
+                        time.time(), last_client_at=self._clock(), worktree_id=worktree_id)
             self._sessions[s.id] = s
+        self._ensure_janitor()
         t = threading.Thread(target=self._pump, args=(s,), name=f"pty-reader-{s.id}", daemon=True)
         s.thread = t
         t.start()
@@ -212,6 +247,7 @@ class TerminalManager:
         return True
 
     def close_all(self, reason: str = "shutdown") -> None:
+        self._stop_janitor()
         for sid in list(self._sessions):
             self.close(sid, reason)
 

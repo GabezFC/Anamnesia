@@ -69,6 +69,14 @@ def data_dir() -> Path:
     return user_data_dir() / "data"
 
 
+def saved_context_dir() -> Path:
+    """Gateway-owned Markdown folder for agent-saved context (Fase 7). Never inside the user's vault.
+
+    Dev checkout: <repo>/data/saved_context (covered by the `data/*` rule in .gitignore).
+    """
+    return data_dir() / "saved_context"
+
+
 def local_settings_path() -> Path:
     root = user_data_dir()
     # Dev checkout keeps config/local_settings.json where it has always been.
