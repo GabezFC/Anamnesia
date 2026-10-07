@@ -75,9 +75,21 @@ def test_closing_pty_and_killing_group_leaves_no_orphan():
     out = _read_until(fd, b"child:")
     grandchild = int(out.split(b"child:")[1].split()[0])
     os.kill(grandchild, 0)  # alive before
+    pgid = os.getpgid(pid)  # read BEFORE closing: macOS may reap the session leader on hangup
     os.close(fd)
-    os.killpg(os.getpgid(pid), signal.SIGKILL)
-    os.waitpid(pid, 0)
-    time.sleep(0.5)
-    with pytest.raises(ProcessLookupError):
-        os.kill(grandchild, 0)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # the hangup already took the whole group down
+    try:
+        os.waitpid(pid, 0)
+    except ChildProcessError:
+        pass
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            return  # gone: no orphan
+        time.sleep(0.1)
+    pytest.fail("grandchild survived closing the PTY")
