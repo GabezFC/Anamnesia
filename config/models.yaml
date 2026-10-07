@@ -1,0 +1,121 @@
+# Model Registry: SINGLE source (Connections tab, Config tab, benchmark). Loaded by app/routing/registry.py.
+# RULES:
+# - price only with source_url + checked_at (official pricing page). Nothing here was verified:
+#   every cloud model has price: null => price_status 'unavailable'. Local = 0.0 marginal cost.
+# - `verified: false` => the id/model name was NOT confirmed against the provider's model list.
+#   Confirm each id before relying on it. context_window null = unknown (never guessed).
+# - tier: integer rank (higher = more capable). The number of tiers is whatever this file uses.
+# - Cursor is not a model provider (consumer agent profile), so it is not listed.
+# - Subset YAML only (maps, lists, [a, b], # comments); no PyYAML dependency.
+version: 1
+models:
+  - id: ollama-qwen-coder
+    provider: ollama
+    model: qwen2.5-coder
+    tier: 1
+    context_window: null
+    capabilities: [code, cheap_bulk]
+    effort_supported: false
+    price: null
+    local: true
+    verified: false
+  - id: ollama-llama
+    provider: ollama
+    model: llama3.1
+    tier: 1
+    context_window: null
+    capabilities: [cheap_bulk]
+    effort_supported: false
+    price: null
+    local: true
+    verified: false
+  - id: vllm-local
+    provider: vllm
+    model: configured-in-vllm-server
+    tier: 1
+    context_window: null
+    capabilities: [cheap_bulk]
+    effort_supported: false
+    price: null
+    local: true   # set false for a rented server (cost per GPU hour, not per token)
+    verified: false
+  - id: openai-small
+    provider: openai
+    model: gpt-4o-mini
+    tier: 1
+    context_window: null
+    capabilities: [code, tools, cheap_bulk]
+    effort_supported: false
+    price: null
+    local: false
+    verified: false
+  - id: openai-mid
+    provider: openai
+    model: gpt-4o
+    tier: 2
+    context_window: null
+    capabilities: [code, tools, vision]
+    effort_supported: false
+    price: null
+    local: false
+    verified: false
+  - id: anthropic-haiku
+    provider: anthropic
+    model: claude-haiku-4-5
+    tier: 1
+    context_window: null
+    capabilities: [code, tools, vision, cheap_bulk]
+    effort_supported: false
+    price: null
+    local: false
+    verified: false
+  - id: anthropic-sonnet
+    provider: anthropic
+    model: claude-sonnet-4-5
+    tier: 2
+    context_window: null
+    capabilities: [code, reasoning, tools, vision, long_context]
+    effort_supported: true
+    price: null
+    local: false
+    verified: false
+  - id: anthropic-opus
+    provider: anthropic
+    model: claude-opus-4-1
+    tier: 3
+    context_window: null
+    capabilities: [code, reasoning, tools, vision, long_context]
+    effort_supported: true
+    price: null
+    local: false
+    verified: false
+  - id: openrouter-llama
+    provider: openrouter
+    model: meta-llama/llama-3.1-70b-instruct
+    tier: 2
+    context_window: null
+    capabilities: [code, tools]
+    effort_supported: false
+    price: null   # OpenRouter models API exposes pricing; read at runtime with date
+    local: false
+    verified: false
+  - id: hf-inference
+    provider: huggingface
+    model: Qwen/Qwen2.5-72B-Instruct
+    tier: 2
+    context_window: null
+    capabilities: [code]
+    effort_supported: false
+    price: null   # needs an explicit inference provider before a price can be recorded
+    local: false
+    verified: false
+  - id: nvidia-hosted
+    provider: nvidia
+    model: meta/llama-3.1-70b-instruct
+    tier: 2
+    context_window: null
+    capabilities: [code]
+    effort_supported: false
+    price: null
+    local: false
+    verified: false
