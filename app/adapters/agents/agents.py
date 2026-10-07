@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 
 from config import PROJECT_ROOT
+from config.paths import data_dir
 from config.agents import AgentsConfig
 from app.adapters.models.providers import GenerationResult
 
@@ -132,7 +133,7 @@ class ClaudeCodeAdapter:
 
     def __init__(self, cfg: AgentsConfig | None = None):
         self.cfg = cfg or AgentsConfig()
-        self._empty_mcp_config = PROJECT_ROOT / "data" / "claude_empty_mcp.json"
+        self._empty_mcp_config = data_dir() / "claude_empty_mcp.json"
 
     def available(self) -> dict:
         v = _version(self.cfg.claude_bin)

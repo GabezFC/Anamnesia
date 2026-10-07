@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 
 from config import PROJECT_ROOT, env_bool, env_int, env_str
+from config.paths import benchmark_db_path
 
 PROFILES = {
     "benchmark": {"cache_enabled": False, "verbose_metrics": True, "randomize": True, "log_payloads": False},
@@ -35,7 +36,7 @@ class BenchmarkConfig:
     benchmark_mode: bool = field(default_factory=lambda: env_bool("BENCHMARK_MODE", False))
     cache_enabled_env: bool = field(default_factory=lambda: env_bool("CACHE_ENABLED", True))
     questions_path: str = field(default_factory=lambda: env_str("BENCHMARK_QUESTIONS", _default_questions_path()))
-    db_path: str = field(default_factory=lambda: env_str("DB_PATH", str(PROJECT_ROOT / "benchmark.db")))
+    db_path: str = field(default_factory=lambda: env_str("DB_PATH", str(benchmark_db_path())))
     # zlib-compress `runs.context` on write (§5.3). Off by default: existing tooling that reads the
     # SQLite file directly (not through Database._decode) would see base64 instead of text.
     db_compress_context: bool = field(default_factory=lambda: env_bool("DB_COMPRESS_CONTEXT", False))

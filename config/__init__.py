@@ -1,11 +1,12 @@
 """Domain configuration, read from environment (.env). No secrets are stored here."""
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env", override=False)
+from config.paths import PACKAGE_ROOT, env_file_path
+
+PROJECT_ROOT = PACKAGE_ROOT  # read-only resources; writable state: see config/paths.py
+load_dotenv(env_file_path(), override=False)
 
 
 def env_str(name: str, default: str = "") -> str:

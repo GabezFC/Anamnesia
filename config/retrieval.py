@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from config.paths import data_dir
 from config import PROJECT_ROOT, env_bool, env_float, env_int, env_str
 
 # The example corpus that ships WITH the repository. It is the default so that a fresh clone runs
@@ -82,7 +83,7 @@ def validate_vault_path_for_runtime(path: Path, db_path: str | Path | None = Non
 @dataclass
 class RetrievalConfig:
     vault_path: Path = field(default_factory=resolve_vault_path)
-    data_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data")
+    data_dir: Path = field(default_factory=lambda: data_dir())
     # Directories inside the vault that are never indexed.
     excluded_dirs: tuple[str, ...] = (".obsidian", ".trash", ".git", "99-Templates")
     max_candidates: int = field(default_factory=lambda: env_int("MAX_CANDIDATES", 100))

@@ -39,8 +39,8 @@ def _token_present() -> bool:
     if os.environ.get("MG_LOCAL_TOKEN"):
         return True
     try:
-        from config import PROJECT_ROOT
-        env = Path(PROJECT_ROOT) / ".env"
+        from config.paths import env_file_path
+        env = env_file_path()
         if env.is_file():
             for line in env.read_text(encoding="utf-8", errors="replace").splitlines():
                 key, _, val = line.partition("=")
@@ -56,6 +56,12 @@ def collect_checks() -> list[tuple[str, str, bool, bool]]:
     rows: list[tuple[str, str, bool, bool]] = []
     py_ok = sys.version_info[:2] >= MIN_PYTHON
     rows.append(("python", f"{sys.version.split()[0]} (requires >= {MIN_PYTHON[0]}.{MIN_PYTHON[1]})", py_ok, True))
+
+    try:
+        from config.paths import user_data_dir
+        rows.append(("data dir", str(user_data_dir()), True, False))
+    except Exception as e:  # noqa: BLE001
+        rows.append(("data dir", f"unresolved ({type(e).__name__})", False, False))
 
     try:
         from config.retrieval import resolve_vault_path

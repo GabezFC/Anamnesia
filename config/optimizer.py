@@ -16,7 +16,8 @@ the exact pre-2026-09-28 behaviour (the default pipeline stays whatever the call
 import json
 from dataclasses import dataclass, field, replace
 
-from config import PROJECT_ROOT, env_bool, env_float, env_int, env_str
+from config.paths import local_settings_path
+from config import PROJECT_ROOT, env_bool, env_float, env_int, env_str  # noqa: F401  (PROJECT_ROOT re-exported)
 
 # Part of the result-cache key and of every run's metrics. Bump when a stage changes MEANING.
 # mol-v2 (2026-10-02): provenance lines, temporality (supersession/archived) and conflict demotion
@@ -28,7 +29,7 @@ ROUTE_TARGETS = ("baseline", "graphify", "graphify_jev", "graphify_jev_opt")
 # User-local, gitignored (never committed, never read from the vault). Same file the future
 # frontend toggle (proposta 2026-09-28 §3) is meant to write to — "config local (arquivo), não no
 # vault". Missing or malformed file is not an error: every key is optional.
-LOCAL_SETTINGS_PATH = PROJECT_ROOT / "config" / "local_settings.json"
+LOCAL_SETTINGS_PATH = local_settings_path()
 
 
 def _local_settings() -> dict:

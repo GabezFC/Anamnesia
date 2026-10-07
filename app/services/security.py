@@ -24,9 +24,9 @@ from urllib.parse import urlsplit
 from fastapi import HTTPException, Request
 
 from app.services.envfile import set_env_var
-from config import PROJECT_ROOT
+from config.paths import env_file_path
 
-ENV_PATH = PROJECT_ROOT / ".env"
+ENV_PATH = env_file_path()
 LOCAL_HOSTS = {"127.0.0.1", "::1"}
 TOKEN_ENV_VAR = "MG_LOCAL_TOKEN"
 

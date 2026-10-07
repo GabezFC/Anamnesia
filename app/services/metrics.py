@@ -8,9 +8,9 @@ import threading
 import time
 from pathlib import Path
 
-from config import PROJECT_ROOT
+from config.paths import logs_dir
 
-LOG_DIR = PROJECT_ROOT / "logs"
+LOG_DIR = logs_dir()
 _lock = threading.Lock()
 _SECRET = re.compile(r"(sk-[A-Za-z0-9_\-]{8,}|ts[_-][A-Za-z0-9_\-]{12,}|Bearer\s+\S+|api[_-]?key\s*[=:]\s*\S+)", re.I)
 
@@ -42,7 +42,7 @@ def _rotate_jsonl(path) -> None:
 def get_logger() -> logging.Logger:
     log = logging.getLogger("memory_gateway")
     if not log.handlers:
-        LOG_DIR.mkdir(exist_ok=True)
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
         from logging.handlers import RotatingFileHandler  # T0.4: bounded log growth
         h = RotatingFileHandler(LOG_DIR / "application.log", maxBytes=LOG_MAX_BYTES,
                                 backupCount=LOG_BACKUPS, encoding="utf-8")
@@ -54,7 +54,7 @@ def get_logger() -> logging.Logger:
 
 def jsonl(stream: str, record: dict) -> None:
     """stream in {benchmark, jev, agents}."""
-    LOG_DIR.mkdir(exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
     rec = {"ts": time.time(), **record}
     line = redact(json.dumps(rec, default=str, ensure_ascii=False))
     path = LOG_DIR / f"{stream}.jsonl"

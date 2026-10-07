@@ -15,9 +15,9 @@ import tempfile
 import threading
 from pathlib import Path
 
-from config import PROJECT_ROOT
+from config.paths import local_settings_path
 
-LOCAL_SETTINGS_PATH = PROJECT_ROOT / "config" / "local_settings.json"
+LOCAL_SETTINGS_PATH = local_settings_path()
 _LOCK = threading.Lock()
 
 
