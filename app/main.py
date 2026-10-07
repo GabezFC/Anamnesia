@@ -60,6 +60,23 @@ def create_app() -> FastAPI:
     own_origins = [f"http://{h}:{cfg.port}" for h in (cfg.host, "127.0.0.1", "localhost")]
     app.add_middleware(CORSMiddleware, allow_origins=sorted(set(own_origins)),
                        allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-MG-Token"])
+    # S1 (DNS rebinding): a hostile page can point its own domain at 127.0.0.1 and then Origin == Host
+    # would still match. Reject any Host header that is not loopback / the configured bind host.
+    import os
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+    allowed = {"127.0.0.1", "localhost", "[::1]", "::1", cfg.host}
+    allowed |= {h.strip() for h in os.getenv("MG_ALLOWED_HOSTS", "").split(",") if h.strip()}
+    allowed.discard("0.0.0.0")  # a wildcard bind is not a valid Host header to trust
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=sorted(allowed))
+
+    @app.middleware("http")
+    async def _security_headers(request, call_next):
+        resp = await call_next(request)
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        return resp
+
     app.include_router(routes.router)
     if FRONTEND.exists():
         app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
