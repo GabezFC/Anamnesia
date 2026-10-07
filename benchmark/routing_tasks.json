@@ -1,0 +1,3614 @@
+{
+ "seed": 20261006,
+ "tasks": [
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v7.111-rc0 em ambiente isolado. Fonte: 20-Dev-IA/reranker-local-023.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "KrampusDB v7.111-rc0"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/reranker-local-023.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq001"
+   },
+   "id": "rt-sq001",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"KrampusDB v7.111-rc0\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 157ms no OzmarelleProxy antes de cair para o fallback textual. Fonte: 20-Dev-IA/cache-de-embeddings-041.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 157ms no OzmarelleProxy"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/cache-de-embeddings-041.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq002"
+   },
+   "id": "rt-sq002",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"timeout de 157ms no OzmarelleProxy\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Durnathil 5.73.1, que substituiu o parser antigo. Fonte: 30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-politica-de-retries-05.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "Durnathil 5.73.1"
+    ],
+    "gold_notes": [
+     "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-politica-de-retries-05.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq003"
+   },
+   "id": "rt-sq003",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"Durnathil 5.73.1\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v3.48-rc0 em ambiente isolado. Fonte: 30-Projetos/Aurora_Cerebro/arquitetura/aurora-modulo-de-ranqueamento-05.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "KrampusDB v3.48-rc0"
+    ],
+    "gold_notes": [
+     "30-Projetos/Aurora_Cerebro/arquitetura/aurora-modulo-de-ranqueamento-05.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq004"
+   },
+   "id": "rt-sq004",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"KrampusDB v3.48-rc0\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.164.3 por causa da licenca Apache-2.0. Fonte: 40-Estudos/estudo-arquitetura-de-transformers-020.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "asyncpg 0.164.3"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-arquitetura-de-transformers-020.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq005"
+   },
+   "id": "rt-sq005",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"asyncpg 0.164.3\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e phi4-mini:3.8b-q30, rodando via Ollama. Fonte: 10-Trabalho/politica-de-dados-059.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "phi4-mini:3.8b-q30"
+    ],
+    "gold_notes": [
+     "10-Trabalho/politica-de-dados-059.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq006"
+   },
+   "id": "rt-sq006",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"phi4-mini:3.8b-q30\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Trivandex 7.115.3, que substituiu o parser antigo. Fonte: 30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-biblioteca-de-embeddings-10.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "Trivandex 7.115.3"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-biblioteca-de-embeddings-10.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq007"
+   },
+   "id": "rt-sq007",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"Trivandex 7.115.3\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49015 dentro da rede docker. Fonte: 30-Projetos/Kraken_Cerebro/estudos/kraken-conceitos-de-bm25-02.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "porta 49015"
+    ],
+    "gold_notes": [
+     "30-Projetos/Kraken_Cerebro/estudos/kraken-conceitos-de-bm25-02.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq008"
+   },
+   "id": "rt-sq008",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"porta 49015\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v3.34-rc1 em ambiente isolado. Fonte: 40-Estudos/estudo-compiladores-e-ast-024.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "KrampusDB v3.34-rc1"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-compiladores-e-ast-024.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq009"
+   },
+   "id": "rt-sq009",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"KrampusDB v3.34-rc1\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49022 dentro da rede docker. Fonte: 40-Estudos/estudo-estatistica-bayesiana-030.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "porta 49022"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-estatistica-bayesiana-030.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq010"
+   },
+   "id": "rt-sq010",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"porta 49022\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Nubrastix-7004 e ele nao deve ser renomeado. Fonte: 20-Dev-IA/chunking-hibrido-051.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "Nubrastix-7004"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/chunking-hibrido-051.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq011"
+   },
+   "id": "rt-sq011",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"Nubrastix-7004\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49085 dentro da rede docker. Fonte: 20-Dev-IA/quantizacao-gguf-056.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "porta 49085"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/quantizacao-gguf-056.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq012"
+   },
+   "id": "rt-sq012",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"porta 49085\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v9.139-rc1 em ambiente isolado. Fonte: 20-Dev-IA/sanitizacao-de-markdown-058.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "KrampusDB v9.139-rc1"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/sanitizacao-de-markdown-058.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq013"
+   },
+   "id": "rt-sq013",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"KrampusDB v9.139-rc1\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.101.0 por causa da licenca Apache-2.0. Fonte: 40-Estudos/estudo-avaliacao-offline-045.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "asyncpg 0.101.0"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-avaliacao-offline-045.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq014"
+   },
+   "id": "rt-sq014",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"asyncpg 0.101.0\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Durnathil-7053 e ele nao deve ser renomeado. Fonte: 10-Trabalho/reuniao-de-alinhamento-025.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "Durnathil-7053"
+    ],
+    "gold_notes": [
+     "10-Trabalho/reuniao-de-alinhamento-025.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq015"
+   },
+   "id": "rt-sq015",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"Durnathil-7053\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.136.0 por causa da licenca Apache-2.0. Fonte: 10-Trabalho/politica-de-dados-011.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "asyncpg 0.136.0"
+    ],
+    "gold_notes": [
+     "10-Trabalho/politica-de-dados-011.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq016"
+   },
+   "id": "rt-sq016",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"asyncpg 0.136.0\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.87.1 por causa da licenca Apache-2.0. Fonte: 00-Inbox/inbox-recorte-de-artigo-028.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "asyncpg 0.87.1"
+    ],
+    "gold_notes": [
+     "00-Inbox/inbox-recorte-de-artigo-028.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq017"
+   },
+   "id": "rt-sq017",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"asyncpg 0.87.1\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.122.1 por causa da licenca Apache-2.0. Fonte: 30-Projetos/Vortex_Cerebro/componentes/vortex-retrieval-service-01.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "asyncpg 0.122.1"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/componentes/vortex-retrieval-service-01.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq018"
+   },
+   "id": "rt-sq018",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"asyncpg 0.122.1\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Frimbulator 8.122.2, que substituiu o parser antigo. Fonte: 50-Pessoal/leitura-da-semana-003.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "Frimbulator 8.122.2"
+    ],
+    "gold_notes": [
+     "50-Pessoal/leitura-da-semana-003.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq019"
+   },
+   "id": "rt-sq019",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"Frimbulator 8.122.2\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.150.4 por causa da licenca Apache-2.0. Fonte: 40-Estudos/estudo-grafos-de-conhecimento-014.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "asyncpg 0.150.4"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-grafos-de-conhecimento-014.md"
+    ],
+    "qclass": "factual",
+    "source_question": "sq020"
+   },
+   "id": "rt-sq020",
+   "kind": "memory_qa",
+   "query": "Qual o registro sobre \"asyncpg 0.150.4\" no vault?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.73.2 por causa da licenca Apache-2.0. Fonte: 30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-girar-credenciais-06.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "asyncpg 0.73.2"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-girar-credenciais-06.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq021"
+   },
+   "id": "rt-sq021",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre asyncpg 0.73.2?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Mextoria 8.129.1, que substituiu o parser antigo. Fonte: 20-Dev-IA/pipeline-de-ingestao-002.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "Mextoria 8.129.1"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/pipeline-de-ingestao-002.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq022"
+   },
+   "id": "rt-sq022",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre Mextoria 8.129.1?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.143.2 por causa da licenca Apache-2.0. Fonte: 10-Trabalho/reuniao-de-alinhamento-049.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "asyncpg 0.143.2"
+    ],
+    "gold_notes": [
+     "10-Trabalho/reuniao-de-alinhamento-049.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq023"
+   },
+   "id": "rt-sq023",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre asyncpg 0.143.2?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.38.2 por causa da licenca Apache-2.0. Fonte: 40-Estudos/estudo-information-retrieval-025.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "asyncpg 0.38.2"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-information-retrieval-025.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq024"
+   },
+   "id": "rt-sq024",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre asyncpg 0.38.2?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.45.4 por causa da licenca Apache-2.0. Fonte: 30-Projetos/Vortex_Cerebro/arquitetura/vortex-integracao-com-o-vault-04.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "asyncpg 0.45.4"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/arquitetura/vortex-integracao-com-o-vault-04.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq025"
+   },
+   "id": "rt-sq025",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre asyncpg 0.45.4?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Zorblex-7060 e ele nao deve ser renomeado. Fonte: 30-Projetos/Vortex_Cerebro/estudos/vortex-licencas-das-dependencias-07.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "Zorblex-7060"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/estudos/vortex-licencas-das-dependencias-07.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq026"
+   },
+   "id": "rt-sq026",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre Zorblex-7060?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49127 dentro da rede docker. Fonte: 20-Dev-IA/grafo-de-notas-020.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "porta 49127"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/grafo-de-notas-020.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq027"
+   },
+   "id": "rt-sq027",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre porta 49127?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49106 dentro da rede docker. Fonte: 20-Dev-IA/retry-com-backoff-007.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "porta 49106"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/retry-com-backoff-007.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq028"
+   },
+   "id": "rt-sq028",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre porta 49106?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Pendrazil-7088 e ele nao deve ser renomeado. Fonte: 10-Trabalho/relatorio-para-stakeholders-021.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "Pendrazil-7088"
+    ],
+    "gold_notes": [
+     "10-Trabalho/relatorio-para-stakeholders-021.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq029"
+   },
+   "id": "rt-sq029",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre Pendrazil-7088?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Yolobrix 6.87.3, que substituiu o parser antigo. Fonte: 20-Dev-IA/observabilidade-de-agentes-028.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "Yolobrix 6.87.3"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/observabilidade-de-agentes-028.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq030"
+   },
+   "id": "rt-sq030",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre Yolobrix 6.87.3?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e qwen2.5-coder:14b-q121, rodando via Ollama. Fonte: 00-Inbox/inbox-pergunta-para-investigar-017.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "qwen2.5-coder:14b-q121"
+    ],
+    "gold_notes": [
+     "00-Inbox/inbox-pergunta-para-investigar-017.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq031"
+   },
+   "id": "rt-sq031",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre qwen2.5-coder:14b-q121?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 234ms no BrintiqProxy antes de cair para o fallback textual. Fonte: 40-Estudos/estudo-estatistica-bayesiana-006.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 234ms no BrintiqProxy"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-estatistica-bayesiana-006.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq032"
+   },
+   "id": "rt-sq032",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre timeout de 234ms no BrintiqProxy?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e qwen2.5-coder:7b-q128, rodando via Ollama. Fonte: 30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-publicar-release-10.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "qwen2.5-coder:7b-q128"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-publicar-release-10.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq033"
+   },
+   "id": "rt-sq033",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre qwen2.5-coder:7b-q128?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 213ms no SnorvathProxy antes de cair para o fallback textual. Fonte: 10-Trabalho/retrospectiva-da-sprint-041.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 213ms no SnorvathProxy"
+    ],
+    "gold_notes": [
+     "10-Trabalho/retrospectiva-da-sprint-041.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq034"
+   },
+   "id": "rt-sq034",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre timeout de 213ms no SnorvathProxy?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e llama3.2-vision:11b-q2, rodando via Ollama. Fonte: 00-Inbox/inbox-anotacao-de-podcast-009.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "llama3.2-vision:11b-q2"
+    ],
+    "gold_notes": [
+     "00-Inbox/inbox-anotacao-de-podcast-009.md"
+    ],
+    "qclass": "rare_terms",
+    "source_question": "sq035"
+   },
+   "id": "rt-sq035",
+   "kind": "memory_qa",
+   "query": "O que a nota diz exatamente sobre llama3.2-vision:11b-q2?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e nomic-embed-text:v1.5-q107, rodando via Ollama. Fonte: 20-Dev-IA/roteador-de-modelos-009.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "nomic-embed-text:v1.5-q107"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/roteador-de-modelos-009.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq036"
+   },
+   "id": "rt-sq036",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece nomic-embed-text:v1.5-q107 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e mxbai-embed-large:335m-q93, rodando via Ollama. Fonte: 30-Projetos/Vortex_Cerebro/componentes/vortex-retrieval-service-07.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "mxbai-embed-large:335m-q93"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/componentes/vortex-retrieval-service-07.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq037"
+   },
+   "id": "rt-sq037",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece mxbai-embed-large:335m-q93 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 185ms no FrimbulatorProxy antes de cair para o fallback textual. Fonte: 10-Trabalho/revisao-de-escopo-038.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 185ms no FrimbulatorProxy"
+    ],
+    "gold_notes": [
+     "10-Trabalho/revisao-de-escopo-038.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq038"
+   },
+   "id": "rt-sq038",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece timeout de 185ms no FrimbulatorProxy e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 143ms no ZorblexProxy antes de cair para o fallback textual. Fonte: 30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-rodar-o-benchmark-02.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 143ms no ZorblexProxy"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-rodar-o-benchmark-02.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq039"
+   },
+   "id": "rt-sq039",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece timeout de 143ms no ZorblexProxy e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib KrampusDB 7.101.1, que substituiu o parser antigo. Fonte: 30-Projetos/Aurora_Cerebro/componentes/aurora-answer-composer-10.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "KrampusDB 7.101.1"
+    ],
+    "gold_notes": [
+     "30-Projetos/Aurora_Cerebro/componentes/aurora-answer-composer-10.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq040"
+   },
+   "id": "rt-sq040",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece KrampusDB 7.101.1 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v5.76-rc1 em ambiente isolado. Fonte: 30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-girar-credenciais-06.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "KrampusDB v5.76-rc1"
+    ],
+    "gold_notes": [
+     "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-girar-credenciais-06.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq041"
+   },
+   "id": "rt-sq041",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece KrampusDB v5.76-rc1 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49029 dentro da rede docker. Fonte: 40-Estudos/estudo-sistemas-distribuidos-040.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "porta 49029"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-sistemas-distribuidos-040.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq042"
+   },
+   "id": "rt-sq042",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece porta 49029 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 129ms no TarnvexProxy antes de cair para o fallback textual. Fonte: 20-Dev-IA/roteador-de-modelos-029.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 129ms no TarnvexProxy"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/roteador-de-modelos-029.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq043"
+   },
+   "id": "rt-sq043",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece timeout de 129ms no TarnvexProxy e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Quaxil-7123 e ele nao deve ser renomeado. Fonte: 20-Dev-IA/observabilidade-de-agentes-048.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "Quaxil-7123"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/observabilidade-de-agentes-048.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq044"
+   },
+   "id": "rt-sq044",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece Quaxil-7123 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Brintiq 3.31.3, que substituiu o parser antigo. Fonte: 20-Dev-IA/pipeline-de-ingestao-062.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "Brintiq 3.31.3"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/pipeline-de-ingestao-062.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq045"
+   },
+   "id": "rt-sq045",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece Brintiq 3.31.3 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v7.118-rc1 em ambiente isolado. Fonte: 30-Projetos/Vortex_Cerebro/componentes/vortex-graph-loader-03.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "KrampusDB v7.118-rc1"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/componentes/vortex-graph-loader-03.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq046"
+   },
+   "id": "rt-sq046",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece KrampusDB v7.118-rc1 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e llama3.2-vision:11b-q114, rodando via Ollama. Fonte: 00-Inbox/inbox-anotacao-de-podcast-039.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "llama3.2-vision:11b-q114"
+    ],
+    "gold_notes": [
+     "00-Inbox/inbox-anotacao-de-podcast-039.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq047"
+   },
+   "id": "rt-sq047",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece llama3.2-vision:11b-q114 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 150ms no YolobrixProxy antes de cair para o fallback textual. Fonte: 20-Dev-IA/sharding-do-indice-017.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 150ms no YolobrixProxy"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/sharding-do-indice-017.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq048"
+   },
+   "id": "rt-sq048",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece timeout de 150ms no YolobrixProxy e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e llama3.2-vision:11b-q58, rodando via Ollama. Fonte: 20-Dev-IA/compressao-de-contexto-050.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "llama3.2-vision:11b-q58"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/compressao-de-contexto-050.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq049"
+   },
+   "id": "rt-sq049",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece llama3.2-vision:11b-q58 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Ozmarelle-7074 e ele nao deve ser renomeado. Fonte: 10-Trabalho/contrato-do-fornecedor-019.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "Ozmarelle-7074"
+    ],
+    "gold_notes": [
+     "10-Trabalho/contrato-do-fornecedor-019.md"
+    ],
+    "qclass": "technical",
+    "source_question": "sq050"
+   },
+   "id": "rt-sq050",
+   "kind": "memory_qa",
+   "query": "Em qual contexto tecnico aparece Ozmarelle-7074 e qual foi a implicacao para o pipeline?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Grubnash 2.17.1, que substituiu o parser antigo. Fonte: 30-Projetos/Aurora_Cerebro/componentes/aurora-cache-layer-08.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "Grubnash 2.17.1"
+    ],
+    "gold_notes": [
+     "30-Projetos/Aurora_Cerebro/componentes/aurora-cache-layer-08.md"
+    ],
+    "qclass": "short",
+    "source_question": "sq051"
+   },
+   "id": "rt-sq051",
+   "kind": "memory_qa",
+   "query": "Grubnash 2.17.1?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Nubrastix 3.24.0, que substituiu o parser antigo. Fonte: 20-Dev-IA/parser-de-frontmatter-039.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "Nubrastix 3.24.0"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/parser-de-frontmatter-039.md"
+    ],
+    "qclass": "short",
+    "source_question": "sq052"
+   },
+   "id": "rt-sq052",
+   "kind": "memory_qa",
+   "query": "Nubrastix 3.24.0?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.94.3 por causa da licenca Apache-2.0. Fonte: 00-Inbox/inbox-ideia-solta-sobre-busca-007.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "asyncpg 0.94.3"
+    ],
+    "gold_notes": [
+     "00-Inbox/inbox-ideia-solta-sobre-busca-007.md"
+    ],
+    "qclass": "short",
+    "source_question": "sq053"
+   },
+   "id": "rt-sq053",
+   "kind": "memory_qa",
+   "query": "asyncpg 0.94.3?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Halvexis 3.38.2, que substituiu o parser antigo. Fonte: 30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-formato-do-indice-08.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "Halvexis 3.38.2"
+    ],
+    "gold_notes": [
+     "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-formato-do-indice-08.md"
+    ],
+    "qclass": "short",
+    "source_question": "sq054"
+   },
+   "id": "rt-sq054",
+   "kind": "memory_qa",
+   "query": "Halvexis 3.38.2?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 164ms no KrampusDBProxy antes de cair para o fallback textual. Fonte: 30-Projetos/Kraken_Cerebro/procedimentos/kraken-como-rodar-o-benchmark-02.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 164ms no KrampusDBProxy"
+    ],
+    "gold_notes": [
+     "30-Projetos/Kraken_Cerebro/procedimentos/kraken-como-rodar-o-benchmark-02.md"
+    ],
+    "qclass": "short",
+    "source_question": "sq055"
+   },
+   "id": "rt-sq055",
+   "kind": "memory_qa",
+   "query": "timeout de 164ms no KrampusDBProxy?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49050 dentro da rede docker. Fonte: 20-Dev-IA/batch-de-inferencia-055.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "porta 49050"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/batch-de-inferencia-055.md"
+    ],
+    "qclass": "short",
+    "source_question": "sq056"
+   },
+   "id": "rt-sq056",
+   "kind": "memory_qa",
+   "query": "porta 49050?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.31.0 por causa da licenca Apache-2.0. Fonte: 30-Projetos/Aurora_Cerebro/estudos/aurora-custos-de-inferencia-10.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "asyncpg 0.31.0"
+    ],
+    "gold_notes": [
+     "30-Projetos/Aurora_Cerebro/estudos/aurora-custos-de-inferencia-10.md"
+    ],
+    "qclass": "short",
+    "source_question": "sq057"
+   },
+   "id": "rt-sq057",
+   "kind": "memory_qa",
+   "query": "asyncpg 0.31.0?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 178ms no TrivandexProxy antes de cair para o fallback textual. Fonte: 00-Inbox/inbox-recorte-de-artigo-034.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 178ms no TrivandexProxy"
+    ],
+    "gold_notes": [
+     "00-Inbox/inbox-recorte-de-artigo-034.md"
+    ],
+    "qclass": "short",
+    "source_question": "sq058"
+   },
+   "id": "rt-sq058",
+   "kind": "memory_qa",
+   "query": "timeout de 178ms no TrivandexProxy?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.115.4 por causa da licenca Apache-2.0. Fonte: 30-Projetos/Vortex_Cerebro/arquitetura/vortex-camada-de-cache-09.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "asyncpg 0.115.4"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/arquitetura/vortex-camada-de-cache-09.md"
+    ],
+    "qclass": "short",
+    "source_question": "sq059"
+   },
+   "id": "rt-sq059",
+   "kind": "memory_qa",
+   "query": "asyncpg 0.115.4?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v6.97-rc1 em ambiente isolado. Fonte: 30-Projetos/Kraken_Cerebro/arquitetura/kraken-visao-geral-do-gateway-01.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "KrampusDB v6.97-rc1"
+    ],
+    "gold_notes": [
+     "30-Projetos/Kraken_Cerebro/arquitetura/kraken-visao-geral-do-gateway-01.md"
+    ],
+    "qclass": "short",
+    "source_question": "sq060"
+   },
+   "id": "rt-sq060",
+   "kind": "memory_qa",
+   "query": "KrampusDB v6.97-rc1?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v2.27-rc0 em ambiente isolado. Fonte: 20-Dev-IA/parser-de-frontmatter-019.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "KrampusDB v2.27-rc0"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/parser-de-frontmatter-019.md"
+    ],
+    "qclass": "long",
+    "source_question": "sq061"
+   },
+   "id": "rt-sq061",
+   "kind": "memory_qa",
+   "query": "Preciso reconstruir a linha de raciocinio: onde no vault esta registrado KrampusDB v2.27-rc0, em que nota isso aparece, qual era o contexto da decisao na epoca e que consequencia pratica ficou anotada para quem for mexer nisso depois?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.108.2 por causa da licenca Apache-2.0. Fonte: 40-Estudos/estudo-engenharia-de-prompts-019.md",
+    "answerable": true,
+    "difficulty_score": 2,
+    "expected_facts": [
+     "asyncpg 0.108.2"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-engenharia-de-prompts-019.md"
+    ],
+    "qclass": "long",
+    "source_question": "sq062"
+   },
+   "id": "rt-sq062",
+   "kind": "memory_qa",
+   "query": "Preciso reconstruir a linha de raciocinio: onde no vault esta registrado asyncpg 0.108.2, em que nota isso aparece, qual era o contexto da decisao na epoca e que consequencia pratica ficou anotada para quem for mexer nisso depois?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v5.69-rc0 em ambiente isolado. Fonte: 20-Dev-IA/batch-de-inferencia-075.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "KrampusDB v5.69-rc0"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/batch-de-inferencia-075.md"
+    ],
+    "qclass": "long",
+    "source_question": "sq063"
+   },
+   "id": "rt-sq063",
+   "kind": "memory_qa",
+   "query": "Preciso reconstruir a linha de raciocinio: onde no vault esta registrado KrampusDB v5.69-rc0, em que nota isso aparece, qual era o contexto da decisao na epoca e que consequencia pratica ficou anotada para quem for mexer nisso depois?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49057 dentro da rede docker. Fonte: 50-Pessoal/orcamento-mensal-016.md",
+    "answerable": true,
+    "difficulty_score": 2,
+    "expected_facts": [
+     "porta 49057"
+    ],
+    "gold_notes": [
+     "50-Pessoal/orcamento-mensal-016.md"
+    ],
+    "qclass": "long",
+    "source_question": "sq064"
+   },
+   "id": "rt-sq064",
+   "kind": "memory_qa",
+   "query": "Preciso reconstruir a linha de raciocinio: onde no vault esta registrado porta 49057, em que nota isso aparece, qual era o contexto da decisao na epoca e que consequencia pratica ficou anotada para quem for mexer nisso depois?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v4.62-rc2 em ambiente isolado. Fonte: 10-Trabalho/reuniao-de-alinhamento-013.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "KrampusDB v4.62-rc2"
+    ],
+    "gold_notes": [
+     "10-Trabalho/reuniao-de-alinhamento-013.md"
+    ],
+    "qclass": "long",
+    "source_question": "sq065"
+   },
+   "id": "rt-sq065",
+   "kind": "memory_qa",
+   "query": "Preciso reconstruir a linha de raciocinio: onde no vault esta registrado KrampusDB v4.62-rc2, em que nota isso aparece, qual era o contexto da decisao na epoca e que consequencia pratica ficou anotada para quem for mexer nisso depois?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 115ms no KlovexaProxy antes de cair para o fallback textual. Fonte: 30-Projetos/Aurora_Cerebro/arquitetura/aurora-camada-de-cache-09.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "timeout de 115ms no KlovexaProxy"
+    ],
+    "gold_notes": [
+     "30-Projetos/Aurora_Cerebro/arquitetura/aurora-camada-de-cache-09.md"
+    ],
+    "qclass": "long",
+    "source_question": "sq066"
+   },
+   "id": "rt-sq066",
+   "kind": "memory_qa",
+   "query": "Preciso reconstruir a linha de raciocinio: onde no vault esta registrado timeout de 115ms no KlovexaProxy, em que nota isso aparece, qual era o contexto da decisao na epoca e que consequencia pratica ficou anotada para quem for mexer nisso depois?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e qwen2.5-coder:7b-q16, rodando via Ollama. Fonte: 20-Dev-IA/sharding-do-indice-077.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "qwen2.5-coder:7b-q16"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/sharding-do-indice-077.md"
+    ],
+    "qclass": "long",
+    "source_question": "sq067"
+   },
+   "id": "rt-sq067",
+   "kind": "memory_qa",
+   "query": "Preciso reconstruir a linha de raciocinio: onde no vault esta registrado qwen2.5-coder:7b-q16, em que nota isso aparece, qual era o contexto da decisao na epoca e que consequencia pratica ficou anotada para quem for mexer nisso depois?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49078 dentro da rede docker. Fonte: 00-Inbox/inbox-rascunho-de-api-038.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "porta 49078"
+    ],
+    "gold_notes": [
+     "00-Inbox/inbox-rascunho-de-api-038.md"
+    ],
+    "qclass": "long",
+    "source_question": "sq068"
+   },
+   "id": "rt-sq068",
+   "kind": "memory_qa",
+   "query": "Preciso reconstruir a linha de raciocinio: onde no vault esta registrado porta 49078, em que nota isso aparece, qual era o contexto da decisao na epoca e que consequencia pratica ficou anotada para quem for mexer nisso depois?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49099 dentro da rede docker. Fonte: 20-Dev-IA/guardrails-de-prompt-053.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "porta 49099"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/guardrails-de-prompt-053.md"
+    ],
+    "qclass": "long",
+    "source_question": "sq069"
+   },
+   "id": "rt-sq069",
+   "kind": "memory_qa",
+   "query": "Preciso reconstruir a linha de raciocinio: onde no vault esta registrado porta 49099, em que nota isso aparece, qual era o contexto da decisao na epoca e que consequencia pratica ficou anotada para quem for mexer nisso depois?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e granite-embed:278m-q23, rodando via Ollama. Fonte: 30-Projetos/Kraken_Cerebro/arquitetura/kraken-camada-de-cache-03.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "granite-embed:278m-q23"
+    ],
+    "gold_notes": [
+     "30-Projetos/Kraken_Cerebro/arquitetura/kraken-camada-de-cache-03.md"
+    ],
+    "qclass": "long",
+    "source_question": "sq070"
+   },
+   "id": "rt-sq070",
+   "kind": "memory_qa",
+   "query": "Preciso reconstruir a linha de raciocinio: onde no vault esta registrado granite-embed:278m-q23, em que nota isso aparece, qual era o contexto da decisao na epoca e que consequencia pratica ficou anotada para quem for mexer nisso depois?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49134 dentro da rede docker. Fonte: 20-Dev-IA/sharding-do-indice-037.md",
+    "answerable": true,
+    "difficulty_score": 3,
+    "expected_facts": [
+     "porta 49134"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/sharding-do-indice-037.md",
+     "50-Pessoal/rotina-de-treino-009.md"
+    ],
+    "qclass": "multi_hop",
+    "source_question": "sq071"
+   },
+   "id": "rt-sq071",
+   "kind": "memory_qa",
+   "query": "A nota que menciona porta 49134 aponta para outra nota relacionada; quais sao as duas e como se conectam?",
+   "risk": "medium",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Glimworth-7025 e ele nao deve ser renomeado. Fonte: 50-Pessoal/organizacao-da-casa-021.md",
+    "answerable": true,
+    "difficulty_score": 3,
+    "expected_facts": [
+     "Glimworth-7025"
+    ],
+    "gold_notes": [
+     "50-Pessoal/organizacao-da-casa-021.md",
+     "20-Dev-IA/guardrails-de-prompt-013.md"
+    ],
+    "qclass": "multi_hop",
+    "source_question": "sq072"
+   },
+   "id": "rt-sq072",
+   "kind": "memory_qa",
+   "query": "A nota que menciona Glimworth-7025 aponta para outra nota relacionada; quais sao as duas e como se conectam?",
+   "risk": "medium",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Jorbistan-7039 e ele nao deve ser renomeado. Fonte: 20-Dev-IA/pipeline-de-ingestao-042.md",
+    "answerable": true,
+    "difficulty_score": 3,
+    "expected_facts": [
+     "Jorbistan-7039"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/pipeline-de-ingestao-042.md",
+     "30-Projetos/Kraken_Cerebro/arquitetura/kraken-modulo-de-ranqueamento-05.md"
+    ],
+    "qclass": "multi_hop",
+    "source_question": "sq073"
+   },
+   "id": "rt-sq073",
+   "kind": "memory_qa",
+   "query": "A nota que menciona Jorbistan-7039 aponta para outra nota relacionada; quais sao as duas e como se conectam?",
+   "risk": "medium",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.59.3 por causa da licenca Apache-2.0. Fonte: 10-Trabalho/auditoria-de-acessos-022.md",
+    "answerable": true,
+    "difficulty_score": 3,
+    "expected_facts": [
+     "asyncpg 0.59.3"
+    ],
+    "gold_notes": [
+     "10-Trabalho/auditoria-de-acessos-022.md",
+     "10-Trabalho/onboarding-do-time-020.md"
+    ],
+    "qclass": "multi_hop",
+    "source_question": "sq074"
+   },
+   "id": "rt-sq074",
+   "kind": "memory_qa",
+   "query": "A nota que menciona asyncpg 0.59.3 aponta para outra nota relacionada; quais sao as duas e como se conectam?",
+   "risk": "medium",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v1.13-rc1 em ambiente isolado. Fonte: 30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-estrategia-de-cache-03.md",
+    "answerable": true,
+    "difficulty_score": 3,
+    "expected_facts": [
+     "KrampusDB v1.13-rc1"
+    ],
+    "gold_notes": [
+     "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-estrategia-de-cache-03.md",
+     "20-Dev-IA/batch-de-inferencia-075.md"
+    ],
+    "qclass": "multi_hop",
+    "source_question": "sq075"
+   },
+   "id": "rt-sq075",
+   "kind": "memory_qa",
+   "query": "A nota que menciona KrampusDB v1.13-rc1 aponta para outra nota relacionada; quais sao as duas e como se conectam?",
+   "risk": "medium",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Glimworth 4.45.1, que substituiu o parser antigo. Fonte: 10-Trabalho/mapa-de-riscos-060.md",
+    "answerable": true,
+    "difficulty_score": 3,
+    "expected_facts": [
+     "Glimworth 4.45.1"
+    ],
+    "gold_notes": [
+     "10-Trabalho/mapa-de-riscos-060.md",
+     "20-Dev-IA/compressao-de-contexto-030.md"
+    ],
+    "qclass": "multi_hop",
+    "source_question": "sq076"
+   },
+   "id": "rt-sq076",
+   "kind": "memory_qa",
+   "query": "A nota que menciona Glimworth 4.45.1 aponta para outra nota relacionada; quais sao as duas e como se conectam?",
+   "risk": "medium",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 206ms no QuaxilProxy antes de cair para o fallback textual. Fonte: 30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-formato-do-indice-02.md",
+    "answerable": true,
+    "difficulty_score": 3,
+    "expected_facts": [
+     "timeout de 206ms no QuaxilProxy"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-formato-do-indice-02.md",
+     "70-Daily/2026-03-28.md"
+    ],
+    "qclass": "multi_hop",
+    "source_question": "sq077"
+   },
+   "id": "rt-sq077",
+   "kind": "memory_qa",
+   "query": "A nota que menciona timeout de 206ms no QuaxilProxy aponta para outra nota relacionada; quais sao as duas e como se conectam?",
+   "risk": "medium",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v3.41-rc2 em ambiente isolado. Fonte: 30-Projetos/Kraken_Cerebro/componentes/kraken-graph-loader-09.md",
+    "answerable": true,
+    "difficulty_score": 4,
+    "expected_facts": [
+     "KrampusDB v3.41-rc2"
+    ],
+    "gold_notes": [
+     "30-Projetos/Kraken_Cerebro/componentes/kraken-graph-loader-09.md",
+     "10-Trabalho/reuniao-de-alinhamento-037.md"
+    ],
+    "qclass": "multi_hop",
+    "source_question": "sq078"
+   },
+   "id": "rt-sq078",
+   "kind": "memory_qa",
+   "query": "A nota que menciona KrampusDB v3.41-rc2 aponta para outra nota relacionada; quais sao as duas e como se conectam?",
+   "risk": "medium",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e granite-embed:278m-q135, rodando via Ollama. Fonte: 10-Trabalho/relatorio-para-stakeholders-033.md",
+    "answerable": true,
+    "difficulty_score": 3,
+    "expected_facts": [
+     "granite-embed:278m-q135"
+    ],
+    "gold_notes": [
+     "10-Trabalho/relatorio-para-stakeholders-033.md",
+     "40-Estudos/estudo-grafos-de-conhecimento-026.md"
+    ],
+    "qclass": "multi_hop",
+    "source_question": "sq079"
+   },
+   "id": "rt-sq079",
+   "kind": "memory_qa",
+   "query": "A nota que menciona granite-embed:278m-q135 aponta para outra nota relacionada; quais sao as duas e como se conectam?",
+   "risk": "medium",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 220ms no GrubnashProxy antes de cair para o fallback textual. Fonte: 30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-publicar-release-10.md",
+    "answerable": true,
+    "difficulty_score": 3,
+    "expected_facts": [
+     "timeout de 220ms no GrubnashProxy"
+    ],
+    "gold_notes": [
+     "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-publicar-release-10.md",
+     "00-Inbox/inbox-recorte-de-artigo-034.md"
+    ],
+    "qclass": "multi_hop",
+    "source_question": "sq080"
+   },
+   "id": "rt-sq080",
+   "kind": "memory_qa",
+   "query": "A nota que menciona timeout de 220ms no GrubnashProxy aponta para outra nota relacionada; quais sao as duas e como se conectam?",
+   "risk": "medium",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Halvexis-7018 e ele nao deve ser renomeado. Fonte: 50-Pessoal/controle-de-gastos-002.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "Halvexis-7018"
+    ],
+    "gold_notes": [
+     "50-Pessoal/controle-de-gastos-002.md"
+    ],
+    "qclass": "navigation",
+    "source_question": "sq081"
+   },
+   "id": "rt-sq081",
+   "kind": "memory_qa",
+   "query": "Em que arquivo do vault esta a anotacao sobre Halvexis-7018?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 108ms no GlimworthProxy antes de cair para o fallback textual. Fonte: 20-Dev-IA/streaming-de-tokens-014.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 108ms no GlimworthProxy"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/streaming-de-tokens-014.md"
+    ],
+    "qclass": "navigation",
+    "source_question": "sq082"
+   },
+   "id": "rt-sq082",
+   "kind": "memory_qa",
+   "query": "Em que arquivo do vault esta a anotacao sobre timeout de 108ms no GlimworthProxy?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v7.104-rc2 em ambiente isolado. Fonte: 00-Inbox/inbox-ideia-solta-sobre-busca-031.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "KrampusDB v7.104-rc2"
+    ],
+    "gold_notes": [
+     "00-Inbox/inbox-ideia-solta-sobre-busca-031.md"
+    ],
+    "qclass": "navigation",
+    "source_question": "sq083"
+   },
+   "id": "rt-sq083",
+   "kind": "memory_qa",
+   "query": "Em que arquivo do vault esta a anotacao sobre KrampusDB v7.104-rc2?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e KrampusDB-7081 e ele nao deve ser renomeado. Fonte: 40-Estudos/estudo-metricas-de-ranqueamento-046.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "KrampusDB-7081"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-metricas-de-ranqueamento-046.md"
+    ],
+    "qclass": "navigation",
+    "source_question": "sq084"
+   },
+   "id": "rt-sq084",
+   "kind": "memory_qa",
+   "query": "Em que arquivo do vault esta a anotacao sobre KrampusDB-7081?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v1.6-rc0 em ambiente isolado. Fonte: 30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-rodar-o-benchmark-08.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "KrampusDB v1.6-rc0"
+    ],
+    "gold_notes": [
+     "30-Projetos/Aurora_Cerebro/procedimentos/aurora-como-rodar-o-benchmark-08.md"
+    ],
+    "qclass": "navigation",
+    "source_question": "sq085"
+   },
+   "id": "rt-sq085",
+   "kind": "memory_qa",
+   "query": "Em que arquivo do vault esta a anotacao sobre KrampusDB v1.6-rc0?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 122ms no JorbistanProxy antes de cair para o fallback textual. Fonte: 30-Projetos/Vortex_Cerebro/arquitetura/vortex-fluxo-de-consulta-02.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "timeout de 122ms no JorbistanProxy"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/arquitetura/vortex-fluxo-de-consulta-02.md"
+    ],
+    "qclass": "navigation",
+    "source_question": "sq086"
+   },
+   "id": "rt-sq086",
+   "kind": "memory_qa",
+   "query": "Em que arquivo do vault esta a anotacao sobre timeout de 122ms no JorbistanProxy?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v2.20-rc2 em ambiente isolado. Fonte: 20-Dev-IA/compressao-de-contexto-070.md",
+    "answerable": true,
+    "difficulty_score": 0,
+    "expected_facts": [
+     "KrampusDB v2.20-rc2"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/compressao-de-contexto-070.md"
+    ],
+    "qclass": "navigation",
+    "source_question": "sq087"
+   },
+   "id": "rt-sq087",
+   "kind": "memory_qa",
+   "query": "Em que arquivo do vault esta a anotacao sobre KrampusDB v2.20-rc2?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 192ms no MextoriaProxy antes de cair para o fallback textual. Fonte: 30-Projetos/Vortex_Cerebro/arquitetura/vortex-limites-de-contexto-06.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "timeout de 192ms no MextoriaProxy"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/arquitetura/vortex-limites-de-contexto-06.md"
+    ],
+    "qclass": "navigation",
+    "source_question": "sq088"
+   },
+   "id": "rt-sq088",
+   "kind": "memory_qa",
+   "query": "Em que arquivo do vault esta a anotacao sobre timeout de 192ms no MextoriaProxy?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 171ms no PendrazilProxy antes de cair para o fallback textual. Fonte: 30-Projetos/Aurora_Cerebro/estudos/aurora-anatomia-do-frontmatter-06.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "timeout de 171ms no PendrazilProxy"
+    ],
+    "gold_notes": [
+     "30-Projetos/Aurora_Cerebro/estudos/aurora-anatomia-do-frontmatter-06.md"
+    ],
+    "qclass": "ambiguous",
+    "source_question": "sq089"
+   },
+   "id": "rt-sq089",
+   "kind": "memory_qa",
+   "query": "E sobre aquilo de timeout de 171ms no PendrazilProxy, tem algo?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e nomic-embed-text:v1.5-q51, rodando via Ollama. Fonte: 00-Inbox/inbox-rascunho-de-api-008.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "nomic-embed-text:v1.5-q51"
+    ],
+    "gold_notes": [
+     "00-Inbox/inbox-rascunho-de-api-008.md"
+    ],
+    "qclass": "ambiguous",
+    "source_question": "sq090"
+   },
+   "id": "rt-sq090",
+   "kind": "memory_qa",
+   "query": "E sobre aquilo de nomic-embed-text:v1.5-q51, tem algo?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v7.111-rc0 em ambiente isolado. Fonte: 20-Dev-IA/reranker-local-023.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "KrampusDB v7.111-rc0"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/reranker-local-023.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq091"
+   },
+   "id": "rt-sq091",
+   "kind": "memory_qa",
+   "query": "Me lembra o que ficou registrado a respeito de KrampusDB v7.111-rc0?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "ficou definido um timeout de 157ms no OzmarelleProxy antes de cair para o fallback textual. Fonte: 20-Dev-IA/cache-de-embeddings-041.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "timeout de 157ms no OzmarelleProxy"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/cache-de-embeddings-041.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq092"
+   },
+   "id": "rt-sq092",
+   "kind": "memory_qa",
+   "query": "Onde o vault fala de timeout de 157ms no OzmarelleProxy e o que diz?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Durnathil 5.73.1, que substituiu o parser antigo. Fonte: 30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-politica-de-retries-05.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "Durnathil 5.73.1"
+    ],
+    "gold_notes": [
+     "30-Projetos/Kraken_Cerebro/decisoes/kraken-decisao-politica-de-retries-05.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq093"
+   },
+   "id": "rt-sq093",
+   "kind": "memory_qa",
+   "query": "What does the vault say about Durnathil 5.73.1?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v3.48-rc0 em ambiente isolado. Fonte: 30-Projetos/Aurora_Cerebro/arquitetura/aurora-modulo-de-ranqueamento-05.md",
+    "answerable": true,
+    "difficulty_score": 2,
+    "expected_facts": [
+     "KrampusDB v3.48-rc0"
+    ],
+    "gold_notes": [
+     "30-Projetos/Aurora_Cerebro/arquitetura/aurora-modulo-de-ranqueamento-05.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq094"
+   },
+   "id": "rt-sq094",
+   "kind": "memory_qa",
+   "query": "Tem alguma nota explicando KrampusDB v3.48-rc0? O que ela afirma?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.164.3 por causa da licenca Apache-2.0. Fonte: 40-Estudos/estudo-arquitetura-de-transformers-020.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "asyncpg 0.164.3"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-arquitetura-de-transformers-020.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq095"
+   },
+   "id": "rt-sq095",
+   "kind": "memory_qa",
+   "query": "Me lembra o que ficou registrado a respeito de asyncpg 0.164.3?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o modelo local padrao para esse passo e phi4-mini:3.8b-q30, rodando via Ollama. Fonte: 10-Trabalho/politica-de-dados-059.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "phi4-mini:3.8b-q30"
+    ],
+    "gold_notes": [
+     "10-Trabalho/politica-de-dados-059.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq096"
+   },
+   "id": "rt-sq096",
+   "kind": "memory_qa",
+   "query": "Onde o vault fala de phi4-mini:3.8b-q30 e o que diz?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Trivandex 7.115.3, que substituiu o parser antigo. Fonte: 30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-biblioteca-de-embeddings-10.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "Trivandex 7.115.3"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/decisoes/vortex-decisao-biblioteca-de-embeddings-10.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq097"
+   },
+   "id": "rt-sq097",
+   "kind": "memory_qa",
+   "query": "What does the vault say about Trivandex 7.115.3?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49015 dentro da rede docker. Fonte: 30-Projetos/Kraken_Cerebro/estudos/kraken-conceitos-de-bm25-02.md",
+    "answerable": true,
+    "difficulty_score": 2,
+    "expected_facts": [
+     "porta 49015"
+    ],
+    "gold_notes": [
+     "30-Projetos/Kraken_Cerebro/estudos/kraken-conceitos-de-bm25-02.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq098"
+   },
+   "id": "rt-sq098",
+   "kind": "memory_qa",
+   "query": "Tem alguma nota explicando porta 49015? O que ela afirma?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v3.34-rc1 em ambiente isolado. Fonte: 40-Estudos/estudo-compiladores-e-ast-024.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "KrampusDB v3.34-rc1"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-compiladores-e-ast-024.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq099"
+   },
+   "id": "rt-sq099",
+   "kind": "memory_qa",
+   "query": "Me lembra o que ficou registrado a respeito de KrampusDB v3.34-rc1?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49022 dentro da rede docker. Fonte: 40-Estudos/estudo-estatistica-bayesiana-030.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "porta 49022"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-estatistica-bayesiana-030.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq100"
+   },
+   "id": "rt-sq100",
+   "kind": "memory_qa",
+   "query": "Onde o vault fala de porta 49022 e o que diz?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Nubrastix-7004 e ele nao deve ser renomeado. Fonte: 20-Dev-IA/chunking-hibrido-051.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "Nubrastix-7004"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/chunking-hibrido-051.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq101"
+   },
+   "id": "rt-sq101",
+   "kind": "memory_qa",
+   "query": "What does the vault say about Nubrastix-7004?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o servico interno responde na porta 49085 dentro da rede docker. Fonte: 20-Dev-IA/quantizacao-gguf-056.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "porta 49085"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/quantizacao-gguf-056.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq102"
+   },
+   "id": "rt-sq102",
+   "kind": "memory_qa",
+   "query": "Tem alguma nota explicando porta 49085? O que ela afirma?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o snapshot foi validado contra KrampusDB v9.139-rc1 em ambiente isolado. Fonte: 20-Dev-IA/sanitizacao-de-markdown-058.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "KrampusDB v9.139-rc1"
+    ],
+    "gold_notes": [
+     "20-Dev-IA/sanitizacao-de-markdown-058.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq103"
+   },
+   "id": "rt-sq103",
+   "kind": "memory_qa",
+   "query": "Me lembra o que ficou registrado a respeito de KrampusDB v9.139-rc1?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.101.0 por causa da licenca Apache-2.0. Fonte: 40-Estudos/estudo-avaliacao-offline-045.md",
+    "answerable": true,
+    "difficulty_score": 2,
+    "expected_facts": [
+     "asyncpg 0.101.0"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-avaliacao-offline-045.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq104"
+   },
+   "id": "rt-sq104",
+   "kind": "memory_qa",
+   "query": "Onde o vault fala de asyncpg 0.101.0 e o que diz?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o identificador interno do experimento e Durnathil-7053 e ele nao deve ser renomeado. Fonte: 10-Trabalho/reuniao-de-alinhamento-025.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "Durnathil-7053"
+    ],
+    "gold_notes": [
+     "10-Trabalho/reuniao-de-alinhamento-025.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq105"
+   },
+   "id": "rt-sq105",
+   "kind": "memory_qa",
+   "query": "What does the vault say about Durnathil-7053?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.136.0 por causa da licenca Apache-2.0. Fonte: 10-Trabalho/politica-de-dados-011.md",
+    "answerable": true,
+    "difficulty_score": 2,
+    "expected_facts": [
+     "asyncpg 0.136.0"
+    ],
+    "gold_notes": [
+     "10-Trabalho/politica-de-dados-011.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq106"
+   },
+   "id": "rt-sq106",
+   "kind": "memory_qa",
+   "query": "Tem alguma nota explicando asyncpg 0.136.0? O que ela afirma?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.87.1 por causa da licenca Apache-2.0. Fonte: 00-Inbox/inbox-recorte-de-artigo-028.md",
+    "answerable": true,
+    "difficulty_score": 1,
+    "expected_facts": [
+     "asyncpg 0.87.1"
+    ],
+    "gold_notes": [
+     "00-Inbox/inbox-recorte-de-artigo-028.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq107"
+   },
+   "id": "rt-sq107",
+   "kind": "memory_qa",
+   "query": "Me lembra o que ficou registrado a respeito de asyncpg 0.87.1?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.122.1 por causa da licenca Apache-2.0. Fonte: 30-Projetos/Vortex_Cerebro/componentes/vortex-retrieval-service-01.md",
+    "answerable": true,
+    "difficulty_score": 2,
+    "expected_facts": [
+     "asyncpg 0.122.1"
+    ],
+    "gold_notes": [
+     "30-Projetos/Vortex_Cerebro/componentes/vortex-retrieval-service-01.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq108"
+   },
+   "id": "rt-sq108",
+   "kind": "memory_qa",
+   "query": "Onde o vault fala de asyncpg 0.122.1 e o que diz?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "a dependencia critica aqui e a lib Frimbulator 8.122.2, que substituiu o parser antigo. Fonte: 50-Pessoal/leitura-da-semana-003.md",
+    "answerable": true,
+    "difficulty_score": 2,
+    "expected_facts": [
+     "Frimbulator 8.122.2"
+    ],
+    "gold_notes": [
+     "50-Pessoal/leitura-da-semana-003.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq109"
+   },
+   "id": "rt-sq109",
+   "kind": "memory_qa",
+   "query": "What does the vault say about Frimbulator 8.122.2?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "o driver escolhido foi asyncpg 0.150.4 por causa da licenca Apache-2.0. Fonte: 40-Estudos/estudo-grafos-de-conhecimento-014.md",
+    "answerable": true,
+    "difficulty_score": 2,
+    "expected_facts": [
+     "asyncpg 0.150.4"
+    ],
+    "gold_notes": [
+     "40-Estudos/estudo-grafos-de-conhecimento-014.md"
+    ],
+    "qclass": "paraphrased",
+    "source_question": "sq110"
+   },
+   "id": "rt-sq110",
+   "kind": "memory_qa",
+   "query": "Tem alguma nota explicando asyncpg 0.150.4? O que ela afirma?",
+   "risk": "low",
+   "verifier": {
+    "mode": "all",
+    "type": "fact_match+citation"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq111"
+   },
+   "id": "rt-sq111",
+   "kind": "memory_qa",
+   "query": "Qual foi a decisao sobre o protocolo Quibblenaut 9.9 no gateway?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq112"
+   },
+   "id": "rt-sq112",
+   "kind": "memory_qa",
+   "query": "Quanto custou a licenca do Wobblefract Enterprise em 2026?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq113"
+   },
+   "id": "rt-sq113",
+   "kind": "memory_qa",
+   "query": "Qual o CNPJ do fornecedor Plimthorne Systems?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq114"
+   },
+   "id": "rt-sq114",
+   "kind": "memory_qa",
+   "query": "Em que nota esta o resultado do experimento Bandersnatch-91231?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq115"
+   },
+   "id": "rt-sq115",
+   "kind": "memory_qa",
+   "query": "What is the rollout plan for the Snorflaxis 12 index format?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq116"
+   },
+   "id": "rt-sq116",
+   "kind": "memory_qa",
+   "query": "Qual a senha do banco de producao do projeto Zibbertron?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq117"
+   },
+   "id": "rt-sq117",
+   "kind": "memory_qa",
+   "query": "Quando foi a reuniao com o cliente Trizzleform Holdings?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq118"
+   },
+   "id": "rt-sq118",
+   "kind": "memory_qa",
+   "query": "Qual a nota de corte definida no edital Vermplex 2027?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq119"
+   },
+   "id": "rt-sq119",
+   "kind": "memory_qa",
+   "query": "Qual foi a metrica final do modelo gronkolo-99b no benchmark?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq120"
+   },
+   "id": "rt-sq120",
+   "kind": "memory_qa",
+   "query": "Onde esta documentado o procedimento de deploy no cluster Yipflorn?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "40-Estudos/estudo-metricas-de-ranqueamento-010.md",
+     "token": "Snorvath 2.10.2"
+    }
+   },
+   "id": "rt-ex001",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 40-Estudos/estudo-metricas-de-ranqueamento-010.md: a dependencia critica aqui e a lib Snorvath 2.10.2, que substituiu o parser antigo.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "expected_json": {
+     "path": "10-Trabalho/planejamento-trimestral-052.md",
+     "token": "asyncpg 0.80.4"
+    }
+   },
+   "id": "rt-ex002",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 10-Trabalho/planejamento-trimestral-052.md: o driver escolhido foi asyncpg 0.80.4 por causa da licenca Apache-2.0.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-politica-de-retries-05.md",
+     "token": "timeout de 199ms no WexpoliumProxy"
+    }
+   },
+   "id": "rt-ex003",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 30-Projetos/Aurora_Cerebro/decisoes/aurora-decisao-politica-de-retries-05.md: ficou definido um timeout de 199ms no WexpoliumProxy antes de cair para o fallback textual.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "50-Pessoal/organizacao-da-casa-021.md",
+     "token": "Glimworth-7025"
+    }
+   },
+   "id": "rt-ex004",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 50-Pessoal/organizacao-da-casa-021.md: o identificador interno do experimento e Glimworth-7025 e ele nao deve ser renomeado.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "50-Pessoal/controle-de-gastos-002.md",
+     "token": "Halvexis-7018"
+    }
+   },
+   "id": "rt-ex005",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 50-Pessoal/controle-de-gastos-002.md: o identificador interno do experimento e Halvexis-7018 e ele nao deve ser renomeado.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "20-Dev-IA/parser-de-frontmatter-039.md",
+     "token": "Nubrastix 3.24.0"
+    }
+   },
+   "id": "rt-ex006",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 20-Dev-IA/parser-de-frontmatter-039.md: a dependencia critica aqui e a lib Nubrastix 3.24.0, que substituiu o parser antigo.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "20-Dev-IA/roteador-de-modelos-009.md",
+     "token": "nomic-embed-text:v1.5-q107"
+    }
+   },
+   "id": "rt-ex007",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 20-Dev-IA/roteador-de-modelos-009.md: o modelo local padrao para esse passo e nomic-embed-text:v1.5-q107, rodando via Ollama.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "00-Inbox/inbox-rascunho-de-api-002.md",
+     "token": "Wexpolium-7116"
+    }
+   },
+   "id": "rt-ex008",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 00-Inbox/inbox-rascunho-de-api-002.md: o identificador interno do experimento e Wexpolium-7116 e ele nao deve ser renomeado.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "expected_json": {
+     "path": "10-Trabalho/reuniao-de-alinhamento-013.md",
+     "token": "KrampusDB v4.62-rc2"
+    }
+   },
+   "id": "rt-ex009",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 10-Trabalho/reuniao-de-alinhamento-013.md: o snapshot foi validado contra KrampusDB v4.62-rc2 em ambiente isolado.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "00-Inbox/inbox-anotacao-de-podcast-039.md",
+     "token": "llama3.2-vision:11b-q114"
+    }
+   },
+   "id": "rt-ex010",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 00-Inbox/inbox-anotacao-de-podcast-039.md: o modelo local padrao para esse passo e llama3.2-vision:11b-q114, rodando via Ollama.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "20-Dev-IA/roteador-de-modelos-029.md",
+     "token": "timeout de 129ms no TarnvexProxy"
+    }
+   },
+   "id": "rt-ex011",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 20-Dev-IA/roteador-de-modelos-029.md: ficou definido um timeout de 129ms no TarnvexProxy antes de cair para o fallback textual.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "expected_json": {
+     "path": "10-Trabalho/reuniao-de-alinhamento-037.md",
+     "token": "KrampusDB v5.83-rc2"
+    }
+   },
+   "id": "rt-ex012",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 10-Trabalho/reuniao-de-alinhamento-037.md: o snapshot foi validado contra KrampusDB v5.83-rc2 em ambiente isolado.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "50-Pessoal/plano-de-viagem-012.md",
+     "token": "Klovexa-7032"
+    }
+   },
+   "id": "rt-ex013",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 50-Pessoal/plano-de-viagem-012.md: o identificador interno do experimento e Klovexa-7032 e ele nao deve ser renomeado.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "expected_json": {
+     "path": "30-Projetos/Vortex_Cerebro/arquitetura/vortex-camada-de-cache-09.md",
+     "token": "asyncpg 0.115.4"
+    }
+   },
+   "id": "rt-ex014",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 30-Projetos/Vortex_Cerebro/arquitetura/vortex-camada-de-cache-09.md: o driver escolhido foi asyncpg 0.115.4 por causa da licenca Apache-2.0.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "10-Trabalho/revisao-de-escopo-038.md",
+     "token": "timeout de 185ms no FrimbulatorProxy"
+    }
+   },
+   "id": "rt-ex015",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 10-Trabalho/revisao-de-escopo-038.md: ficou definido um timeout de 185ms no FrimbulatorProxy antes de cair para o fallback textual.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "50-Pessoal/leitura-da-semana-003.md",
+     "token": "Frimbulator 8.122.2"
+    }
+   },
+   "id": "rt-ex016",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 50-Pessoal/leitura-da-semana-003.md: a dependencia critica aqui e a lib Frimbulator 8.122.2, que substituiu o parser antigo.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "50-Pessoal/organizacao-da-casa-013.md",
+     "token": "Snorvath-7130"
+    }
+   },
+   "id": "rt-ex017",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 50-Pessoal/organizacao-da-casa-013.md: o identificador interno do experimento e Snorvath-7130 e ele nao deve ser renomeado.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "20-Dev-IA/quantizacao-gguf-016.md",
+     "token": "Ozmarelle 6.94.2"
+    }
+   },
+   "id": "rt-ex018",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 20-Dev-IA/quantizacao-gguf-016.md: a dependencia critica aqui e a lib Ozmarelle 6.94.2, que substituiu o parser antigo.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "20-Dev-IA/observabilidade-de-agentes-028.md",
+     "token": "Yolobrix 6.87.3"
+    }
+   },
+   "id": "rt-ex019",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 20-Dev-IA/observabilidade-de-agentes-028.md: a dependencia critica aqui e a lib Yolobrix 6.87.3, que substituiu o parser antigo.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-rodar-o-benchmark-02.md",
+     "token": "timeout de 143ms no ZorblexProxy"
+    }
+   },
+   "id": "rt-ex020",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 30-Projetos/Vortex_Cerebro/procedimentos/vortex-como-rodar-o-benchmark-02.md: ficou definido um timeout de 143ms no ZorblexProxy antes de cair para o fallback textual.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "expected_json": {
+     "path": "50-Pessoal/controle-de-gastos-026.md",
+     "token": "porta 49001"
+    }
+   },
+   "id": "rt-ex021",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 50-Pessoal/controle-de-gastos-026.md: o servico interno responde na porta 49001 dentro da rede docker.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "expected_json": {
+     "path": "00-Inbox/inbox-anotacao-de-podcast-009.md",
+     "token": "llama3.2-vision:11b-q2"
+    }
+   },
+   "id": "rt-ex022",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 00-Inbox/inbox-anotacao-de-podcast-009.md: o modelo local padrao para esse passo e llama3.2-vision:11b-q2, rodando via Ollama.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "expected_json": {
+     "path": "00-Inbox/inbox-rascunho-de-api-038.md",
+     "token": "porta 49078"
+    }
+   },
+   "id": "rt-ex023",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 00-Inbox/inbox-rascunho-de-api-038.md: o servico interno responde na porta 49078 dentro da rede docker.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "expected_json": {
+     "path": "40-Estudos/estudo-metricas-de-ranqueamento-022.md",
+     "token": "porta 49120"
+    }
+   },
+   "id": "rt-ex024",
+   "kind": "extraction",
+   "query": "Da nota abaixo extraia em JSON {\"path\", \"token\"} o identificador/versao citado.\nNota 40-Estudos/estudo-metricas-de-ranqueamento-022.md: o servico interno responde na porta 49120 dentro da rede docker.",
+   "risk": "low",
+   "verifier": {
+    "match_expected": true,
+    "schema": {
+     "properties": {
+      "path": {
+       "type": "string"
+      },
+      "token": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path",
+      "token"
+     ],
+     "type": "object"
+    },
+    "type": "json_schema"
+   }
+  }
+ ],
+ "version": 1
+}
