@@ -1,0 +1,92 @@
+# Connections catalog (Fase 9). Adding an entry here is enough: no code change needed.
+# Fields: id, type (agent|model|mcp), name, command, env_keys, docs_url (only URLs found in this repo,
+# else null), status (available|planned), mcp_snippet (hermes_yaml|claude_json|codex_toml|null).
+connections:
+  - id: hermes
+    type: agent
+    name: Hermes
+    command: hermes
+    env_keys: []
+    docs_url: https://hermes-agent.nousresearch.com/docs/reference/model-catalog
+    status: available
+    mcp_snippet: hermes_yaml
+  - id: claude-code
+    type: agent
+    name: Claude Code
+    command: claude
+    env_keys: []
+    docs_url: null
+    status: available
+    mcp_snippet: claude_json
+  - id: codex
+    type: agent
+    name: Codex
+    command: codex
+    env_keys: []
+    docs_url: null
+    status: available
+    mcp_snippet: codex_toml
+  - id: opencode
+    type: agent
+    name: OpenCode
+    command: opencode
+    env_keys: []
+    docs_url: null
+    status: available
+    mcp_snippet: null
+  - id: anthropic
+    type: model
+    name: Anthropic
+    command: null
+    env_keys: [ANTHROPIC_API_KEY]
+    docs_url: null
+    status: available
+    mcp_snippet: null
+  - id: openai
+    type: model
+    name: OpenAI
+    command: null
+    env_keys: [OPENAI_API_KEY]
+    docs_url: null
+    status: available
+    mcp_snippet: null
+  - id: ollama
+    type: model
+    name: Ollama
+    command: ollama
+    env_keys: []
+    docs_url: null
+    status: available
+    mcp_snippet: null
+  - id: openrouter
+    type: model
+    name: OpenRouter
+    command: null
+    env_keys: [OPENROUTER_API_KEY]
+    docs_url: null
+    status: planned
+    mcp_snippet: null
+  - id: huggingface
+    type: model
+    name: Hugging Face
+    command: null
+    env_keys: [HF_TOKEN]
+    docs_url: null
+    status: planned
+    mcp_snippet: null
+  - id: nvidia
+    type: model
+    name: NVIDIA
+    command: null
+    env_keys: [NVIDIA_API_KEY]
+    docs_url: null
+    status: planned
+    mcp_snippet: null
+  - id: memory-gateway
+    type: mcp
+    name: Memory Gateway (MCP)
+    command: python -m app.mcp.server
+    env_keys: []
+    docs_url: null
+    status: available
+    mcp_snippet: null
