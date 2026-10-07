@@ -45,10 +45,22 @@ def cmd_search(a):
         ov["relevance_threshold"] = a.threshold
         ov["review_threshold"] = min(a.threshold, g.jev_cfg.review_threshold)
     r = g.search(a.query, a.pipeline, a.max_results, jev_overrides=ov or None, run_meta={"kind": "cli", "agent": "cli"})
-    if _print(r.to_dict(), a.json):
+    mode = getattr(a, "mode", "context")
+    extras = {}
+    if mode != "context":
+        from app.routing.answer import apply_mode, merge_mode
+        extras = apply_mode(g, r, mode, risk=getattr(a, "risk", "medium"))
+    if _print(merge_mode(r.to_dict(), extras) if extras else r.to_dict(), a.json):
         return
     m = r.metrics
     print(f"pipeline={r.pipeline} run_id={r.run_id}")
+    if extras:
+        print(f"mode_used={extras.get('mode_used')} fallback_reason={extras.get('fallback_reason')}")
+        if extras.get("mode_used") == "answer":
+            print(extras["answer"])
+            for s in extras.get("answer_sources", []):
+                print(f"  [{s['n']}] {s['file']} :: {s['section'][:70]}")
+            return
     print(f"candidatos={m.get('candidates')} sobreviventes={m.get('survivors')} "
           f"tokens_candidatos={m.get('candidate_tokens_before_filter')} tokens_contexto={m.get('context_tokens')} "
           f"latência={m.get('total_latency_ms')}ms jev_tokens={m.get('jev_tokens')} jev_cost={m.get('jev_cost')}")
@@ -287,6 +299,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--threshold", type=float)
     s.add_argument("--show-context", action="store_true")
     s.add_argument("--json", action="store_true")
+    s.add_argument("--mode", choices=["context", "answer", "delegate"], default="context")
+    s.add_argument("--risk", choices=["low", "medium", "high"], default="medium")
     s.set_defaults(fn=cmd_search)
     b = sub.add_parser("benchmark")
     b.add_argument("--pipeline", action="append", choices=list(PIPELINES))

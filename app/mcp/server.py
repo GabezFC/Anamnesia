@@ -63,10 +63,25 @@ def gateway():
 
 
 def _search(query: str, pipeline: str, max_results: int, scope: str | None = None,
-            response: str | None = None, client: str | None = None) -> dict:
+            response: str | None = None, client: str | None = None, mode: str = "context") -> dict:
     max_results = max(1, min(int(max_results), 20))
     r = gateway().search(query, pipeline, max_results, scope=scope or None,
                          run_meta={"kind": "mcp", "agent": "mcp", "client": client})
+    extras = {}
+    if mode != "context":      # context (default) never touches the routing code: response unchanged
+        from app.routing.answer import apply_mode
+        extras = apply_mode(gateway(), r, mode)
+    return _merge(_shape(r, response), extras)
+
+
+def _merge(base: dict, extras: dict) -> dict:
+    if not extras:
+        return base
+    from app.routing.answer import merge_mode
+    return merge_mode(base, extras)
+
+
+def _shape(r, response: str | None) -> dict:
     m = r.metrics
     if (response or RESPONSE) != "full":
         return {"run_id": r.run_id, "context": r.context,
@@ -82,13 +97,16 @@ def _search(query: str, pipeline: str, max_results: int, scope: str | None = Non
 
 @server.tool()
 def memory_search(query: str, pipeline: PipelineT = "auto", max_results: int = 10,
-                  scope: str | None = None, client: str | None = None) -> dict:
+                  scope: str | None = None, client: str | None = None,
+                  mode: Literal["context", "answer", "delegate"] = "context") -> dict:
     """Recupera contexto relevante da memória Obsidian do usuário para a pergunta `query`.
     pipeline: auto (padrão, otimizado), baseline, graphify, graphify_jev_opt (juiz pago com
     otimizações) ou graphify_jev (juiz pago, referência congelada).
     scope: opcional, ex. "projeto:<slug>" ou "area:<Area>".
-    client: opcional, identifica quem chamou (ex. "hermes", "claude_code", "codex", "opencode")."""
-    return _search(query, pipeline, max_results, scope, client=client)
+    client: opcional, identifica quem chamou (ex. "hermes", "claude_code", "codex", "opencode").
+    mode: context (padrão, contexto compacto), answer (resposta curta com fontes por modelo escolhido
+    pelo router; cai para context se não houver modelo/fundamentação) ou delegate (ainda = context)."""
+    return _search(query, pipeline, max_results, scope, client=client, mode=mode)
 
 
 if TOOLSET == "full":

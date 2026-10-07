@@ -58,6 +58,24 @@ class SearchRequest(BaseModel):
     # Who actually called (Hermes, Claude Code, Codex…), distinct from the interface ("rest").
     # Optional; recorded in metrics_json.client and surfaced in GET /benchmark/runs (§5.1).
     client: str | None = Field(None, max_length=200)
+    # R3: context (default, unchanged) | answer (router + short cited answer) | delegate (= context for now).
+    mode: Literal["context", "answer", "delegate"] = "context"
+    risk: Literal["low", "medium", "high"] = "medium"
+
+
+class RouteRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2000)
+    task_kind: str = Field("memory", max_length=50)
+    risk: Literal["low", "medium", "high"] = "medium"
+    context_tokens: int = Field(0, ge=0, le=10_000_000)
+
+
+class GenerateRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2000)
+    scope: str | None = Field(None, max_length=500)
+    max_results: int = Field(10, ge=1, le=50)
+    risk: Literal["low", "medium", "high"] = "medium"
+    client: str | None = Field(None, max_length=200)
 
 
 class ConsumerSpec(BaseModel):
@@ -100,7 +118,11 @@ def _search(req: SearchRequest, pipeline: str):
                         run_meta={"kind": "api", "agent": "rest", "client": req.client})
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    return r.to_dict(include_candidates=req.include_candidates)
+    out = r.to_dict(include_candidates=req.include_candidates)
+    if req.mode != "context":   # default path above is byte-for-byte what it was before R3
+        from app.routing.answer import apply_mode, merge_mode
+        out = merge_mode(out, apply_mode(gw(), r, req.mode, risk=req.risk))
+    return out
 
 
 def _health_warnings(g) -> list[dict]:
@@ -131,6 +153,27 @@ def health():
 @router.post("/memory/search")
 def memory_search(req: SearchRequest):
     return _search(req, req.pipeline)
+
+
+@router.post("/route")
+def route_decision(req: RouteRequest):
+    """Deterministic RoutingDecision for a query. Read-only: zero model calls, same guard as /memory/search."""
+    import dataclasses
+
+    from app.routing.answer import plan_route
+    try:
+        decision = plan_route(req.query, req.context_tokens, req.task_kind, req.risk)[0]
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(503, f"router indisponível: {type(exc).__name__}") from exc
+    return dataclasses.asdict(decision)
+
+
+@router.post("/generate", dependencies=[Depends(require_local_write)])
+def generate(req: GenerateRequest):
+    """memory_search mode=answer over REST. Calls a model (may cost money), so it needs the same
+    local-write guard (loopback + same-origin + X-MG-Token) as the other state/spend endpoints."""
+    return _search(SearchRequest(query=req.query, scope=req.scope, max_results=req.max_results,
+                                 client=req.client, mode="answer", risk=req.risk), "auto")
 
 
 @router.post("/memory/search/baseline")
