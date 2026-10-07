@@ -5,6 +5,8 @@ against actual data, not a fixture. A mock JEV backend keeps the paid judge out 
 """
 from __future__ import annotations
 
+import shutil
+
 import pytest
 
 from app.gateway.memory_gateway import MemoryGateway
@@ -28,6 +30,12 @@ def gateway():
     gw.jev = gw.make_jev(gw.jev_cfg, cache=False)
     gw.warm()
     return gw
+
+
+def _need_graph(gw) -> None:
+    """T0.2: a clean checkout/CI has neither the graphify binary nor a built graph; skip, never fail."""
+    if not gw.graphify.graph_path.exists() and not shutil.which(str(gw.graphify.bin)):
+        pytest.skip("graphify ausente e sem graph.json (ambiente limpo)")
 
 
 QUERY = "arquitetura decisao driver banco de dados"
@@ -84,6 +92,7 @@ def test_multi_project_scope_is_a_union(gateway):
 
 def test_scope_reduces_judge_input(gateway):
     """A narrow scope must cost FEWER judge tokens than global: scoping happens before the judge."""
+    _need_graph(gateway)
     wide = gateway.search(QUERY, pipeline="graphify_jev", max_results=10, persist=False)
     info = gateway.projects()
     if not info["projects"]:
