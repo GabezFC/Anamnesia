@@ -1,0 +1,50 @@
+# Sub-agent orchestration (Fase 11). Loaded by app/orchestration/config.py.
+# Model CLASSES are NOT model ids. Each class is a RANGE of positions in the registry's tier ranking
+# (config/models.yaml): position = index_of_tier / (number_of_tiers - 1), 0.0 = lowest tier, 1.0 = highest.
+# So a 3-tier and a 5-tier registry both work. A class with no tier in range falls to the class
+# above and a warning is recorded (spec: "classe sem modelo conectado cai para a classe acima e avisa").
+# Subset YAML only (maps, lists, [a, b], # comments); no PyYAML dependency.
+version: 1
+class_order: [cheap, medium, strong]   # low -> high; "escalate one class" walks this list upward
+classes:
+  cheap:
+    rank_min: 0.0
+    rank_max: 0.33
+  medium:
+    rank_min: 0.34
+    rank_max: 0.66
+  strong:
+    rank_min: 0.67
+    rank_max: 1.0
+presets:
+  economic:
+    label: Econômico
+    routing_preset: economic     # app/routing/policy.py preset() name
+    roles:
+      orchestrator: strong
+      researcher: cheap
+      implementer: medium
+      reviewer: medium
+  balanced:
+    label: Equilibrado
+    routing_preset: balanced
+    roles:
+      orchestrator: strong
+      researcher: medium
+      implementer: strong
+      reviewer: medium
+  max:
+    label: Máximo
+    routing_preset: max
+    roles:
+      orchestrator: strong
+      researcher: strong
+      implementer: strong
+      reviewer: strong
+limits:
+  max_parallel_subagents: 3
+  budget_usd: null              # per-run ceiling in USD; null = no ceiling
+  escalate_on_failures: 2       # failures of the same step before moving one class up
+  max_escalations_per_step: 1   # the spec escalates one class, once
+  step_timeout_s: 600
+  poll_interval_s: 0.5
