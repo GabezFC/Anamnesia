@@ -122,3 +122,8 @@ reports/
 
 # --- Eclipse/IDE project file ---
 .project
+
+# spikes: vendored third-party assets and screenshots are local-only
+spikes/**/vendor/
+spikes/**/shots/
+spikes/**/node_modules/
