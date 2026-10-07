@@ -1,0 +1,54 @@
+# Launch profiles for terminal sessions (Fase 10). Loaded by app/terminals/profiles.py.
+# Subset YAML only (maps, lists, [a, b], # comments); no PyYAML dependency.
+# - command: executable name, resolved with shutil.which (never run through a shell).
+# - windows_command / windows_args: override on Windows. The shell profile also falls back to
+#   $SHELL -> bash -> sh on POSIX (see profiles.py).
+# - env_keys: the ONLY extra environment variables copied into the session (besides the fixed
+#   allowlist PATH, HOME/USERPROFILE, LANG, TERM, SystemRoot, COMSPEC, TEMP). Never the whole .env.
+#   Agents that authenticate through their own login (OAuth files under HOME) need no key here.
+version: 1
+profiles:
+  - id: shell
+    name: Shell
+    kind: shell
+    command: bash
+    windows_command: cmd.exe
+    args: []
+    env_keys: []
+    description: Terminal puro (cmd no Windows, bash/sh nos demais).
+  - id: powershell
+    name: PowerShell
+    kind: shell
+    command: pwsh
+    windows_command: powershell.exe
+    args: []
+    env_keys: []
+    description: PowerShell (pwsh em Linux/macOS, se instalado).
+  - id: hermes
+    name: Hermes Agent
+    kind: agent
+    command: hermes
+    args: []
+    env_keys: []
+    description: Hermes Agent CLI no diretório do projeto.
+  - id: claude-code
+    name: Claude Code
+    kind: agent
+    command: claude
+    args: []
+    env_keys: [ANTHROPIC_API_KEY]
+    description: Claude Code CLI (usa login próprio se não houver chave).
+  - id: codex
+    name: Codex
+    kind: agent
+    command: codex
+    args: []
+    env_keys: [OPENAI_API_KEY]
+    description: OpenAI Codex CLI.
+  - id: opencode
+    name: OpenCode
+    kind: agent
+    command: opencode
+    args: []
+    env_keys: [ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY]
+    description: OpenCode CLI.

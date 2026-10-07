@@ -22,6 +22,9 @@ dependencies = [
     "openai==3.19.2",
 ]
 
+[project.optional-dependencies]
+terminal = ["pywinpty>=3.0; sys_platform == 'win32'"]
+
 [project.scripts]
 anamnesia = "anamnesia.cli:main"
 
