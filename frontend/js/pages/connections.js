@@ -10,7 +10,122 @@ import { icon } from '../icons.js';
 import { I18N } from '../i18n.js';
 import { esc } from '../format.js';
 import { mockConnections } from '../mock-data.js';
-import { testConn, snippetOf, saveKey } from '../live.js';
+import { testConn, snippetOf } from '../live.js';
+import { listConnections, setSecret, removeSecret } from '../anamnesia-api.js';
+
+/* ------------------------------------------------------------------ chaves por provedor */
+// Estado por variável vindo de GET /api/connections ({cid: {ENV: {has_key, masked}}}); só máscara, nunca o segredo.
+const keyStatus = {};
+
+const tKeys = () => I18N.config || {};
+const fmtMsg = (m, vars) => String(m).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+
+/** Linhas de chave (uma por variável de ambiente) de uma conexão. Input password sempre vazio. */
+export function renderKeyRows(item) {
+  const t = I18N.connections;
+  const c = tKeys();
+  const envKeys = item.env_keys || [];
+  if (!envKeys.length) {
+    return `
+      <div class="connection-key-section">
+        <label class="input-label">${t.apiKeyLabel}</label>
+        <div class="input-control">
+          <input type="password" autocomplete="new-password" value="" placeholder="${t.apiKeyPlaceholder}" readonly disabled data-bind="masked-key-input" />
+        </div>
+      </div>`;
+  }
+  return envKeys.map((env) => {
+    const st = (keyStatus[item.id] || {})[env];
+    const has = st ? !!st.has_key : !!item.has_key;
+    const masked = st ? st.masked : item.masked_key;
+    return `
+      <div class="connection-key-section" data-env-key="${esc(env)}">
+        <label class="input-label">${t.apiKeyLabel} · <span class="tabular">${esc(env)}</span>
+          <span class="chip ${has ? 'chip-configured' : 'chip-unconfigured'}">${has ? c.keyConfigured : c.keyMissing}</span>
+        </label>
+        <div class="input-control config-key-row">
+          <input
+            type="password"
+            autocomplete="new-password"
+            value=""
+            placeholder="${masked ? esc(masked) : (c.keyPlaceholder || t.apiKeyPlaceholder)}"
+            data-bind="masked-key-input"
+            data-env-key="${esc(env)}"
+          />
+          <button class="btn btn-primary btn-sm" data-action="save-key" data-item-id="${esc(item.id)}" data-env-key="${esc(env)}">${c.keySave}</button>
+          <button class="btn btn-ghost btn-sm" data-action="remove-key" data-item-id="${esc(item.id)}" data-env-key="${esc(env)}" ${has ? '' : 'disabled'}>${c.keyRemove}</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+const allConnections = () => [...mockConnections.agents, ...mockConnections.models, ...mockConnections.mcp];
+
+/** Relê máscaras/estado das chaves do servidor e atualiza os cartões em memória. */
+export async function refreshKeyStatus() {
+  try {
+    const list = await listConnections();
+    for (const c of list) {
+      keyStatus[c.id] = c.keys || {};
+      const item = allConnections().find((x) => x.id === c.id);
+      if (item) { item.has_key = !!c.has_key; item.masked_key = c.masked ? esc(c.masked) : null; }
+    }
+  } catch { /* backend indisponível: mantém o que há */ }
+}
+
+const safeErr = (e) => (e && e.message ? e.message : String(e));
+
+/**
+ * Ações de chave compartilhadas (#/connections e #/config → Chaves). `target` é o botão clicado.
+ * Nunca registra nem exibe o valor digitado; o input é limpo assim que a requisição é montada.
+ */
+export async function handleKeyAction(action, target, { toast, rerender } = {}) {
+  const c = tKeys();
+  const itemId = target.getAttribute('data-item-id');
+  const found = allConnections().find((x) => x.id === itemId);
+  const name = found?.name || itemId;
+  const card = target.closest('.connection-card') || document;
+
+  if (action === 'test-connection') {
+    try {
+      const r = await testConn(itemId);
+      const ok = r && (r.ok === true || r.status === 'ok');
+      toast(ok ? 'success' : 'error', `${name}: ${r?.message || r?.status || (ok ? 'ok' : 'falhou')}`);
+    } catch (err) { toast('error', `${name}: ${safeErr(err)}`); }
+    return;
+  }
+
+  if (action === 'remove-key') {
+    const env = target.getAttribute('data-env-key');
+    try {
+      await removeSecret(itemId, env);
+      toast('success', c.keyRemoved);
+    } catch (err) { toast('error', fmtMsg(c.keyFailed, { err: safeErr(err) })); }
+    await refreshKeyStatus();
+    if (rerender) rerender();
+    return;
+  }
+
+  // save-key (uma variável) ou save-connection (todas as preenchidas do cartão)
+  const inputs = [...card.querySelectorAll('input[type="password"][data-env-key]')]
+    .filter((i) => action === 'save-connection' || i.getAttribute('data-env-key') === target.getAttribute('data-env-key'));
+  const pending = [];
+  for (const input of inputs) {
+    if (input.value) {
+      const v = input.value; input.value = '';
+      pending.push([input.getAttribute('data-env-key'), v]);
+    }
+  }
+  if (!pending.length) { toast('info', c.keyEmptyInput || 'Informe a chave para salvar.'); return; }
+  let failed = null;
+  for (const [env, v] of pending) {
+    try { await setSecret(itemId, env, v); } catch (err) { failed = err; break; }
+  }
+  if (failed) toast('error', fmtMsg(c.keyFailed, { err: safeErr(failed) }));
+  else toast('success', c.keySaved);
+  await refreshKeyStatus();
+  if (rerender) rerender();
+}
 
 let currentState = 'loaded'; // 'loaded' | 'loading' | 'empty' | 'error' | 'backend-unavailable'
 
@@ -92,20 +207,8 @@ export function render() {
           <span class="chip ${hasKey ? 'chip-configured' : 'chip-unconfigured'}">${hasKey ? t.configured : t.notConfigured}</span>
         </div>
 
-        <!-- Chave mascarada (NUNCA reexibir a chave real no client-side) -->
-        <div class="connection-key-section">
-          <label class="input-label">${t.apiKeyLabel}</label>
-          <div class="input-control">
-            <input 
-              type="password" 
-              autocomplete="new-password"
-              value="" 
-              placeholder="${item.masked_key ? esc(item.masked_key) : t.apiKeyPlaceholder}" 
-              ${item.env_keys && item.env_keys.length ? '' : 'readonly disabled'}
-              data-bind="masked-key-input"
-            />
-          </div>
-        </div>
+        <!-- Chaves por variável de ambiente (NUNCA reexibir a chave real no client-side) -->
+        ${renderKeyRows(item)}
 
         <div class="connection-card-actions">
           <button class="btn btn-ghost btn-sm" data-action="view-snippet" data-item-id="${item.id}">
@@ -178,24 +281,10 @@ export function mount(root) {
     const itemId = target.getAttribute('data-item-id');
 
     const toast = (type, message) => window.dispatchEvent(new CustomEvent('anamnesia:toast', { detail: { type, message } }));
-    const all = [...mockConnections.agents, ...mockConnections.models, ...mockConnections.mcp];
+    const all = allConnections();
     const found = all.find(x => x.id === itemId);
-    if (action === 'test-connection') {
-      testConn(itemId).then((r) => {
-        const ok = r && (r.ok === true || r.status === 'ok');
-        toast(ok ? 'success' : 'error', `${found?.name || itemId}: ${r?.message || r?.status || (ok ? 'ok' : 'falhou')}`);
-      }).catch((err) => toast('error', `${found?.name || itemId}: ${err.message || err}`));
-    } else if (action === 'save-connection') {
-      const card = target.closest('.connection-card, [data-item-card], .card') || root;
-      const input = card.querySelector('input[type="password"]');
-      const envKey = found?.env_keys?.[0];
-      if (input && input.value && envKey) {
-        const v = input.value; input.value = '';
-        saveKey(itemId, envKey, v).then(() => toast('success', I18N.connections.saveSuccess))
-          .catch((err) => toast('error', `Não foi possível salvar: ${err.message || err}`));
-      } else {
-        toast('info', 'Informe a chave para salvar.');
-      }
+    if (action === 'test-connection' || action === 'save-connection' || action === 'save-key' || action === 'remove-key') {
+      handleKeyAction(action, target, { toast, rerender: () => { root.innerHTML = render(); } });
     } else if (action === 'view-snippet') {
       snippetOf(itemId).then((r) => {
         window.dispatchEvent(new CustomEvent('anamnesia:modal:snippet', { detail: { title: found?.name || itemId, snippet: r.content || r.note || '' } }));
@@ -209,6 +298,7 @@ export function mount(root) {
   };
 
   root.addEventListener('click', handleClick);
+  refreshKeyStatus().then(() => { if (root.isConnected) root.innerHTML = render(); });
   root._connectionsCleanup = () => {
     root.removeEventListener('click', handleClick);
   };

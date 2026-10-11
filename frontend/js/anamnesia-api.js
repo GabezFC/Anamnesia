@@ -135,3 +135,37 @@ export const fmtUsd = (v) => {
   if (v === 0) return 'US$ 0';
   return `US$ ${v < 0.01 ? v.toFixed(6).replace(/0+$/, '').replace(/\.$/, '') : v.toFixed(4)}`;
 };
+
+// ---- costs ----
+const _q = (o) => { const p = new URLSearchParams(); for (const [k, v] of Object.entries(o)) if (v != null && v !== '') p.set(k, String(v)); return p.toString(); };
+export const costCallsRange = ({ range = 'today', limit = 50, cursor } = {}) =>
+  call('GET', `/api/costs/calls?${_q({ range, limit, cursor })}`);
+export const costHourly = (range = 'today') => call('GET', `/api/costs/hourly?${_q({ range })}`);
+export const costBudget = () => call('GET', '/api/costs/budget');
+export const putCostBudget = ({ daily_usd, monthly_usd, alert_pct } = {}) => {
+  const body = {};
+  if (daily_usd !== undefined) body.daily_usd = daily_usd;
+  if (monthly_usd !== undefined) body.monthly_usd = monthly_usd;
+  if (alert_pct !== undefined) body.alert_pct = alert_pct;
+  return call('PUT', '/api/costs/budget', body);
+};
+export const costByRole = (range = 'today') => call('GET', `/api/costs/by-role?${_q({ range })}`);
+
+// ---- workspace/memory ----
+export const getSettings = () => call('GET', '/api/settings');
+export const putSettings = (patch) => call('PUT', '/api/settings', patch);
+export const lastSearch = () => call('GET', '/api/memory/last-search');
+export const searchPreview = ({ q, maxResults = 8, scope = '' } = {}) => {
+  const p = new URLSearchParams({ q: String(q ?? ''), max_results: String(maxResults) });
+  if (scope) p.set('scope', scope);
+  return call('GET', `/api/memory/search-preview?${p.toString()}`);
+};
+/** Sessão com opções: worktree (bool|id), subagent_role (orchestrator|researcher|implementer|reviewer), mcp (bool|undefined). */
+export const createSessionOpts = ({ project, profile, worktree, role, mcp }) => {
+  const body = { project, profile };
+  if (worktree) body.worktree = worktree;
+  if (role) body.subagent_role = role;
+  if (typeof mcp === 'boolean') body.mcp = mcp;
+  return call('POST', '/api/sessions', body);
+};
+export const benchmarkReportUrl = (fmt = 'md') => `/api/benchmark/report.${fmt === 'json' ? 'json' : 'md'}`;

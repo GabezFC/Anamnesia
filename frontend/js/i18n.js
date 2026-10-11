@@ -5,6 +5,11 @@
  * Todas as strings da aplicação centralizadas para facilitar futura internacionalização.
  */
 
+import { COSTS_I18N } from './i18n-costs.js';
+import { WS_I18N } from './i18n-workspace.js';
+
+import { CONFIG_PT, CONFIG_EN } from './i18n-config.js';
+
 const PT = {
   app: {
     title: 'Anamnésia',
@@ -357,6 +362,23 @@ const EN = {
     statSignificant: 'Statistically significant (p < 0.05)',
   },
 };
+
+Object.assign(PT.costs, COSTS_I18N.pt);
+Object.assign(EN.costs, COSTS_I18N.en);
+
+// workspace/memory: mescla profunda (nav, workspace, memory, lab) sem sobrescrever chaves existentes
+function mergeDeep(base, extra) {
+  for (const k of Object.keys(extra)) {
+    if (extra[k] && typeof extra[k] === 'object') mergeDeep((base[k] ||= {}), extra[k]);
+    else base[k] = extra[k];
+  }
+}
+mergeDeep(PT, WS_I18N.pt);
+mergeDeep(EN, WS_I18N.en);
+
+// chaves novas da tela de Configurações (js/i18n-config.js)
+Object.assign(PT.config, CONFIG_PT);
+Object.assign(EN.config, CONFIG_EN);
 
 export const LANGS = ['pt', 'en'];
 const LANG_PREF_ITEM = 'anamnesia_lang';

@@ -89,7 +89,7 @@ def test_benchmark_data_lives_only_in_the_lab():
     app = read(FRONT / "js" / "app.js")
     assert "#/compare" in app and "Comparar Modelos" in read(FRONT / "js" / "i18n.js") + app
     nav = re.findall(r'href="#/(\w+)" class="nav-item', app)
-    assert nav == ["workspace", "connections", "config", "costs"], nav
+    assert nav == ["workspace", "connections", "config", "costs", "memory"], nav
 
 
 def test_terminal_is_presented_as_local_to_the_app():

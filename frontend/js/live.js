@@ -30,6 +30,9 @@ function toSession(s, projects) {
     title: `${s.profile_id} [${proj?.name || 'local'}]`, status: s.state,
     statusText: s.state === 'active' ? 'Ativo' : `Encerrado${s.exit_code != null ? ` (código ${s.exit_code})` : ''}`,
     cols: s.cols, rows: s.rows, startTime: hhmm(s.started_at), real: true,
+    // worktree/subagente/MCP (valores crus: workspace.js aplica esc() ao renderizar)
+    cwd: s.cwd || null, branch: s.branch || null, role: s.role || null, worktreeId: s.worktree_id || null,
+    mcp: s.mcp && typeof s.mcp === 'object' ? s.mcp : null,
   };
 }
 
@@ -71,8 +74,10 @@ async function loadWorkspace() {
   else replace(mockFiles, []);
 }
 
-export async function launchSession(projectId, profileId) {
-  const r = await A.createSession(projectId, profileId);
+export async function launchSession(projectId, profileId, opts = null) {
+  const r = opts && (opts.worktree || opts.role || typeof opts.mcp === 'boolean')
+    ? await A.createSessionOpts({ project: projectId, profile: profileId, ...opts })
+    : await A.createSession(projectId, profileId);
   await refreshSessions();
   return r.session_id || r.session?.id;
 }

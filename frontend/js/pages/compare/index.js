@@ -93,6 +93,14 @@ export function render(subRoute = 'overview', opts = {}) {
         </div>
 
         <div class="lab-header-right">
+          <a class="btn btn-secondary btn-sm" href="/api/benchmark/report.md" download="benchmark-report.md" data-action="export-report-md">
+            ${icon('download', '', 12)}
+            <span>${I18N.lab.exportMd}</span>
+          </a>
+          <a class="btn btn-secondary btn-sm" href="/api/benchmark/report.json" download="benchmark-report.json" data-action="export-report-json">
+            ${icon('download', '', 12)}
+            <span>${I18N.lab.exportJson}</span>
+          </a>
           <button class="btn btn-lab btn-sm" data-action="run-new-benchmark">
             ${icon('play', '', 12)}
             <span>${I18N.app.runNewComparison}</span>

@@ -15,6 +15,7 @@ import * as workspacePage from './pages/workspace.js';
 import * as connectionsPage from './pages/connections.js';
 import * as configPage from './pages/config.js';
 import * as costsPage from './pages/costs.js';
+import * as memoryPage from './pages/memory.js';
 import * as compareLab from './pages/compare/index.js';
 import { esc } from './format.js';
 import { loadLive, installTerminalObserver, registerProject } from './live.js';
@@ -25,6 +26,7 @@ const ROUTES = {
   '#/connections': { id: 'connections', get title() { return I18N.nav.connections; }, icon: 'connections', module: connectionsPage },
   '#/config': { id: 'config', get title() { return I18N.nav.config; }, icon: 'config', module: configPage },
   '#/costs': { id: 'costs', get title() { return I18N.nav.costs; }, icon: 'costs', module: costsPage },
+  '#/memory': { id: 'memory', get title() { return I18N.nav.memory; }, icon: 'database', module: memoryPage },
 };
 
 /** Seletor PT | EN (botões segmentados; delegação via data-action="set-lang"). */
@@ -165,6 +167,10 @@ function renderShell() {
             <a href="#/costs" class="nav-item ${routeObj.id === 'costs' ? 'is-active' : ''}" aria-current="${routeObj.id === 'costs' ? 'page' : 'false'}">
               <span class="nav-item-icon">${icon('costs', '', 18)}</span>
               <span>${I18N.nav.costs}</span>
+            </a>
+            <a href="#/memory" class="nav-item ${routeObj.id === 'memory' ? 'is-active' : ''}" aria-current="${routeObj.id === 'memory' ? 'page' : 'false'}">
+              <span class="nav-item-icon">${icon('database', '', 18)}</span>
+              <span>${I18N.nav.memory}</span>
             </a>
           </nav>
         </div>

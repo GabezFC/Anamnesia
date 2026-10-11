@@ -2,444 +2,600 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * ANAMNÉSIA COSTS PAGE (#/costs)
- * Livro de custos por chamada do Memory Gateway, orçamentos e gráficos SVG interativos.
+ * Livro de custos ligado ao backend: /api/costs/{summary,calls,hourly,budget,by-role,stream}.
  * Zero benchmarks ou comparações de modelos nesta página (foco em produto e auditoria financeira).
  */
 
 import { icon } from '../icons.js';
-import { I18N } from '../i18n.js';
-import { mockCostSummary, mockBudget, mockCalls } from '../mock-data.js';
-import { createLineChart, createDonutChart } from '../charts/chart-kit.js';
+import { I18N, getLang } from '../i18n.js';
+import { esc } from '../format.js';
+import * as A from '../anamnesia-api.js';
+import { createLineChart } from '../charts/chart-kit.js';
+import { createVirtualTable } from '../components/virtual-table.js';
+import { skeleton, skeletonKpis, skeletonTable } from '../components/skeleton.js';
+import { emptyState } from '../components/empty-state.js';
 
-let selectedPeriod = 'today'; // 'today' | '7d' | '30d' | 'all'
-let visibleCallsCount = 12;
-let selectedCardCall = null;
-let currentState = 'loaded'; // 'loaded' | 'loading' | 'empty' | 'error' | 'backend-unavailable'
-
-// Chart instances for proper cleanup on unmount
-let lineChartInstance = null;
-let donutChartInstance = null;
+const RANGES = ['today', '7d', '30d', 'all'];
+const PAGE_SIZE = 50;
+const POLL_MS = 30000;
+const DEBOUNCE_MS = 600;
+// fallback de rótulo de origem caso a chave I18N esteja ausente (nunca exibe 0 no lugar de 'indisponível')
 const ORIGIN_PT = { measured: 'medido', estimated: 'estimado', unavailable: 'indisponível' };
+
+const S = {
+  range: 'today',
+  status: 'loading', // 'loading' | 'ready' | 'error' | 'backend-unavailable'
+  summary: null,
+  hourly: [],
+  budget: null,
+  roles: [],
+  calls: [],
+  nextCursor: null,
+  loadingMore: false,
+  selected: null,
+  live: 'polling', // 'live' | 'polling'
+  draft: { daily: null, monthly: null, alert: null },
+  budgetMsg: null, // { ok, text }
+  budgetSaving: false,
+};
+
+let reqSeq = 0;
+let stopStream = null;
+let pollTimer = null;
+let debounceTimer = null;
+let lineChart = null;
+let callsTable = null;
+let currentRoot = null;
+
+/* ---------------------------------------------------------------- helpers */
+const originKey = (o) => (o === 'measured' || o === 'estimated' ? o : 'unavailable');
+const originText = (o) => I18N.app[originKey(o)] || ORIGIN_PT[originKey(o)];
+const fmtMoney = (v) => (typeof v === 'number' && Number.isFinite(v) ? `US$ ${v.toFixed(v !== 0 && Math.abs(v) < 0.01 ? 4 : 2)}` : '—');
+const fmtTok = (v) => (typeof v === 'number' && Number.isFinite(v) ? (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)) : null);
+const fmtWhen = (ts) => (typeof ts === 'number' ? new Date(ts * 1000).toLocaleString(getLang() === 'en' ? 'en-US' : 'pt-BR') : '—');
+const fill = (tpl, vars) => String(tpl).replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? ''));
+const asNum = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+
+export function normalizeCall(c) {
+  return {
+    id: String(c.run_id ?? c.id ?? ''),
+    ts: asNum(c.created_at),
+    project: c.project || '—',
+    agent: c.client || c.agent || '—',
+    pipeline: c.pipeline || '—',
+    context_tokens: A.lvValue(c.context_tokens),
+    cost: A.lvValue(c.cost_usd),
+    origin: originKey(A.lvOrigin(c.cost_usd)),
+  };
+}
+
+function budgetRows() {
+  const b = S.budget;
+  if (!b) return [];
+  const t = I18N.costs;
+  return [
+    { key: 'daily', label: t.budgetDaily, short: t.budgetDailyShort, d: b.daily || {} },
+    { key: 'monthly', label: t.budgetMonthly, short: t.budgetMonthlyShort, d: b.monthly || {} },
+  ];
+}
+
+/* ---------------------------------------------------------------- data */
+async function fetchAll(seq) {
+  const range = S.range;
+  const r = await Promise.allSettled([
+    A.costSummary(range),
+    A.costHourly(range),
+    A.costBudget(),
+    A.costByRole(range),
+    A.costCallsRange({ range, limit: PAGE_SIZE }),
+  ]);
+  if (seq !== reqSeq) return null;
+  return r;
+}
+
+async function load({ silent = false } = {}) {
+  const seq = ++reqSeq;
+  if (!silent) { S.status = 'loading'; paint(); }
+  const r = await fetchAll(seq);
+  if (!r) return;
+  const [sum, hourly, budget, roles, calls] = r;
+  if (sum.status === 'rejected' && calls.status === 'rejected') {
+    S.status = A.isUnavailable(sum.reason) ? 'backend-unavailable' : 'error';
+    if (!silent || !S.summary) paint();
+    return;
+  }
+  if (sum.status === 'fulfilled') S.summary = sum.value;
+  S.hourly = hourly.status === 'fulfilled' ? (hourly.value?.points || []) : [];
+  S.budget = budget.status === 'fulfilled' ? budget.value : null;
+  S.roles = roles.status === 'fulfilled' ? A.asList(roles.value) : [];
+  if (calls.status === 'fulfilled') {
+    const fresh = A.asList(calls.value).map(normalizeCall);
+    if (silent && S.calls.length > fresh.length) {
+      // refresh em segundo plano preserva páginas já carregadas (mescla por id)
+      const seen = new Set(fresh.map((c) => c.id));
+      S.calls = [...fresh, ...S.calls.filter((c) => !seen.has(c.id))];
+    } else {
+      S.calls = fresh;
+      S.nextCursor = calls.value?.next_cursor || null;
+    }
+  }
+  S.status = 'ready';
+  paint();
+}
+
+async function loadMore() {
+  if (!S.nextCursor || S.loadingMore) return;
+  const seq = reqSeq;
+  S.loadingMore = true;
+  paint();
+  try {
+    const page = await A.costCallsRange({ range: S.range, limit: PAGE_SIZE, cursor: S.nextCursor });
+    if (seq !== reqSeq) return;
+    const seen = new Set(S.calls.map((c) => c.id));
+    S.calls = [...S.calls, ...A.asList(page).map(normalizeCall).filter((c) => !seen.has(c.id))];
+    S.nextCursor = page?.next_cursor || null;
+  } catch { /* mantém a lista atual; o botão continua disponível */ }
+  S.loadingMore = false;
+  paint();
+}
+
+function scheduleRefresh() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => { load({ silent: true }); }, DEBOUNCE_MS);
+}
+
+function startLive() {
+  stopLive();
+  const startPoll = () => {
+    if (pollTimer) return;
+    pollTimer = setInterval(() => { load({ silent: true }); }, POLL_MS);
+  };
+  const stopPoll = () => { clearInterval(pollTimer); pollTimer = null; };
+  startPoll(); // fallback: cobre o intervalo até o SSE conectar (ou se EventSource faltar)
+  if (typeof EventSource === 'undefined') return;
+  stopStream = A.openCostStream(
+    () => scheduleRefresh(),
+    (state) => {
+      if (state === 'live') { stopPoll(); S.live = 'live'; } else { startPoll(); S.live = 'polling'; }
+      const el = currentRoot?.querySelector('[data-bind="costs-live"]');
+      if (el) el.innerHTML = liveBadge();
+    },
+  );
+}
+
+function stopLive() {
+  if (stopStream) { stopStream(); stopStream = null; }
+  clearInterval(pollTimer); pollTimer = null;
+  clearTimeout(debounceTimer); debounceTimer = null;
+}
+
+/* ---------------------------------------------------------------- views */
+function liveBadge() {
+  const t = I18N.costs;
+  return `<span class="dot ${S.live === 'live' ? 'dot-success' : 'dot-warning'}"></span><span style="font-size: var(--text-xs); color: var(--text-secondary);">${esc(S.live === 'live' ? t.liveOn : t.livePolling)}</span>`;
+}
+
+function skeletonView() {
+  return `
+    <div class="costs-page" data-bind="costs-page" aria-busy="true">
+      ${skeleton({ width: 340, height: 36 })}
+      ${skeletonKpis(4)}
+      ${skeleton({ height: 120 })}
+      <div class="charts-dual-row">${skeleton({ height: 260 })}${skeleton({ height: 260 })}</div>
+      ${skeletonTable({ rows: 6, cols: 6 })}
+    </div>`;
+}
+
+function kpiCard(label, origin, value, sub, accent = false) {
+  const style = accent ? ' style="color: var(--success);"' : '';
+  return `
+    <div class="kpi-card">
+      <div class="kpi-label"><span>${esc(label)}</span><span class="badge-origin badge-origin-${origin}">${esc(originText(origin))}</span></div>
+      <div class="kpi-value-row"><span class="kpi-value"${style}>${esc(value)}</span></div>
+      <span class="kpi-subtext">${esc(sub)}</span>
+    </div>`;
+}
+
+function kpisView() {
+  const t = I18N.costs;
+  const s = S.summary || {};
+  const na = t.unavailable;
+  const money = A.lvValue(s.cost_usd);
+  const ctx = A.lvValue(s.context_tokens);
+  const cand = A.lvValue(s.candidate_tokens);
+  const saved = cand != null && ctx != null ? cand - ctx : null;
+  const calls = asNum(s.calls);
+  return `
+    <div class="costs-kpi-grid">
+      ${kpiCard(t.kpiTotal, originKey(A.lvOrigin(s.cost_usd)), money == null ? na : fmtMoney(money), t.kpiTotalSub)}
+      ${kpiCard(t.kpiCalls, 'measured', calls == null ? na : String(calls), t.kpiCallsSub)}
+      ${kpiCard(t.kpiTokens, originKey(A.lvOrigin(s.context_tokens)), ctx == null ? na : `${fmtTok(ctx)} ${t.tokensUnit}`, t.kpiTokensSub)}
+      ${kpiCard(t.kpiSavedTokens, saved == null ? 'unavailable' : 'estimated', saved == null ? na : `${fmtTok(saved)} ${t.tokensUnit}`, t.kpiSavedSub, saved != null)}
+    </div>`;
+}
+
+function budgetView() {
+  const t = I18N.costs;
+  const b = S.budget;
+  let banner = '';
+  let bars = '';
+  let status = `<span class="dot dot-success"></span><span style="font-size: var(--text-xs); color: var(--text-secondary);">${esc(t.budgetOk)}</span>`;
+  if (!b) {
+    bars = `<p class="kpi-subtext">${esc(t.budgetUnavailable)}</p>`;
+    status = '';
+  } else {
+    const rows = budgetRows();
+    const hot = rows.filter((r) => r.d.alert || r.d.exceeded);
+    if (hot.length) {
+      const exceeded = hot.some((r) => r.d.exceeded);
+      const which = hot.map((r) => r.short).join(', ');
+      const pct = Math.round(Math.max(...hot.map((r) => asNum(r.d.percent) ?? 0)));
+      const msg = esc(fill(exceeded ? t.budgetExceededBanner : t.budgetAlertBanner, { pct, which }));
+      banner = `
+        <div class="callout-notice budget-banner ${exceeded ? 'is-exceeded' : 'is-alert'}" role="alert" data-bind="budget-banner">
+          <div class="callout-notice-icon">${icon('alertTriangle', '', 18)}</div>
+          <div class="callout-notice-body">${msg}</div>
+        </div>`;
+      status = `<span class="dot ${exceeded ? 'dot-danger' : 'dot-warning'}"></span><span style="font-size: var(--text-xs); color: var(--text-secondary);">${esc(exceeded ? t.budgetStatusExceeded : t.budgetStatusAlert)}</span>`;
+    }
+    bars = rows.map((r) => {
+      const pct = asNum(r.d.percent);
+      const noLimit = asNum(r.d.limit_usd) == null;
+      const cls = r.d.exceeded ? 'exceeded' : r.d.alert ? 'warning' : 'ok';
+      const text = noLimit
+        ? `${fmtMoney(asNum(r.d.spent_usd))} · ${t.budgetNoLimit}`
+        : `${fmtMoney(asNum(r.d.spent_usd))} ${t.budgetOf} ${fmtMoney(r.d.limit_usd)}${pct != null ? ` (${pct.toFixed(0)}%)` : ''}`;
+      return `
+        <div class="budget-item" data-budget="${r.key}">
+          <div class="budget-header"><span style="font-weight: 500;">${esc(r.label)}</span><span class="tabular">${esc(text)}</span></div>
+          <div class="budget-track" role="progressbar" aria-label="${esc(r.label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(pct ?? 0, 100).toFixed(0)}">
+            <div class="budget-fill budget-fill-${cls}" style="width: ${Math.min(pct ?? 0, 100)}%;"></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  const val = (k, fallback) => (S.draft[k] != null ? S.draft[k] : (fallback == null ? '' : String(fallback)));
+  const form = b ? `
+    <form class="budget-form" data-action="budget-form" novalidate>
+      <label class="input-group"><span class="input-label">${esc(t.budgetDailyInput)}</span>
+        <input class="input-field" name="daily" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(val('daily', b.daily?.limit_usd))}"></label>
+      <label class="input-group"><span class="input-label">${esc(t.budgetMonthlyInput)}</span>
+        <input class="input-field" name="monthly" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(val('monthly', b.monthly?.limit_usd))}"></label>
+      <label class="input-group"><span class="input-label">${esc(t.budgetAlertInput)}</span>
+        <input class="input-field" name="alert" type="number" min="1" max="100" step="1" inputmode="numeric" value="${esc(val('alert', b.alert_pct))}"></label>
+      <button class="btn btn-primary btn-sm" type="submit" ${S.budgetSaving ? 'disabled' : ''}>${esc(S.budgetSaving ? t.budgetSaving : t.budgetSave)}</button>
+      <span class="budget-msg ${S.budgetMsg ? (S.budgetMsg.ok ? 'is-ok' : 'is-error') : ''}" role="status" aria-live="polite">${S.budgetMsg ? esc(S.budgetMsg.text) : ''}</span>
+    </form>` : '';
+
+  return `
+    ${banner}
+    <div class="budget-panel">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);">
+        <h2 style="font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-primary);">${esc(t.budgetTitle)}</h2>
+        <span class="status-indicator">${status}</span>
+      </div>
+      <div class="budget-bars-grid">${bars}</div>
+      ${form}
+    </div>`;
+}
+
+function rolesView() {
+  const t = I18N.costs;
+  const body = S.roles.length
+    ? `<table class="table" data-bind="roles-table"><thead><tr>
+        <th>${esc(t.colRole)}</th><th class="num-col">${esc(t.colCalls)}</th><th class="num-col">${esc(t.colRuns)}</th>
+        <th class="num-col">${esc(t.colTokens)}</th><th class="num-col">${esc(t.colCost)}</th><th>${esc(t.colCostStatus)}</th>
+      </tr></thead><tbody>${S.roles.map((r) => {
+        const cost = asNum(r.cost_usd);
+        const st = originKey(r.cost_status);
+        return `<tr>
+          <td><span class="badge" style="font-family: var(--font-mono); font-size: 11px;">${esc(r.role || '—')}</span></td>
+          <td class="num-col tabular font-mono">${esc(r.calls ?? '—')}</td>
+          <td class="num-col tabular font-mono">${esc(r.runs ?? '—')}</td>
+          <td class="num-col tabular font-mono">${esc(asNum(r.total_tokens_spent)?.toLocaleString() ?? '—')}</td>
+          <td class="num-col tabular font-mono" style="font-weight: 600;">${esc(cost == null ? t.unavailable : fmtMoney(cost))}</td>
+          <td><span class="badge-origin badge-origin-${st}">${esc(originText(st))}</span></td>
+        </tr>`;
+      }).join('')}</tbody></table>`
+    : emptyState({ title: t.rolesEmptyTitle, description: t.rolesEmptyDesc, variant: 'data', compact: true });
+  return `
+    <div class="chart-card" data-bind="roles-card">
+      <div class="chart-header"><div>
+        <h2 style="font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-primary);">${esc(t.rolesTitle)}</h2>
+        <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">${esc(t.rolesSubtitle)}</p>
+      </div></div>
+      <div class="table-container" style="margin-top: var(--space-3);">${body}</div>
+    </div>`;
+}
+
+function callsView() {
+  const t = I18N.costs;
+  const more = S.nextCursor
+    ? `<div style="text-align: center; margin-top: var(--space-4);"><button class="btn btn-secondary btn-sm" data-action="load-more-calls" ${S.loadingMore ? 'disabled' : ''}>${esc(S.loadingMore ? t.callsLoadingMore : t.callsMore)}</button></div>`
+    : '';
+  return `
+    <div class="calls-section">
+      <div class="calls-table-toolbar">
+        <h2 style="font-size: var(--text-md); font-weight: var(--font-semibold); color: var(--text-primary);">${esc(t.callsTableTitle)}</h2>
+        <span class="section-count tabular">${esc(fill(t.callsShowing, { n: S.calls.length }))}</span>
+      </div>
+      <div id="costs-calls-mount" data-bind="calls-table"></div>
+      ${more}
+    </div>`;
+}
+
+function drawerView() {
+  const t = I18N.costs;
+  const c = S.selected;
+  const kv = (label, value, extra = '') => `<div class="readonly-kv-item"><span class="readonly-kv-label">${esc(label)}</span><span class="readonly-kv-value ${extra}">${esc(value)}</span></div>`;
+  return `
+    <div class="drawer-backdrop ${c ? 'is-active' : ''}" data-action="close-call-detail"></div>
+    <div class="drawer ${c ? 'is-active' : ''}">
+      <div class="drawer-header">
+        <div><div class="card-title">${esc(t.callDetailTitle)}</div><div class="card-subtitle">${esc(c ? c.id : '')}</div></div>
+        <button class="btn btn-ghost btn-icon" data-action="close-call-detail" aria-label="${esc(I18N.app.close)}">${icon('x', '', 16)}</button>
+      </div>
+      <div class="drawer-content">${c ? `
+        ${kv(t.detailTimestamp, fmtWhen(c.ts), 'tabular')}
+        ${kv(t.detailProject, c.project)}
+        ${kv(t.detailAgent, c.agent)}
+        ${kv(t.detailPipeline, c.pipeline, 'font-mono')}
+        ${kv(t.detailContext, c.context_tokens == null ? t.unavailable : `${c.context_tokens.toLocaleString()} ${t.tokensUnit}`, 'tabular')}
+        <div class="readonly-kv-item"><span class="readonly-kv-label">${esc(t.detailCost)}</span>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+            <span class="readonly-kv-value tabular" style="font-size: 16px;">${esc(c.cost == null ? t.unavailable : fmtMoney(c.cost))}</span>
+            <span class="badge-origin badge-origin-${c.origin}">${esc(originText(c.origin))}</span>
+          </div>
+        </div>` : ''}
+      </div>
+    </div>`;
+}
 
 export function render() {
   const t = I18N.costs;
+  if (S.status === 'loading') return skeletonView();
 
-  if (currentState === 'loading') {
-    return `
-      <div class="costs-page">
-        <div class="skeleton" style="height: 36px; width: 340px;"></div>
-        <div class="costs-kpi-grid">
-          <div class="skeleton" style="height: 110px;"></div>
-          <div class="skeleton" style="height: 110px;"></div>
-          <div class="skeleton" style="height: 110px;"></div>
-          <div class="skeleton" style="height: 110px;"></div>
-        </div>
-        <div class="skeleton" style="height: 240px; margin-top: 16px;"></div>
-      </div>
-    `;
+  if (S.status === 'error') {
+    return `<div class="costs-page" data-bind="costs-page">${emptyState({
+      title: I18N.app.errorTitle, description: t.errorDesc, variant: 'error',
+      action: { label: I18N.app.errorRetry, action: 'retry-costs', kind: 'secondary' },
+    })}</div>`;
   }
 
-  if (currentState === 'error') {
-    return `
-      <div class="state-container" style="height: 100%;">
-        <div class="state-icon-wrap" style="color: var(--danger);">${icon('alertTriangle', '', 24)}</div>
-        <h2 class="state-title">${I18N.app.errorTitle}</h2>
-        <p class="state-description">Falha ao consolidar o ledger de chamadas do Memory Gateway.</p>
-        <button class="btn btn-secondary" data-action="retry-costs">${I18N.app.errorRetry}</button>
-      </div>
-    `;
-  }
-
-  if (currentState === 'empty') {
-    return `
-      <div class="state-container" style="height: 100%;">
-        <div class="state-icon-wrap">${icon('costs', '', 28)}</div>
-        <h2 class="state-title">Nenhum custo registrado</h2>
-        <p class="state-description">Execute comandos em um terminal para registrar consumo no Memory Gateway.</p>
-      </div>
-    `;
-  }
-
-  const backendNotice = currentState === 'backend-unavailable' ? `
-    <div class="callout-notice" style="margin-bottom: var(--space-4);">
+  const unavailable = S.status === 'backend-unavailable';
+  const noData = !unavailable && S.calls.length === 0 && !(asNum(S.summary?.calls) > 0);
+  const notice = unavailable ? `
+    <div class="callout-notice">
       <div class="callout-notice-icon">${icon('info', '', 18)}</div>
-      <div class="callout-notice-body">
-        <strong>${I18N.app.backendUnavailableTitle}</strong>
-        ${I18N.app.backendUnavailableDesc}
+      <div class="callout-notice-body"><strong>${esc(I18N.app.backendUnavailableTitle)}</strong> ${esc(I18N.app.backendUnavailableDesc)}</div>
+    </div>` : '';
+
+  const tabs = RANGES.map((r) => {
+    const label = { today: t.periodToday, '7d': t.period7d, '30d': t.period30d, all: t.periodAll }[r];
+    return `<button class="tab-btn ${S.range === r ? 'is-active' : ''}" role="tab" aria-selected="${S.range === r}" data-action="filter-period" data-period="${r}">${esc(label)}</button>`;
+  }).join('');
+
+  const header = `
+    <div class="costs-filter-bar">
+      <div>
+        <h1 style="font-size: var(--text-2xl); font-weight: var(--font-semibold); color: var(--text-primary);">${esc(t.ledgerTitle)}</h1>
+        <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">${esc(t.ledgerSubtitle)}</p>
       </div>
-    </div>
-  ` : '';
+      <div style="display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
+        <span class="status-indicator" data-bind="costs-live">${liveBadge()}</span>
+        <div class="tab-list" role="tablist" aria-label="${esc(t.rangeAria)}">${tabs}</div>
+        <button class="btn btn-secondary btn-sm" data-action="export-csv">${icon('download', '', 13)} ${esc(t.exportCsv)}</button>
+      </div>
+    </div>`;
 
-  const visibleCalls = mockCalls.slice(0, visibleCallsCount);
-
-  // Dynamic calculations based on mockCalls
-  const totalCallsCount = mockCalls.length;
-  const measuredCalls = mockCalls.filter(c => c.cost_usd.value !== null);
-  const totalSpentUsd = measuredCalls.reduce((acc, c) => acc + c.cost_usd.value, 0);
-  const totalContextTokens = mockCalls.reduce((acc, c) => acc + c.context_tokens, 0);
+  if (noData) {
+    return `<div class="costs-page" data-bind="costs-page">${notice}${header}${budgetView()}${emptyState({
+      title: t.emptyTitle, description: t.emptyDesc, variant: 'cost',
+    })}</div>`;
+  }
 
   return `
     <div class="costs-page" data-bind="costs-page">
-      ${backendNotice}
-
-      <!-- BARRA DE CABEÇALHO & FILTROS -->
-      <div class="costs-filter-bar">
-        <div>
-          <h1 style="font-size: var(--text-2xl); font-weight: var(--font-semibold); color: var(--text-primary);">${t.ledgerTitle}</h1>
-          <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">
-            Auditoria de consumo financeiro e volumetria de tokens entregues pelo gateway local.
-          </p>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: var(--space-3);">
-          <div class="tab-list" role="tablist">
-            <button class="tab-btn ${selectedPeriod === 'today' ? 'is-active' : ''}" role="tab" aria-selected="${selectedPeriod === 'today'}" data-action="filter-period" data-period="today">${t.periodToday}</button>
-            <button class="tab-btn ${selectedPeriod === '7d' ? 'is-active' : ''}" role="tab" aria-selected="${selectedPeriod === '7d'}" data-action="filter-period" data-period="7d">${t.period7d}</button>
-            <button class="tab-btn ${selectedPeriod === '30d' ? 'is-active' : ''}" role="tab" aria-selected="${selectedPeriod === '30d'}" data-action="filter-period" data-period="30d">${t.period30d}</button>
-            <button class="tab-btn ${selectedPeriod === 'all' ? 'is-active' : ''}" role="tab" aria-selected="${selectedPeriod === 'all'}" data-action="filter-period" data-period="all">${t.periodAll}</button>
-          </div>
-
-          <button class="btn btn-secondary btn-sm" data-action="export-csv">
-            ${icon('download', '', 13)} ${t.exportCsv}
-          </button>
-        </div>
-      </div>
-
-      <!-- CARDS KPI COM SELOS DE ORIGEM (medido, estimado, indisponível) -->
-      <div class="costs-kpi-grid">
-        <div class="kpi-card">
-          <div class="kpi-label">
-            <span>${t.kpiTotal}</span>
-            <span class="badge-origin badge-origin-${mockCostSummary.total_usd.origin}">${ORIGIN_PT[mockCostSummary.total_usd.origin]}</span>
-          </div>
-          <div class="kpi-value-row">
-            <span class="kpi-value">${mockCostSummary.total_usd.value == null ? 'indisponível' : 'US$ ' + mockCostSummary.total_usd.value.toFixed(2)}</span>
-          </div>
-          <span class="kpi-subtext">Acumulado no período selecionado</span>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">
-            <span>${t.kpiCalls}</span>
-            <span class="badge-origin badge-origin-measured">medido</span>
-          </div>
-          <div class="kpi-value-row">
-            <span class="kpi-value">${totalCallsCount}</span>
-          </div>
-          <span class="kpi-subtext">Registros no gateway local</span>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">
-            <span>${t.kpiTokens}</span>
-            <span class="badge-origin badge-origin-${mockCostSummary.context_tokens.origin}">${ORIGIN_PT[mockCostSummary.context_tokens.origin]}</span>
-          </div>
-          <div class="kpi-value-row">
-            <span class="kpi-value">${(totalContextTokens / 1000).toFixed(1)}k</span>
-          </div>
-          <span class="kpi-subtext">Injetados no contexto dos prompts</span>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">
-            <span>${t.kpiSavedTokens}</span>
-            <span class="badge-origin badge-origin-${mockCostSummary.saved_tokens_est.origin}">${ORIGIN_PT[mockCostSummary.saved_tokens_est.origin]}</span>
-          </div>
-          <div class="kpi-value-row" style="color: var(--success);">
-            <span class="kpi-value" style="color: var(--success);">${mockCostSummary.saved_tokens_est.label}</span>
-          </div>
-          <span class="kpi-subtext">Evitados via deduplicação & JEV</span>
-        </div>
-      </div>
-
-      <!-- PAINEL DE ORÇAMENTO (Gauges diário e mensal) -->
-      <div class="budget-panel">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <h2 style="font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-primary);">Limites de Orçamento do Usuário</h2>
-          <span class="status-indicator">
-            <span class="dot dot-success"></span>
-            <span style="font-size: var(--text-xs); color: var(--text-secondary);">Dentro das metas configuradas</span>
-          </span>
-        </div>
-
-        <div class="budget-bars-grid">
-          <div class="budget-item">
-            <div class="budget-header">
-              <span style="font-weight: 500;">${t.budgetDaily}</span>
-              <span class="tabular">US$ ${mockBudget.daily.spent.toFixed(2)} ${t.budgetOf} US$ ${mockBudget.daily.limit.toFixed(2)} (${((mockBudget.daily.spent / mockBudget.daily.limit) * 100).toFixed(0)}%)</span>
-            </div>
-            <div class="budget-track">
-              <div class="budget-fill budget-fill-ok" style="width: ${Math.min((mockBudget.daily.spent / mockBudget.daily.limit) * 100, 100)}%;"></div>
-            </div>
-          </div>
-
-          <div class="budget-item">
-            <div class="budget-header">
-              <span style="font-weight: 500;">${t.budgetMonthly}</span>
-              <span class="tabular">US$ ${mockBudget.monthly.spent.toFixed(2)} ${t.budgetOf} US$ ${mockBudget.monthly.limit.toFixed(2)} (${mockBudget.monthly.pct}%)</span>
-            </div>
-            <div class="budget-track">
-              <div class="budget-fill budget-fill-ok" style="width: ${mockBudget.monthly.pct}%;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- SEÇÃO DE GRÁFICOS REATIVOS COM CHART-KIT (LINHA TEMPORAL + DISTRIBUIÇÃO POR AGENTE) -->
-      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5);">
-        <!-- Gráfico de Linha de Gastos Acumulados -->
+      ${notice}
+      ${header}
+      ${kpisView()}
+      ${budgetView()}
+      <div class="charts-dual-row">
         <div class="chart-card">
           <div class="chart-header">
             <div>
-              <h2 style="font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-primary);">Consumo Financeiro Acumulado (Hoje)</h2>
-              <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">Variação horária em dólares norte-americanos (US$)</p>
+              <h2 style="font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-primary);">${esc(t.chartTitle)}</h2>
+              <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">${esc(t.chartSubtitle)}</p>
             </div>
-            <span class="badge-origin badge-origin-measured">medido</span>
+            <span class="badge-origin badge-origin-measured">${esc(originText('measured'))}</span>
           </div>
-
-          <!-- Container do ChartKit SVG -->
           <div id="cost-line-chart-mount" style="min-height: 220px; width: 100%; margin-top: var(--space-3);"></div>
         </div>
-
-        <!-- Donut de Distribuição de Chamadas por Agente -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <div>
-              <h2 style="font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-primary);">Chamadas por Agente</h2>
-              <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">Distribuição de volume</p>
-            </div>
-          </div>
-
-          <div id="cost-donut-chart-mount" style="min-height: 220px; width: 100%; margin-top: var(--space-3); display: flex; align-items: center; justify-content: center;"></div>
-        </div>
+        ${rolesView()}
       </div>
+      ${callsView()}
+      ${drawerView()}
+    </div>`;
+}
 
-      <!-- TABELA DE CHAMADAS (Quando, Projeto, Agente, Pipeline, Contexto, Custo, Origem, Detalhes) -->
-      <div class="calls-section">
-        <div class="calls-table-toolbar">
-          <h2 style="font-size: var(--text-md); font-weight: var(--font-semibold); color: var(--text-primary);">${t.callsTableTitle}</h2>
-          <span class="section-count tabular">Exibindo ${visibleCalls.length} de ${mockCalls.length} chamadas</span>
-        </div>
+/* ---------------------------------------------------------------- mounting */
+export function hourlyChartData(points) {
+  let acc = 0;
+  return (points || []).map((p) => {
+    acc += asNum(p.cost_usd) || 0;
+    return { hour: String(p.hour ?? ''), cost: Number(acc.toFixed(4)) };
+  });
+}
 
-        <div class="table-container">
-          <table class="table" data-bind="calls-table">
-            <thead>
-              <tr>
-                <th>${t.colWhen}</th>
-                <th>${t.colProject}</th>
-                <th>${t.colAgent}</th>
-                <th>${t.colPipeline}</th>
-                <th class="num-col">${t.colContext}</th>
-                <th class="num-col">${t.colCost}</th>
-                <th>${t.colOrigin}</th>
-                <th style="text-align: right;">${t.colActions}</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${visibleCalls.map(c => {
-                const hasValue = c.cost_usd.value !== null;
-                const costDisplay = hasValue ? `US$ ${c.cost_usd.value.toFixed(4)}` : 'indisponível';
-                const originClass = c.cost_usd.origin === 'measured' ? 'badge-origin-measured' : c.cost_usd.origin === 'estimated' ? 'badge-origin-estimated' : 'badge-origin-unavailable';
-                return `
-                  <tr>
-                    <td class="tabular font-mono" style="color: var(--text-secondary); font-size: 11px;">${c.when}</td>
-                    <td style="font-weight: 500;">${c.project}</td>
-                    <td>
-                      <span class="badge" style="font-family: var(--font-mono); font-size: 11px;">${c.agent}</span>
-                    </td>
-                    <td><span class="font-mono text-tertiary" style="font-size: 11px;">${c.pipeline}</span></td>
-                    <td class="num-col tabular font-mono">${c.context_tokens.toLocaleString()} tok</td>
-                    <td class="num-col tabular font-mono" style="font-weight: 600;">${costDisplay}</td>
-                    <td>
-                      <span class="badge-origin ${originClass}">${c.cost_usd.origin}</span>
-                    </td>
-                    <td style="text-align: right;">
-                      <button class="btn btn-ghost btn-sm" data-action="view-call-detail" data-call-id="${c.id}">
-                        ${icon('fileText', '', 12)} Detalhes
-                      </button>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
+function destroyWidgets() {
+  if (lineChart && lineChart.destroy) lineChart.destroy();
+  lineChart = null;
+  if (callsTable) callsTable.destroy();
+  callsTable = null;
+}
 
-        ${visibleCallsCount < mockCalls.length ? `
-          <div style="text-align: center; margin-top: var(--space-4);">
-            <button class="btn btn-secondary btn-sm" data-action="load-more-calls">
-              Carregar mais chamadas (${mockCalls.length - visibleCallsCount} restantes)
-            </button>
-          </div>
-        ` : ''}
-      </div>
+function mountWidgets(root) {
+  destroyWidgets();
+  const t = I18N.costs;
+  const lineMount = root.querySelector('#cost-line-chart-mount');
+  if (lineMount) {
+    const data = hourlyChartData(S.hourly);
+    if (!data.length) {
+      lineMount.innerHTML = emptyState({ title: t.chartEmpty, variant: 'data', compact: true });
+    } else {
+      lineChart = createLineChart(lineMount, {
+        data,
+        xKey: 'hour',
+        series: [{ key: 'cost', label: t.chartSeries, color: 'var(--chart-1)', fill: true }],
+        yFormatter: (v) => `US$ ${v.toFixed(2)}`,
+        xFormatter: (v) => v,
+        height: 220,
+      });
+    }
+  }
+  const tableMount = root.querySelector('#costs-calls-mount');
+  if (tableMount) {
+    callsTable = createVirtualTable({
+      container: tableMount,
+      ariaLabel: t.callsAria,
+      rowHeight: 40,
+      height: 400,
+      rows: S.calls,
+      rowKey: (r) => r.id,
+      emptyHtml: emptyState({ title: I18N.app.noCallsTitle, description: I18N.app.noCallsDesc, variant: 'data', compact: true }),
+      columns: [
+        { key: 'ts', label: t.colWhen, width: '150px', render: (r) => `<span class="tabular font-mono" style="color: var(--text-secondary); font-size: 11px;">${esc(fmtWhen(r.ts))}</span>` },
+        { key: 'project', label: t.colProject, width: '1fr', render: (r) => `<span style="font-weight: 500;">${esc(r.project)}</span>` },
+        { key: 'agent', label: t.colAgent, width: '1fr', render: (r) => `<span class="badge" style="font-family: var(--font-mono); font-size: 11px;">${esc(r.agent)}</span>` },
+        { key: 'pipeline', label: t.colPipeline, width: '1fr', render: (r) => `<span class="font-mono text-tertiary" style="font-size: 11px;">${esc(r.pipeline)}</span>` },
+        { key: 'context_tokens', label: t.colContext, width: '110px', align: 'right', render: (r) => `<span class="tabular font-mono">${esc(r.context_tokens == null ? '—' : `${r.context_tokens.toLocaleString()} ${t.tokensUnit}`)}</span>` },
+        { key: 'cost', label: t.colCost, width: '120px', align: 'right', render: (r) => `<span class="tabular font-mono" style="font-weight: 600;">${esc(r.cost == null ? t.unavailable : fmtMoney(r.cost))}</span>` },
+        { key: 'origin', label: t.colOrigin, width: '110px', render: (r) => `<span class="badge-origin badge-origin-${r.origin}">${esc(originText(r.origin))}</span>` },
+        { key: 'id', label: t.colActions, width: '110px', align: 'right', render: (r) => `<button class="btn btn-ghost btn-sm" data-action="view-call-detail" data-call-id="${esc(r.id)}">${icon('fileText', '', 12)} ${esc(t.detailsBtn)}</button>` },
+      ],
+    });
+  }
+}
 
-      <!-- GAVETA LATERAL: Detalhamento da Chamada -->
-      <div class="drawer-backdrop ${selectedCardCall ? 'is-active' : ''}" data-action="close-call-detail"></div>
-      <div class="drawer ${selectedCardCall ? 'is-active' : ''}">
-        <div class="drawer-header">
-          <div>
-            <div class="card-title">${t.callDetailTitle}</div>
-            <div class="card-subtitle">${selectedCardCall ? selectedCardCall.id : ''}</div>
-          </div>
-          <button class="btn btn-ghost btn-icon" data-action="close-call-detail">${icon('x', '', 16)}</button>
-        </div>
-        <div class="drawer-content">
-          ${selectedCardCall ? `
-            <div class="readonly-kv-item">
-              <span class="readonly-kv-label">Timestamp</span>
-              <span class="readonly-kv-value tabular">${selectedCardCall.when}</span>
-            </div>
-            <div class="readonly-kv-item">
-              <span class="readonly-kv-label">Projeto Vinculado</span>
-              <span class="readonly-kv-value">${selectedCardCall.project}</span>
-            </div>
-            <div class="readonly-kv-item">
-              <span class="readonly-kv-label">Agente Consumidor</span>
-              <span class="readonly-kv-value">${selectedCardCall.agent}</span>
-            </div>
-            <div class="readonly-kv-item">
-              <span class="readonly-kv-label">Pipeline de Execução</span>
-              <span class="readonly-kv-value font-mono">${selectedCardCall.pipeline}</span>
-            </div>
-            <div class="readonly-kv-item">
-              <span class="readonly-kv-label">Tokens de Contexto Injetados</span>
-              <span class="readonly-kv-value tabular">${selectedCardCall.context_tokens.toLocaleString()} tokens</span>
-            </div>
-            <div class="readonly-kv-item">
-              <span class="readonly-kv-label">Custo Total e Origem</span>
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
-                <span class="readonly-kv-value tabular" style="font-size: 16px;">
-                  ${selectedCardCall.cost_usd.value !== null ? `US$ ${selectedCardCall.cost_usd.value.toFixed(4)}` : 'indisponível'}
-                </span>
-                <span class="badge-origin badge-origin-${selectedCardCall.cost_usd.origin}">${selectedCardCall.cost_usd.origin}</span>
-              </div>
-            </div>
-          ` : ''}
-        </div>
-      </div>
-    </div>
-  `;
+function paint() {
+  if (!currentRoot) return;
+  // preserva o foco do formulário de orçamento durante refresh em segundo plano
+  const name = currentRoot.querySelector('form[data-action="budget-form"] :focus')?.name;
+  destroyWidgets();
+  currentRoot.innerHTML = render();
+  mountWidgets(currentRoot);
+  if (name) {
+    const el = currentRoot.querySelector(`form[data-action="budget-form"] [name="${name}"]`);
+    if (el) el.focus();
+  }
+}
+
+async function saveBudget(form) {
+  const t = I18N.costs;
+  const fd = new FormData(form);
+  const parse = (v) => {
+    const s = String(v ?? '').trim();
+    if (s === '') return undefined;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : NaN;
+  };
+  const daily = parse(fd.get('daily'));
+  const monthly = parse(fd.get('monthly'));
+  const alert = parse(fd.get('alert'));
+  const bad = [daily, monthly].some((n) => n !== undefined && (Number.isNaN(n) || n < 0))
+    || (alert !== undefined && (Number.isNaN(alert) || alert < 1 || alert > 100));
+  if (bad) { S.budgetMsg = { ok: false, text: t.budgetInvalid }; paint(); return; }
+  const body = {};
+  if (daily !== undefined) body.daily_usd = daily;
+  if (monthly !== undefined) body.monthly_usd = monthly;
+  if (alert !== undefined) body.alert_pct = alert;
+  S.budgetSaving = true; S.budgetMsg = null; paint();
+  try {
+    await A.putCostBudget(body);
+    S.budgetMsg = { ok: true, text: t.budgetSaved };
+    S.draft = { daily: null, monthly: null, alert: null };
+    try { S.budget = await A.costBudget(); } catch { /* mantém valores anteriores */ }
+    window.dispatchEvent(new CustomEvent('anamnesia:toast', { detail: { type: 'success', message: t.budgetSaved } }));
+  } catch (e) {
+    const detail = e && e.message ? `: ${e.message}` : '';
+    S.budgetMsg = { ok: false, text: `${t.budgetSaveFail}${detail}` };
+  }
+  S.budgetSaving = false;
+  paint();
 }
 
 export function mount(root) {
-  // Mount interactive SVG charts using ChartKit
-  mountCharts(root);
+  currentRoot = root;
+  S.selected = null;
+  S.budgetMsg = null;
 
-  const handleClick = (e) => {
+  const onClick = (e) => {
     const target = e.target.closest('[data-action]');
-    if (!target) return;
-
+    if (!target || target.getAttribute('data-action') === 'budget-form') return;
     const action = target.getAttribute('data-action');
-
     if (action === 'filter-period') {
-      selectedPeriod = target.getAttribute('data-period');
-      root.innerHTML = render();
-      mountCharts(root);
+      const p = target.getAttribute('data-period');
+      if (!RANGES.includes(p) || p === S.range) return;
+      S.range = p; S.calls = []; S.nextCursor = null;
+      load();
     } else if (action === 'export-csv') {
-      window.dispatchEvent(new CustomEvent('anamnesia:toast', {
-        detail: { type: 'success', message: 'Relatório anamnesia-costs.csv gerado com sucesso.' }
-      }));
+      const a = document.createElement('a');
+      a.href = A.costCsvUrl(S.range);
+      a.download = 'anamnesia-costs.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      window.dispatchEvent(new CustomEvent('anamnesia:toast', { detail: { type: 'success', message: I18N.costs.csvStarted } }));
     } else if (action === 'load-more-calls') {
-      visibleCallsCount = Math.min(visibleCallsCount + 10, mockCalls.length);
-      root.innerHTML = render();
-      mountCharts(root);
+      loadMore();
     } else if (action === 'view-call-detail') {
-      const callId = target.getAttribute('data-call-id');
-      selectedCardCall = mockCalls.find(c => c.id === callId) || null;
-      root.innerHTML = render();
-      mountCharts(root);
+      const id = target.getAttribute('data-call-id');
+      S.selected = S.calls.find((c) => c.id === id) || null;
+      paint();
     } else if (action === 'close-call-detail') {
-      selectedCardCall = null;
-      root.innerHTML = render();
-      mountCharts(root);
+      S.selected = null; paint();
     } else if (action === 'retry-costs') {
-      currentState = 'loaded';
-      root.innerHTML = render();
-      mountCharts(root);
+      load();
     }
   };
-
-  root.addEventListener('click', handleClick);
-  root._costsCleanup = () => {
-    root.removeEventListener('click', handleClick);
-    cleanupCharts();
+  const onSubmit = (e) => {
+    const form = e.target.closest('form[data-action="budget-form"]');
+    if (!form) return;
+    e.preventDefault();
+    saveBudget(form);
   };
-}
+  const onInput = (e) => {
+    const el = e.target;
+    if (el && el.closest && el.closest('form[data-action="budget-form"]') && el.name in S.draft) S.draft[el.name] = el.value;
+  };
 
-function mountCharts(root) {
-  cleanupCharts();
+  root.addEventListener('click', onClick);
+  root.addEventListener('submit', onSubmit);
+  root.addEventListener('input', onInput);
+  root._costsCleanup = () => {
+    root.removeEventListener('click', onClick);
+    root.removeEventListener('submit', onSubmit);
+    root.removeEventListener('input', onInput);
+  };
 
-  const lineMount = root.querySelector('#cost-line-chart-mount');
-  if (lineMount) {
-    // Cumulative hourly spending from 06h to 12h
-    const byHour = new Map();
-    [...mockCalls].filter(c => c.ts).sort((a, b) => a.ts - b.ts).forEach(c => {
-      const d = new Date(c.ts * 1000);
-      const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}h`;
-      byHour.set(key, (byHour.get(key) || 0) + (c.cost_usd.value || 0));
-    });
-    let acc = 0;
-    const hourlyPoints = [...byHour.entries()].map(([hour, v]) => { acc += v; return { hour, cost: Number(acc.toFixed(4)) }; });
-    if (!hourlyPoints.length) hourlyPoints.push({ hour: '—', cost: 0 });
-
-    lineChartInstance = createLineChart(lineMount, {
-      data: hourlyPoints,
-      xKey: 'hour',
-      series: [
-        { key: 'cost', label: 'Custo Acumulado', color: 'var(--chart-1)', fill: true }
-      ],
-      yFormatter: (v) => `US$ ${v.toFixed(2)}`,
-      xFormatter: (v) => v,
-      height: 220
-    });
-  }
-
-  const donutMount = root.querySelector('#cost-donut-chart-mount');
-  if (donutMount) {
-    // Count calls per agent
-    const counts = {};
-    mockCalls.forEach(c => {
-      counts[c.agent] = (counts[c.agent] || 0) + 1;
-    });
-
-    const PAL = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
-    const donutData = Object.entries(counts).map(([label, value], i) => ({ label, value, color: PAL[i % PAL.length] }));
-    if (!donutData.length) donutData.push({ label: 'sem chamadas', value: 1, color: 'var(--border-subtle)' });
-
-    donutChartInstance = createDonutChart(donutMount, {
-      data: donutData,
-      formatter: (v) => `${v} chamadas`,
-      centerLabel: 'Total',
-      size: 190,
-      thickness: 24
-    });
-  }
-}
-
-function cleanupCharts() {
-  if (lineChartInstance && lineChartInstance.destroy) {
-    lineChartInstance.destroy();
-    lineChartInstance = null;
-  }
-  if (donutChartInstance && donutChartInstance.destroy) {
-    donutChartInstance.destroy();
-    donutChartInstance = null;
-  }
+  // stale-while-revalidate: com dados anteriores, atualiza sem voltar ao skeleton
+  const hasData = S.status === 'ready' && S.summary;
+  if (!hasData) S.status = 'loading';
+  paint();
+  load({ silent: !!hasData });
+  startLive();
 }
 
 export function unmount(root) {
-  cleanupCharts();
-  if (root && root._costsCleanup) {
-    root._costsCleanup();
-    delete root._costsCleanup;
-  }
+  stopLive();
+  reqSeq += 1; // descarta respostas em voo
+  destroyWidgets();
+  const r = root || currentRoot;
+  if (r && r._costsCleanup) { r._costsCleanup(); delete r._costsCleanup; }
+  currentRoot = null;
 }
 
 export function setDebugState(state, root) {
-  currentState = state;
-  if (root) {
-    root.innerHTML = render();
-    mountCharts(root);
-  }
+  S.status = state === 'loaded' ? 'ready' : state;
+  if (root) currentRoot = root;
+  paint();
 }

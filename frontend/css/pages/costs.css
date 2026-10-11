@@ -120,3 +120,24 @@
   align-items: center;
   justify-content: space-between;
 }
+
+/* Budget form, banner and live status (backend-connected) */
+.budget-banner.is-alert { border-color: var(--warning); }
+.budget-banner.is-alert .callout-notice-icon { color: var(--warning); }
+.budget-banner.is-exceeded { border-color: var(--danger); }
+.budget-banner.is-exceeded .callout-notice-icon { color: var(--danger); }
+
+.budget-form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-4);
+}
+.budget-form .input-group { min-width: 160px; flex: 1 1 160px; }
+.budget-msg { font-size: var(--text-xs); min-height: 1em; }
+.budget-msg.is-ok { color: var(--success); }
+.budget-msg.is-error { color: var(--danger); }
+
+.calls-section .vtable { width: 100%; }
