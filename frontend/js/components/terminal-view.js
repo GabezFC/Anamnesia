@@ -35,6 +35,33 @@ export const ANSI_THEME = {
   brightWhite: '#FFFFFF'
 };
 
+const TOKEN_MAP = {
+  background: '--term-bg', foreground: '--term-fg', cursor: '--term-cursor', cursorAccent: '--term-bg',
+  selectionBackground: '--term-selection',
+  black: '--term-black', red: '--term-red', green: '--term-green', yellow: '--term-yellow',
+  blue: '--term-blue', magenta: '--term-magenta', cyan: '--term-cyan', white: '--term-white',
+  brightBlack: '--term-bright-black', brightRed: '--term-bright-red', brightGreen: '--term-bright-green',
+  brightYellow: '--term-bright-yellow', brightBlue: '--term-bright-blue', brightMagenta: '--term-bright-magenta',
+  brightCyan: '--term-bright-cyan', brightWhite: '--term-bright-white',
+};
+
+/**
+ * Lê os tokens CSS --term-* do tema ativo (claro/escuro) e devolve um objeto `theme` do xterm.
+ * Tokens ausentes caem em ANSI_THEME. Chamar de novo após trocar data-theme.
+ * @param {Element} [el] elemento de onde ler os estilos computados (padrão: <html>)
+ */
+export function readTerminalTheme(el) {
+  const root = el || (typeof document !== 'undefined' ? document.documentElement : null);
+  if (!root || typeof getComputedStyle === 'undefined') return { ...ANSI_THEME };
+  const cs = getComputedStyle(root);
+  const theme = {};
+  for (const [key, token] of Object.entries(TOKEN_MAP)) {
+    const v = cs.getPropertyValue(token).trim();
+    theme[key] = v || ANSI_THEME[key];
+  }
+  return theme;
+}
+
 /**
  * Renderiza a moldura visual do terminal para uma sessão
  * @param {object} session

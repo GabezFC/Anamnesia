@@ -70,3 +70,9 @@ python -m memory_gateway db-maintenance [--older-than-days 90] [--db PATH] [--ap
 ```
 
 Com `--apply`: zera `context`, `answer` e `sources_json` das runs mais antigas que N dias (ids, `metrics_json`, config e demais colunas ficam, então o histórico de custo sobrevive), apaga `jev_cache` mais antigo que N dias e `candidates` órfãos. `--vacuum` (só com `--apply`) devolve o espaço ao disco. Idempotente. Faça backup antes do primeiro `--apply`.
+
+## Terminais: MCP memory_gateway por padrão (app/terminals/mcp_inject.py)
+
+- Cada sessão de agente recebe o MCP `memory_gateway` sem tocar em config global. Verificado: `claude --mcp-config <arquivo>` (sem `--strict-mcp-config`, os MCPs do usuário permanecem). Arquivo por sessão em `data/terminal_mcp/<id>.json`, removido ao fechar.
+- Hermes (sem flag por invocação), Codex, OpenCode, Gemini: **não verificados/instalados** → fallback: o PTY exporta `MG_MCP_CONFIG` (JSON `mcpServers`), `MG_MCP_COMMAND`, `MG_MCP_ARGS`, `MG_MCP_CWD`, `MG_MCP_URL`, `MEMORY_GATEWAY_URL`. Snippets manuais em `integrations/`.
+- Opt-out: `MG_TERMINAL_MCP=0` ou `mcp:false` no `POST /api/sessions`. Papel de subagente: `MG_AGENT_ROLE`.

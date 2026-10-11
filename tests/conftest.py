@@ -141,3 +141,10 @@ def _isolated_local_files(tmp_path, monkeypatch):
             os.environ.pop(k, None)
         else:
             os.environ[k] = v
+
+
+@pytest.fixture(autouse=True)
+def _terminal_mcp_tmpdir(tmp_path, monkeypatch):
+    """Sessões de terminal geram config MCP por sessão: nunca escrever em data/ do repo durante testes."""
+    from app.terminals import mcp_inject
+    monkeypatch.setattr(mcp_inject, "CONFIG_DIR", tmp_path / "terminal_mcp")

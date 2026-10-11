@@ -8,7 +8,7 @@
  */
 
 import { icon } from './icons.js';
-import { I18N } from './i18n.js';
+import { I18N, getLang, setLang } from './i18n.js';
 import { mockProjects, mockCostSummary, mockSessions } from './mock-data.js';
 
 import * as workspacePage from './pages/workspace.js';
@@ -19,12 +19,25 @@ import * as compareLab from './pages/compare/index.js';
 import { esc } from './format.js';
 import { loadLive, installTerminalObserver, registerProject } from './live.js';
 
+// `title` é getter: lê I18N no momento do render para acompanhar a troca de idioma.
 const ROUTES = {
-  '#/workspace': { id: 'workspace', title: I18N.nav.workspace, icon: 'terminal', module: workspacePage },
-  '#/connections': { id: 'connections', title: I18N.nav.connections, icon: 'connections', module: connectionsPage },
-  '#/config': { id: 'config', title: I18N.nav.config, icon: 'config', module: configPage },
-  '#/costs': { id: 'costs', title: I18N.nav.costs, icon: 'costs', module: costsPage },
+  '#/workspace': { id: 'workspace', get title() { return I18N.nav.workspace; }, icon: 'terminal', module: workspacePage },
+  '#/connections': { id: 'connections', get title() { return I18N.nav.connections; }, icon: 'connections', module: connectionsPage },
+  '#/config': { id: 'config', get title() { return I18N.nav.config; }, icon: 'config', module: configPage },
+  '#/costs': { id: 'costs', get title() { return I18N.nav.costs; }, icon: 'costs', module: costsPage },
 };
+
+/** Seletor PT | EN (botões segmentados; delegação via data-action="set-lang"). */
+function renderLangSwitch() {
+  const cur = getLang();
+  const btn = (code, label) => `<button type="button" class="lang-switch-btn ${cur === code ? 'is-active' : ''}" data-action="set-lang" data-lang="${code}" aria-pressed="${cur === code}" lang="${code === 'en' ? 'en' : 'pt-BR'}">${label}</button>`;
+  return `<div class="lang-switch" role="group" aria-label="${I18N.app.language}">${btn('pt', 'PT')}${btn('en', 'EN')}</div>`;
+}
+
+function changeLang(lang) {
+  if (lang === getLang()) return;
+  setLang(lang); // persiste em localStorage e emite 'anamnesia:lang'
+}
 
 function getInitialTheme() {
   const saved = localStorage.getItem('anamnesia_theme');
@@ -55,6 +68,15 @@ export async function init() {
 
   // Setup global event listeners
   window.addEventListener('hashchange', handleRoute);
+  // Re-renderiza a página atual quando o idioma muda (as páginas leem I18N a cada render)
+  window.addEventListener('anamnesia:lang', () => {
+    if (!appRoot) return;
+    if (activePageModule && activePageModule.unmount) {
+      const slot = appRoot.querySelector('[data-bind="content-slot"]');
+      if (slot) activePageModule.unmount(slot);
+    }
+    renderShell();
+  });
   window.addEventListener('keydown', handleKeyboardShortcuts);
   window.addEventListener('anamnesia:toast', (e) => showToast(e.detail));
   window.addEventListener('anamnesia:modal:add-project', () => openModal({ type: 'add-project' }));
@@ -96,7 +118,7 @@ function renderShell() {
   if (isLab) {
     const subRoute = currentRoute.replace('#/compare/', '').replace('#/compare', '') || 'overview';
     appRoot.innerHTML = `
-      ${compareLab.render(subRoute)}
+      ${compareLab.render(subRoute, { langSwitch: renderLangSwitch() })}
       ${renderGlobalToasts()}
       ${renderCommandPalette()}
     `;
@@ -171,10 +193,12 @@ function renderShell() {
 
           <div class="sidebar-actions-row">
             <!-- Alternador de Tema Escuro / Claro -->
-            <button class="btn btn-ghost btn-sm" data-action="toggle-theme" title="Alternar tema" aria-label="Alternar tema">
+            <button class="btn btn-ghost btn-sm" data-action="toggle-theme" title="${I18N.app.toggleTheme}" aria-label="${I18N.app.toggleTheme}">
               ${icon(currentTheme === 'dark' ? 'sun' : 'moon', '', 14)}
-              <span>${currentTheme === 'dark' ? 'Claro' : 'Escuro'}</span>
+              <span>${currentTheme === 'dark' ? I18N.app.switchToLight : I18N.app.switchToDark}</span>
             </button>
+
+            ${renderLangSwitch()}
 
             <!-- Atalho da paleta -->
             <button class="btn btn-ghost btn-sm" data-action="open-command-palette" title="Paleta de Comandos (Ctrl+K)">
@@ -395,14 +419,20 @@ function renderCommandPalette() {
           <div class="command-palette-item" data-action="palette-action" data-subaction="new-terminal">
             <div class="command-palette-item-left">
               ${icon('plus', '', 14)}
-              <span>Abrir Novo Terminal Local</span>
+              <span>${I18N.app.paletteNewTerminal}</span>
             </div>
             <kbd>Ctrl+T</kbd>
           </div>
           <div class="command-palette-item" data-action="palette-action" data-subaction="toggle-theme">
             <div class="command-palette-item-left">
               ${icon('sun', '', 14)}
-              <span>Alternar Tema Escuro / Claro</span>
+              <span>${I18N.app.paletteToggleTheme}</span>
+            </div>
+          </div>
+          <div class="command-palette-item" data-action="palette-action" data-subaction="toggle-lang">
+            <div class="command-palette-item-left">
+              ${icon('info', '', 14)}
+              <span>${I18N.app.paletteToggleLang}</span>
             </div>
           </div>
         </div>
@@ -486,6 +516,10 @@ function attachShellHandlers() {
         }
         break;
       }
+      case 'set-lang': {
+        changeLang(target.getAttribute('data-lang'));
+        break;
+      }
       case 'toggle-theme': {
         currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
         localStorage.setItem('anamnesia_theme', currentTheme);
@@ -535,6 +569,8 @@ function attachShellHandlers() {
           localStorage.setItem('anamnesia_theme', currentTheme);
           document.documentElement.setAttribute('data-theme', currentTheme);
           renderShell();
+        } else if (subaction === 'toggle-lang') {
+          changeLang(getLang() === 'en' ? 'pt' : 'en');
         } else if (subaction === 'new-terminal') {
           window.location.hash = '#/workspace';
         }

@@ -17,6 +17,7 @@ from app.services import costs as svc
 from app.services.security import require_local_write
 
 router = APIRouter(prefix="/api/costs")
+RANGE_RE = "^(today|7d|30d|all)$"
 
 
 def get_db() -> Database:
@@ -30,7 +31,7 @@ def metrics_only() -> bool:
 
 
 @router.get("/summary")
-def summary(range: str = Query("today", pattern="^(today|7d|30d|all)$"), project: str | None = None,
+def summary(range: str = Query("today", pattern=RANGE_RE), project: str | None = None,
             db: Database = Depends(get_db)) -> dict:
     now = time.time()
     rows = db.cost_rows(since=svc.range_since(range, now), project=project)
@@ -53,14 +54,14 @@ def _decode_cursor(c: str) -> tuple[float, str]:
 
 @router.get("/calls")
 def calls(cursor: str | None = None, limit: int = Query(50, ge=1, le=500), project: str | None = None,
-          db: Database = Depends(get_db)) -> dict:
+          range: str = Query("all", pattern=RANGE_RE), db: Database = Depends(get_db)) -> dict:
     before = _decode_cursor(cursor) if cursor else None
-    rows = db.cost_rows(project=project, limit=limit + 1, before=before)
+    rows = db.cost_rows(since=svc.range_since(range), project=project, limit=limit + 1, before=before)
     page = rows[:limit]
     mo = metrics_only()
     return {"items": [svc.call_view(r, mo) for r in page],
             "next_cursor": _encode_cursor(page[-1]) if len(rows) > limit else None,
-            "metrics_only": mo}
+            "metrics_only": mo, "range": range}
 
 
 @router.get("/calls/{run_id}")
@@ -83,7 +84,7 @@ def call_detail(run_id: str, db: Database = Depends(get_db)) -> dict:
 
 
 @router.get("/export.csv")
-def export_csv(range: str = Query("all", pattern="^(today|7d|30d|all)$"), project: str | None = None,
+def export_csv(range: str = Query("all", pattern=RANGE_RE), project: str | None = None,
                db: Database = Depends(get_db)) -> Response:
     mo = metrics_only()
     fields = list(svc.CSV_FIELDS) + ([] if mo else ["query"])
@@ -96,26 +97,12 @@ def export_csv(range: str = Query("all", pattern="^(today|7d|30d|all)$"), projec
                     headers={"Content-Disposition": 'attachment; filename="custos.csv"'})
 
 
-class BudgetIn(BaseModel):
-    period: str
-    ceiling_usd: float | None = None
-
-
-@router.put("/budget", dependencies=[Depends(require_local_write)])
-def put_budget(body: BudgetIn, db: Database = Depends(get_db)) -> dict:
-    if body.period not in svc.BUDGET_PERIODS:
-        raise HTTPException(422, f"period deve ser um de {svc.BUDGET_PERIODS}")
-    if body.ceiling_usd is not None and body.ceiling_usd < 0:
-        raise HTTPException(422, "ceiling_usd deve ser >= 0")
-    db.set_budget(body.period, body.ceiling_usd)
-    return {"budgets": db.get_budgets()}
-
-
 @router.get("/stream")
 def stream(max_seconds: float = Query(300.0, ge=0, le=3600), max_events: int = Query(0, ge=0),
            poll_interval: float = Query(1.0, ge=0.01, le=10), after_rowid: int | None = Query(None, ge=0),
            db: Database = Depends(get_db)) -> StreamingResponse:
-    """SSE: one `call` event per new run. Ends after max_seconds (or max_events if >0)."""
+    """SSE: one `call` event per new run, pushed the moment it is inserted (poll_interval is only the
+    fallback wake-up). Ends after max_seconds (or max_events if >0)."""
     mo = metrics_only()
 
     def gen() -> Iterator[str]:
@@ -124,6 +111,7 @@ def stream(max_seconds: float = Query(300.0, ge=0, le=3600), max_events: int = Q
         sent = 0
         yield ": connected\n\n"
         while True:
+            seq = db.run_seq  # read BEFORE querying: an insert in between wakes the wait below at once
             for r in db.cost_rows_after_rowid(last):
                 last = max(last, r["_rowid"])
                 data = json.dumps(svc.call_view(r, mo), ensure_ascii=False, default=str)
@@ -135,7 +123,11 @@ def stream(max_seconds: float = Query(300.0, ge=0, le=3600), max_events: int = Q
             if time.monotonic() >= deadline:
                 yield "event: end\ndata: {}\n\n"
                 return
-            time.sleep(min(poll_interval, max(0.0, deadline - time.monotonic())))
+            # Woken by Database.save_run at insert time; poll_interval is only the safety-net timeout.
+            db.wait_new_run(seq, min(poll_interval, max(0.0, deadline - time.monotonic())))
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+from app.api import costs_ext  # noqa: E402,F401  (registers budget/hourly/by-role on this router)

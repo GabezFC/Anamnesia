@@ -10,33 +10,42 @@ import { estimateBenchmark } from '../../live.js';
 import { I18N } from '../../i18n.js';
 import { mockBenchmark } from '../../mock-data.js';
 
-import * as overviewTab from './overview.js';
-import * as modelsTab from './models.js';
-import * as pipelineTab from './pipeline.js';
-import * as tokensTab from './tokens.js';
-import * as latencyTab from './latency.js';
-import * as modelCostTab from './model-cost.js';
-import * as resultsTab from './results.js';
-import * as historyTab from './history.js';
+import { skeletonKpis, skeletonCard, loadingBlock } from '../../components/skeleton.js';
+import { emptyState } from '../../components/empty-state.js';
 
+// Abas carregadas sob demanda (dynamic import + cache): nada de aba é baixado/avaliado até ser aberta.
+// `label` é getter para acompanhar a troca de idioma.
 const TABS = {
-  overview: { id: 'overview', label: I18N.lab.overview, module: overviewTab },
-  models: { id: 'models', label: I18N.lab.models, module: modelsTab },
-  pipeline: { id: 'pipeline', label: I18N.lab.pipeline, module: pipelineTab },
-  tokens: { id: 'tokens', label: I18N.lab.tokens, module: tokensTab },
-  latency: { id: 'latency', label: I18N.lab.latency, module: latencyTab },
-  'model-cost': { id: 'model-cost', label: I18N.lab.modelCost, module: modelCostTab },
-  results: { id: 'results', label: I18N.lab.results, module: resultsTab },
-  history: { id: 'history', label: I18N.lab.history, module: historyTab }
+  overview: { id: 'overview', get label() { return I18N.lab.overview; }, load: () => import('./overview.js') },
+  models: { id: 'models', get label() { return I18N.lab.models; }, load: () => import('./models.js') },
+  pipeline: { id: 'pipeline', get label() { return I18N.lab.pipeline; }, load: () => import('./pipeline.js') },
+  tokens: { id: 'tokens', get label() { return I18N.lab.tokens; }, load: () => import('./tokens.js') },
+  latency: { id: 'latency', get label() { return I18N.lab.latency; }, load: () => import('./latency.js') },
+  'model-cost': { id: 'model-cost', get label() { return I18N.lab.modelCost; }, load: () => import('./model-cost.js') },
+  results: { id: 'results', get label() { return I18N.lab.results; }, load: () => import('./results.js') },
+  history: { id: 'history', get label() { return I18N.lab.history; }, load: () => import('./history.js') },
 };
+
+const tabCache = new Map(); // id -> módulo já importado
+let loadToken = 0;
+
+/** Importa a aba uma única vez (cache). */
+export function loadTab(id) {
+  const tab = TABS[id] || TABS.overview;
+  if (tabCache.has(tab.id)) return Promise.resolve(tabCache.get(tab.id));
+  return tab.load().then((m) => { tabCache.set(tab.id, m); return m; });
+}
+
+/** Ids de aba já carregados (diagnóstico/testes). */
+export function loadedTabs() { return [...tabCache.keys()]; }
 
 let currentSubTab = 'overview';
 let activeSubModule = null;
 
-export function render(subRoute = 'overview') {
+export function render(subRoute = 'overview', opts = {}) {
   currentSubTab = TABS[subRoute] ? subRoute : 'overview';
   const currentTabObj = TABS[currentSubTab];
-  activeSubModule = currentTabObj.module;
+  activeSubModule = tabCache.get(currentTabObj.id) || null;
   const meta = mockBenchmark.meta;
 
   return `
@@ -56,9 +65,10 @@ export function render(subRoute = 'overview') {
         </div>
 
         <div class="lab-banner-right">
-          <span class="tabular">Ambiente de Teste Isolado</span>
+          <span class="tabular">${I18N.app.labIsolated}</span>
           <span aria-hidden="true">·</span>
-          <span>Sessão de Auditoria Local</span>
+          <span>${I18N.app.labAudit}</span>
+          ${opts.langSwitch || ''}
         </div>
       </div>
 
@@ -92,7 +102,7 @@ export function render(subRoute = 'overview') {
 
       <!-- Barra de Abas Internas do Laboratório -->
       <div class="lab-main">
-        <nav class="lab-nav-bar" role="tablist" aria-label="Abas do Laboratório de Comparação">
+        <nav class="lab-nav-bar" role="tablist" aria-label="${I18N.app.labTabsAria}">
           ${Object.values(TABS).map(tab => {
             const isActive = tab.id === currentSubTab;
             return `
@@ -112,7 +122,7 @@ export function render(subRoute = 'overview') {
 
         <!-- Conteúdo da Sub-Aba -->
         <div class="lab-tab-content" data-bind="lab-tab-content">
-          ${activeSubModule ? activeSubModule.render() : ''}
+          ${activeSubModule ? activeSubModule.render() : loadingBlock(skeletonKpis(4) + skeletonCard({ lines: 5 }), I18N.app.loading)}
         </div>
       </div>
     </div>
@@ -122,8 +132,21 @@ export function render(subRoute = 'overview') {
 export function mount(root) {
   // Mount the sub-tab module inside the container
   const container = root.querySelector('[data-bind="lab-tab-content"]');
-  if (container && activeSubModule && activeSubModule.mount) {
-    activeSubModule.mount(container);
+  const tabId = currentSubTab;
+  const token = ++loadToken;
+  // Aba já em cache: render() já devolveu o conteúdo, só montar. Senão: importar sob demanda.
+  if (container && activeSubModule) {
+    if (activeSubModule.mount) activeSubModule.mount(container);
+  } else if (container) {
+    loadTab(tabId).then((mod) => {
+      if (token !== loadToken || !container.isConnected) return; // usuário trocou de aba/saiu
+      activeSubModule = mod;
+      container.innerHTML = mod.render();
+      if (mod.mount) mod.mount(container);
+    }).catch((err) => {
+      if (token !== loadToken || !container.isConnected) return;
+      container.innerHTML = emptyState({ title: I18N.app.labTabLoadFail, description: err?.message || String(err), variant: 'error', action: { label: I18N.app.errorRetry, action: 'retry-lab-tab' } });
+    });
   }
 
   const handleClick = (e) => {
@@ -131,6 +154,11 @@ export function mount(root) {
     if (!target) return;
 
     const action = target.getAttribute('data-action');
+
+    if (action === 'retry-lab-tab') {
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      return;
+    }
 
     if (action === 'run-new-benchmark') {
       const toast = (type, message) => window.dispatchEvent(new CustomEvent('anamnesia:toast', { detail: { type, message } }));
@@ -144,6 +172,7 @@ export function mount(root) {
   root.addEventListener('click', handleClick);
   root._labCleanup = () => {
     root.removeEventListener('click', handleClick);
+    loadToken += 1; // invalida import em andamento
     if (activeSubModule && activeSubModule.unmount && container) {
       activeSubModule.unmount(container);
     }

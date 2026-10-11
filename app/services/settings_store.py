@@ -1,0 +1,124 @@
+"""Server-side persisted app settings (GET/PUT /api/settings). Stored as JSON in the `kv` table.
+
+Pure of HTTP. The budget ceilings live in the existing `budgets` table (period day|month) so the
+cost ledger and the settings screen can never disagree; `alert_pct` lives in the settings JSON.
+"""
+from __future__ import annotations
+
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+KV_KEY = "app_settings"
+DEFAULT_ALERT_PCT = 80.0
+PIPELINE_CHOICES = ("auto", "baseline", "graphify", "graphify_jev", "graphify_jev_opt")
+
+
+class BudgetSettings(BaseModel):
+    daily_usd: float | None = Field(None, ge=0)
+    monthly_usd: float | None = Field(None, ge=0)
+    alert_pct: float = Field(DEFAULT_ALERT_PCT, gt=0, le=100)
+
+
+class BudgetPatch(BaseModel):
+    daily_usd: float | None = Field(None, ge=0)
+    monthly_usd: float | None = Field(None, ge=0)
+    alert_pct: float | None = Field(None, gt=0, le=100)
+
+
+class Settings(BaseModel):
+    subagent_preset: dict[str, Any] = Field(default_factory=dict)
+    prefilter_cache: dict[str, Any] = Field(default_factory=dict)
+    terminal_layout: dict[str, Any] = Field(default_factory=dict)
+    language: Literal["pt-BR", "en"] = "pt-BR"
+    budget: BudgetSettings = Field(default_factory=BudgetSettings)
+    max_tokens_per_query: int | None = Field(None, ge=1, le=1_000_000)
+    default_pipeline: Literal[PIPELINE_CHOICES] = "auto"  # type: ignore[valid-type]
+    auto_graphify_jev_opt: bool = False
+    reduce_max_results_by_question_type: bool = False
+
+
+class SettingsPatch(BaseModel):
+    """Every field optional; only the ones present in the request body are applied."""
+    model_config = {"extra": "forbid"}
+    subagent_preset: dict[str, Any] | None = None
+    prefilter_cache: dict[str, Any] | None = None
+    terminal_layout: dict[str, Any] | None = None
+    language: Literal["pt-BR", "en"] | None = None
+    budget: BudgetPatch | None = None
+    max_tokens_per_query: int | None = Field(None, ge=1, le=1_000_000)  # explicit null clears the cap
+    default_pipeline: Literal[PIPELINE_CHOICES] | None = None  # type: ignore[valid-type]
+    auto_graphify_jev_opt: bool | None = None
+    reduce_max_results_by_question_type: bool | None = None
+
+
+def _stored(db) -> dict:
+    raw = db.get_kv(KV_KEY)
+    return raw if isinstance(raw, dict) else {}
+
+
+def load_settings(db) -> Settings:
+    """Stored settings (invalid/legacy keys ignored -> defaults) with the live budget ceilings."""
+    raw = dict(_stored(db))
+    raw.pop("budget_ceilings", None)
+    try:
+        s = Settings.model_validate(raw)
+    except Exception:  # noqa: BLE001 - a corrupt row must never break the app: fall back to defaults
+        s = Settings()
+    ceilings = db.get_budgets()
+    s.budget.daily_usd = ceilings.get("day")
+    s.budget.monthly_usd = ceilings.get("month")
+    return s
+
+
+def save_patch(db, patch: SettingsPatch) -> Settings:
+    """Merge `patch` (only fields_set) into the stored settings and persist. Returns the result."""
+    current = load_settings(db).model_dump()
+    sent = patch.model_fields_set
+    for key in sent:
+        if key == "budget":
+            continue
+        value = getattr(patch, key)
+        if value is None and key not in ("max_tokens_per_query",):
+            continue  # null only means "clear" for the nullable cap; other fields ignore null
+        current[key] = value
+    if "budget" in sent and patch.budget is not None:
+        bsent = patch.budget.model_fields_set
+        if "daily_usd" in bsent:
+            db.set_budget("day", patch.budget.daily_usd)
+            current["budget"]["daily_usd"] = patch.budget.daily_usd
+        if "monthly_usd" in bsent:
+            db.set_budget("month", patch.budget.monthly_usd)
+            current["budget"]["monthly_usd"] = patch.budget.monthly_usd
+        if "alert_pct" in bsent and patch.budget.alert_pct is not None:
+            current["budget"]["alert_pct"] = patch.budget.alert_pct
+    final = Settings.model_validate(current)
+    stored = final.model_dump()
+    stored["budget"] = {"alert_pct": final.budget.alert_pct}  # ceilings live in `budgets`
+    db.set_kv(KV_KEY, stored)
+    return load_settings(db)
+
+
+def alert_pct(db) -> float:
+    b = _stored(db).get("budget")
+    try:
+        v = float(b.get("alert_pct", DEFAULT_ALERT_PCT)) if isinstance(b, dict) else DEFAULT_ALERT_PCT
+    except (TypeError, ValueError):
+        return DEFAULT_ALERT_PCT
+    return v if 0 < v <= 100 else DEFAULT_ALERT_PCT
+
+
+def economy_of(db):
+    """The three economy opt-ins, read raw (cheap, tolerant). Absent/invalid -> everything off."""
+    from app.gateway.economy import EconomySettings
+    raw = _stored(db)
+    cap = raw.get("max_tokens_per_query")
+    return EconomySettings(
+        auto_graphify_jev_opt=raw.get("auto_graphify_jev_opt") is True,
+        reduce_max_results_by_question_type=raw.get("reduce_max_results_by_question_type") is True,
+        max_tokens_per_query=cap if isinstance(cap, int) and not isinstance(cap, bool) and cap > 0 else None)
+
+
+def default_pipeline_of(db) -> str:
+    v = _stored(db).get("default_pipeline")
+    return v if v in PIPELINE_CHOICES else "auto"

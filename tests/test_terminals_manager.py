@@ -92,7 +92,9 @@ def test_env_allowlist_and_profile_keys(fake, proj, prof):
     assert env["PATH"] == "/bin" and env["HOME"] == "/var/fakehome" and env["LANG"] == "C"
     assert env["MG_SCOPE"] == "meuprojeto"
     assert env["TERM"]
-    assert not (set(env) - {k for k in ENV_ALLOWLIST} - {"FAKE_PROFILE_KEY", "MG_SCOPE"})
+    # MCP injetado por padrão (agentes): só variáveis MG_*/MEMORY_GATEWAY_URL, nunca segredos
+    extra = {k for k in set(env) - {k for k in ENV_ALLOWLIST} - {"FAKE_PROFILE_KEY", "MG_SCOPE"}}
+    assert all(k.startswith("MG_MCP_") or k == "MEMORY_GATEWAY_URL" for k in extra)
 
 
 def test_env_case_insensitive_and_real_environ(monkeypatch):

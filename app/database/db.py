@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
 CREATE TABLE IF NOT EXISTS jev_cache (key TEXT PRIMARY KEY, value TEXT, created_at REAL);
 CREATE TABLE IF NOT EXISTS configs (hash TEXT PRIMARY KEY, json TEXT);
 CREATE TABLE IF NOT EXISTS budgets (period TEXT PRIMARY KEY, ceiling_usd REAL, updated_at REAL);
+CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT, updated_at REAL);
 CREATE TABLE IF NOT EXISTS routing_decisions (
   run_id TEXT, policy_version TEXT, registry_version TEXT, complexity REAL, risk TEXT, tier INTEGER,
   model TEXT, effort TEXT, verify TEXT, reason_codes TEXT, router_tokens INTEGER, router_cost REAL,
@@ -91,6 +92,9 @@ class Database:
         self.compress_context = compress_context
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        # Wakes SSE streams the instant a run is inserted (no polling latency); see wait_new_run().
+        self._run_cv = threading.Condition()
+        self._run_seq = 0
         self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
@@ -184,6 +188,78 @@ class Database:
             self._exec("INSERT INTO candidates VALUES (?,?,?,?,?,?,?,?,?)",
                        (row["run_id"], cd["candidate_id"], cd["source_file"], cd["section"], cd["score"],
                         cd.get("relevance"), cd.get("injection"), cd.get("decision"), cd.get("token_estimate")))
+        self._publish_run()
+
+    def _publish_run(self) -> None:
+        with self._run_cv:
+            self._run_seq += 1
+            self._run_cv.notify_all()
+
+    @property
+    def run_seq(self) -> int:
+        return self._run_seq
+
+    def wait_new_run(self, seen_seq: int, timeout: float) -> int:
+        """Block until a run was saved after `seen_seq` (or `timeout` s). Returns the current sequence."""
+        with self._run_cv:
+            if self._run_seq == seen_seq and timeout > 0:
+                self._run_cv.wait(timeout)
+            return self._run_seq
+
+    # key/value settings (persisted app settings; JSON values) ------------------
+    def get_kv(self, key: str) -> Any | None:
+        rows = self.query("SELECT value FROM kv WHERE key=?", (key,))
+        if not rows:
+            return None
+        try:
+            return json.loads(rows[0]["value"])
+        except (TypeError, ValueError):
+            return None
+
+    def set_kv(self, key: str, value: Any) -> None:
+        self._exec("INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES (?,?,?)",
+                   (key, json.dumps(value, ensure_ascii=False, default=str), time.time()))
+
+    def last_search_run(self) -> dict | None:
+        """Newest ad-hoc (interactive/MCP/REST) search run, with decoded sources and candidates."""
+        rows = self.query("SELECT run_id FROM runs WHERE session_id='adhoc' AND COALESCE(warmup,0)=0"
+                          " ORDER BY created_at DESC, rowid DESC LIMIT 1")
+        return self.get_run(rows[0]["run_id"]) if rows else None
+
+    def benchmark_rows(self, session_id: str | None = None, since: float | None = None,
+                       until: float | None = None, include_warmup: bool = False) -> list[dict]:
+        """Runs reduced to (pipeline, metrics) for server-side aggregation; no heavy columns."""
+        where, args = [], []
+        if not include_warmup:
+            where.append("COALESCE(warmup,0)=0 AND COALESCE(mode,'')<>'warmup'")
+        if session_id:
+            where.append("session_id=?"); args.append(session_id)
+        if since is not None:
+            where.append("created_at>=?"); args.append(since)
+        if until is not None:
+            where.append("created_at<=?"); args.append(until)
+        sql = "SELECT run_id, pipeline, created_at, error, jev_model, metrics_json FROM runs"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        return self.query(sql, tuple(args))
+
+    def evaluation_scores(self, session_id: str | None = None, since: float | None = None,
+                          until: float | None = None) -> list[dict]:
+        where, args = [], []
+        if session_id:
+            where.append("r.session_id=?"); args.append(session_id)
+        if since is not None:
+            where.append("r.created_at>=?"); args.append(since)
+        if until is not None:
+            where.append("r.created_at<=?"); args.append(until)
+        sql = ("SELECT COALESCE(e.pipeline, r.pipeline) AS pipeline, COUNT(*) AS n,"
+               " AVG(e.accuracy) AS accuracy, AVG(e.completeness) AS completeness,"
+               " AVG(e.groundedness) AS groundedness, AVG(e.citation_quality) AS citation_quality"
+               " FROM evaluations e JOIN runs r ON r.run_id=e.run_id")
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " GROUP BY COALESCE(e.pipeline, r.pipeline)"
+        return self.query(sql, tuple(args))
 
     def update_run_answer(self, run_id: str, answer: str | None, metrics: dict, error: str | None = None) -> None:
         self._exec("UPDATE runs SET answer=?, metrics_json=?, error=? WHERE run_id=?",

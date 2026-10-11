@@ -101,6 +101,12 @@ def create_app() -> FastAPI:
     from app.api import connections as connections_api  # Fase 9
     from app.api import orchestration as orchestration_api  # Fase 11
     from app.api import workspace as workspace_api  # Fase 10 (terminals: loopback-only gate inside)
+    from app.api import benchmark_report as benchmark_report_api  # aggregate + report (server-side)
+    from app.api import memory_context as memory_context_api  # last-search / search-preview
+    from app.api import settings as settings_api  # persisted settings
+    app.include_router(settings_api.router)
+    app.include_router(benchmark_report_api.router)
+    app.include_router(memory_context_api.router)
     app.include_router(connections_api.router)
     app.include_router(orchestration_api.router)
     app.include_router(workspace_api.router)

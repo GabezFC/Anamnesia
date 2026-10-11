@@ -216,6 +216,9 @@ class MemoryGateway:
         except Exception as exc:  # noqa: BLE001 — a failed freshness check never blocks a search
             pre["optimizer_errors"] = [f"freshness:{type(exc).__name__}"]
         plan = opt.plan(query, pipeline, self)
+        # Opt-in economy rules (settings): inert unless the user enabled them -> default unchanged.
+        plan, max_results, context_budget, eco_m = self._apply_economy(plan, max_results, context_budget, query)
+        pre.update(eco_m)
         # T6.4: no-op unless ANAMNESIA_BUDGET_ENFORCE=1 (then may degrade a paid plan to baseline)
         plan, budget_m = self.budget_guard.apply(plan, self.db)
         pre.update(budget_m)
@@ -312,6 +315,25 @@ class MemoryGateway:
         if persist:
             self._persist(result, jcfg, meta, error, all_judged)
         return result
+
+    def economy_settings(self):
+        from app.services.settings_store import economy_of
+        try:
+            return economy_of(self.db)
+        except Exception:  # noqa: BLE001 - settings are optional; never break a search
+            from app.gateway.economy import EconomySettings
+            return EconomySettings()
+
+    def _apply_economy(self, plan, max_results: int, context_budget: int | None, query: str):
+        from app.gateway.economy import apply_economy
+        eco = self.economy_settings()
+        if not eco.active:
+            return plan, max_results, context_budget, {}
+        try:
+            return apply_economy(eco, plan, max_results, context_budget, self.retrieval_cfg.model_context_budget,
+                                 lambda: self.optimizer._verdict_size_estimate(self, query))
+        except Exception as exc:  # noqa: BLE001
+            return plan, max_results, context_budget, {"optimizer_errors": [f"economy:{type(exc).__name__}"]}
 
     def _optimizer_metrics(self, plan, pre: dict, post: dict, cache_hit: bool) -> dict:
         out = {

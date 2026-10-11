@@ -14,6 +14,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 
+from app.terminals import mcp_inject
 from app.terminals.backend import PtyBackend, PtyHandle, default_backend
 
 audit = logging.getLogger("anamnesia.terminals.audit")
@@ -106,6 +107,9 @@ class Session:
     thread: threading.Thread | None = field(default=None, repr=False)
     close_reason: str | None = None
     worktree_id: str | None = None
+    branch: str | None = None
+    role: str | None = None
+    mcp: mcp_inject.McpInjection = field(default_factory=mcp_inject.McpInjection, repr=False)
 
     @property
     def pid(self) -> int | None:
@@ -116,7 +120,8 @@ class Session:
                 "state": self.state, "pid": self.pid, "rows": self.rows, "cols": self.cols,
                 "started_at": self.started_at, "ended_at": self.ended_at, "exit_code": self.exit_code,
                 "clients": len(self.subscribers), "worktree_id": self.worktree_id,
-                "cwd": self.project_path}
+                "cwd": self.project_path, "branch": self.branch, "role": self.role,
+                "mcp": self.mcp.public()}
 
 
 class TerminalManager:
@@ -163,7 +168,8 @@ class TerminalManager:
 
     # ------------------------------------------------------------ lifecycle
     def create(self, project, profile, cols: int = 80, rows: int = 24, cwd: str | None = None,
-               worktree_id: str | None = None) -> Session:
+               worktree_id: str | None = None, branch: str | None = None, role: str | None = None,
+               mcp: bool | None = None, mcp_config_dir=None) -> Session:
         """`project`: object with id/name/path. `profile`: app.terminals.profiles.Profile.
         `cwd` overrides the project path (used for git worktrees; the caller validated it)."""
         self.reap()
@@ -172,14 +178,26 @@ class TerminalManager:
         if not os.path.isdir(cwd):
             raise FileNotFoundError("diretório do projeto não existe mais")
         argv = profile.argv()
-        env = build_env(profile.env_keys, self._environ, {"MG_SCOPE": project.name})
+        src_env = os.environ if self._environ is None else self._environ
+        sid = uuid.uuid4().hex[:12]
+        inj = mcp_inject.prepare(profile, sid, project.name, role, src_env, want=mcp, config_dir=mcp_config_dir)
+        argv = [*argv, *inj.args]
+        extra = {"MG_SCOPE": project.name, **inj.env}
+        if role:
+            extra["MG_AGENT_ROLE"] = role
+        env = build_env(profile.env_keys, self._environ, extra)
         with self._lock:
             active = sum(1 for s in self._sessions.values() if s.state == "active")
             if active >= self.max_sessions:
                 raise SessionLimitError(f"limite de {self.max_sessions} sessões simultâneas atingido")
-            handle = self.backend.spawn(argv, cwd, env, rows, cols)
-            s = Session(uuid.uuid4().hex[:12], project.id, cwd, profile.id, handle, rows, cols,
-                        time.time(), last_client_at=self._clock(), worktree_id=worktree_id)
+            try:
+                handle = self.backend.spawn(argv, cwd, env, rows, cols)
+            except BaseException:
+                mcp_inject.cleanup(inj.config_path)
+                raise
+            s = Session(sid, project.id, cwd, profile.id, handle, rows, cols,
+                        time.time(), last_client_at=self._clock(), worktree_id=worktree_id,
+                        branch=branch, role=role, mcp=inj)
             self._sessions[s.id] = s
         self._ensure_janitor()
         t = threading.Thread(target=self._pump, args=(s,), name=f"pty-reader-{s.id}", daemon=True)
@@ -239,6 +257,7 @@ class TerminalManager:
         except Exception:
             log.exception("terminate_tree failed for %s", session_id)
         self._mark_ended(s, reason)
+        mcp_inject.cleanup(s.mcp.config_path)
         if s.thread and s.thread is not threading.current_thread():
             s.thread.join(timeout=5)
         if remove:

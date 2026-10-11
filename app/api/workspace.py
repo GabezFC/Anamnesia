@@ -24,6 +24,7 @@ from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 from app.services.security import (get_or_create_local_token, is_local_client, require_local_write,
                                    require_localhost)
+from app.orchestration import roles as role_contracts
 from app.terminals import worktrees as wt
 from app.terminals.manager import SessionLimitError, SessionNotFound, TerminalManager
 from app.terminals.profiles import Profile, ProfileError, ProfileUnavailable, load_profiles
@@ -210,6 +211,10 @@ class SessionIn(BaseModel):
     cols: int = Field(default=80, ge=1, le=500)
     rows: int = Field(default=24, ge=1, le=500)
     worktree_id: str | None = Field(default=None, max_length=64)
+    # true => cria um worktree isolado novo (branch anamnesia/<papel>-<hex>); string => id de worktree existente
+    worktree: bool | str | None = None
+    subagent_role: str | None = Field(default=None, max_length=32)  # app/orchestration/roles.py
+    mcp: bool | None = None  # false => opt-out só desta sessão (global: MG_TERMINAL_MCP=0)
 
 
 @router.post("/sessions", status_code=201, dependencies=[Depends(require_local_write)])
@@ -224,14 +229,24 @@ def create_session(body: SessionIn, mgr: TerminalManager = Depends(get_manager),
     prof = profiles.get(body.profile)
     if prof is None:
         return _err(404, "profile_not_found", "perfil não encontrado")
-    cwd = None
-    if body.worktree_id:
-        try:
-            cwd = wt.get_worktree(proj.path, body.worktree_id).path
-        except wt.WorktreeError as e:
-            return _wt_err(e)
+    role = body.subagent_role
+    if role is not None and role not in role_contracts.CONTRACTS:
+        return _err(422, "invalid_role", "papel de subagente desconhecido",
+                    "use: " + ", ".join(sorted(role_contracts.CONTRACTS)))
+    cwd = branch = None
+    wt_id = body.worktree_id or (body.worktree if isinstance(body.worktree, str) and body.worktree else None)
     try:
-        s = mgr.create(proj, prof, cols=body.cols, rows=body.rows, cwd=cwd, worktree_id=body.worktree_id)
+        if wt_id:
+            w = wt.get_worktree(proj.path, wt_id)
+            cwd, branch, wt_id = w.path, w.branch, w.id
+        elif body.worktree is True:
+            w = wt.create_worktree(proj.path, proj.name, f"anamnesia/{role or 'agent'}-{secrets.token_hex(3)}")
+            cwd, branch, wt_id = w.path, w.branch, w.id
+    except wt.WorktreeError as e:
+        return _wt_err(e)
+    try:
+        s = mgr.create(proj, prof, cols=body.cols, rows=body.rows, cwd=cwd, worktree_id=wt_id,
+                       branch=branch, role=role, mcp=body.mcp)
     except ProfileUnavailable as e:
         return _err(422, "profile_unavailable", str(e), "instale a CLI ou abra o perfil 'shell'")
     except SessionLimitError as e:

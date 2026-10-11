@@ -140,3 +140,74 @@ def test_module_graph_resolves():
     r = subprocess.run(["node", str(ROOT / "scripts" / "check_frontend_imports.mjs")],
                        capture_output=True, text=True, cwd=ROOT, timeout=60)
     assert r.returncode == 0, r.stdout + r.stderr
+
+# ---------------------------------------------------------------- UX parte 1 (i18n, tema, skeleton, lazy, virtual)
+def _node(code: str) -> str:
+    r = subprocess.run(["node", "--input-type=module", "-e", code], cwd=str(FRONT / "js"),
+                       capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    return r.stdout.strip()
+
+
+def test_new_shared_components_exist_and_have_documented_api():
+    comp = FRONT / "js" / "components"
+    assert "export function skeleton(" in read(comp / "skeleton.js")
+    assert "export function spinner(" in read(comp / "skeleton.js")
+    assert "export function emptyState(" in read(comp / "empty-state.js")
+    assert "<svg" in read(comp / "empty-state.js")
+    assert "export function createVirtualTable(" in read(comp / "virtual-table.js")
+
+
+def test_language_switch_persists_and_emits_event():
+    app = read(FRONT / "js" / "app.js")
+    assert 'data-action="set-lang"' in app and "case 'set-lang'" in app
+    i18n = read(FRONT / "js" / "i18n.js")
+    assert "anamnesia_lang" in i18n and "anamnesia:lang" in i18n
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_en_dictionary_is_complete_and_switch_updates_live_object():
+    out = _node("""
+globalThis.localStorage = { _d: {}, getItem(k){return this._d[k] ?? null}, setItem(k,v){this._d[k]=String(v)} };
+globalThis.window = { dispatchEvent(e){ globalThis.__ev = e.detail.lang; } };
+globalThis.CustomEvent = class { constructor(n, o){ this.type = n; this.detail = o.detail; } };
+globalThis.document = { documentElement: { setAttribute(){} } };
+const m = await import('./i18n.js');
+const before = m.I18N.nav.costs;
+m.setLang('en');
+console.log(JSON.stringify({ miss: m.missingKeys('en'), before, after: m.I18N.nav.costs, ev: globalThis.__ev, stored: localStorage.getItem('anamnesia_lang') }));
+m.setLang('pt');
+""")
+    import json
+    d = json.loads(out)
+    assert d["miss"] == [], d["miss"]
+    assert d["before"] != d["after"] and d["ev"] == "en" and d["stored"] == "en"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_virtual_table_window_math_renders_only_visible_rows():
+    out = _node("""
+const { computeRange } = await import('./components/virtual-table.js');
+console.log(JSON.stringify([computeRange(0, 400, 40, 10000, 6), computeRange(40000, 400, 40, 10000, 6), computeRange(0, 400, 40, 0, 6)]));
+""")
+    import json
+    a, b, c = json.loads(out)
+    assert a == {"start": 0, "end": 16}
+    assert b == {"start": 994, "end": 1016}
+    assert c == {"start": 0, "end": 0}
+
+
+def test_terminal_theme_reads_css_tokens_and_reacts_to_theme_switch():
+    tv = read(FRONT / "js" / "components" / "terminal-view.js")
+    assert "export function readTerminalTheme" in tv and "--term-bg" in tv and "getComputedStyle" in tv
+    t = read(FRONT / "js" / "terminals.js")
+    assert "readTerminalTheme()" in t and "attributeFilter: ['data-theme']" in t
+    assert "term.options.theme" in t
+
+
+def test_lab_tabs_are_lazy_dynamic_imports():
+    idx = read(FRONT / "js" / "pages" / "compare" / "index.js")
+    assert not re.search(r"^import \* as \w+ from '\./\w[\w-]*\.js'", idx, flags=re.M)
+    assert len(re.findall(r"import\('\./[\w-]+\.js'\)", idx)) == 8
+    assert "tabCache" in idx
+

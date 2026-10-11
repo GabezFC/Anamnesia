@@ -7,6 +7,7 @@
 // server → raw terminal output (text or binary frames). On reconnect the server replays its buffer,
 // so the terminal is reset first to avoid duplicated output.
 import { openSessionSocket } from './anamnesia-api.js';
+import { readTerminalTheme } from './components/terminal-view.js';
 const t = (k, p = {}) => (k === 'term.loadFail' ? 'Falha ao carregar o terminal: ' + p.src : k);
 
 const VENDOR = '/static/vendor/xterm';
@@ -40,9 +41,17 @@ export function loadXterm() {
   return loading;
 }
 
-const THEME = {
-  background: '#0B1220', foreground: '#E6EDF7', cursor: '#60A5FA', selectionBackground: '#1E3A5F',
-};
+// Terminais vivos: ao trocar data-theme em <html>, relê os tokens --term-* e reaplica em cada xterm.
+const liveTerminals = new Set();
+let themeObserver = null;
+function watchTheme() {
+  if (themeObserver || typeof MutationObserver === 'undefined') return;
+  themeObserver = new MutationObserver(() => {
+    const theme = readTerminalTheme();
+    for (const t of liveTerminals) t.applyTheme(theme);
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
 const RETRY_MS = [500, 1000, 2000, 4000, 8000];
 const MAX_RETRIES = 8;
 
@@ -87,8 +96,10 @@ export class SessionTerminal {
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     this.term = new window.Terminal({
       fontFamily: 'Consolas, "Cascadia Mono", monospace', fontSize: 14, cursorBlink: !reduce,
-      allowProposedApi: true, theme: THEME, scrollback: 5000,
+      allowProposedApi: true, theme: readTerminalTheme(), scrollback: 5000,
     });
+    liveTerminals.add(this);
+    watchTheme();
     this.fit = new window.FitAddon.FitAddon();
     this.term.loadAddon(this.fit);
     this.term.open(this.el);
@@ -102,6 +113,11 @@ export class SessionTerminal {
     this.ro.observe(this.el);
     if (this.pendingFocus) { this.pendingFocus = false; this.term.focus(); }
     this.connect();
+  }
+
+  /** Reaplica o tema (claro/escuro) sem recriar o terminal. */
+  applyTheme(theme = readTerminalTheme()) {
+    if (this.term) this.term.options.theme = theme;
   }
 
   send(obj) {
@@ -174,6 +190,7 @@ export class SessionTerminal {
 
   dispose() {
     this.disposed = true;
+    liveTerminals.delete(this);
     clearTimeout(this.timer);
     this.ro?.disconnect();
     try { this.ws?.close(1000); } catch { /* already closed */ }

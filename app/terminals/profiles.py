@@ -7,6 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.terminals import mcp_inject
 from app.routing.registry import RegistryError, _parse_yaml
 
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / "config" / "profiles.yaml"
@@ -63,7 +64,8 @@ class Profile:
         return {"id": self.id, "name": self.name, "kind": self.kind, "description": self.description,
                 "command": (self.windows_command or self.command) if sys.platform == "win32" else self.command,
                 "available": self.resolve() is not None, "env_keys": list(self.env_keys),
-                "missing_env_keys": self.missing_env_keys()}
+                "missing_env_keys": self.missing_env_keys(),
+                "mcp_default": mcp_inject.is_default(self), "mcp_mode": mcp_inject.mode_for(self)}
 
 
 def _str_list(v, where) -> tuple[str, ...]:
