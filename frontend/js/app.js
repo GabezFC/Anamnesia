@@ -1,409 +1,577 @@
-// app.js — hash router + shell. ES module; no framework, no build step.
-import * as API from './api.js';
-import { esc, fmtDate, get, realRuns, metricsOf, num, fmtCompact, mean, totalTokens } from './format.js';
-import {
-  errorState, skeletonCards, skeletonChart, skeletonTable, panel,
-} from './components.js';
-import {
-  loadCore, loadRecentDetails, getSystemInfo, getQuestions, getProjects, RUN_LIMIT,
-} from './store.js';
-import { destroyCharts } from './charts.js';
-import {
-  renderDashboard, mountDashboard, renderBenchmarks, renderPipeline, mountPipeline,
-  renderTokens, mountTokens, renderLatency, mountLatency, renderCosts, mountCosts,
-} from './pages-core.js';
-import {
-  renderHistory, mountHistory, unmountHistory, renderProjects, renderMemory, renderAgents, renderModels,
-} from './pages-data.js';
-import { renderConfig, renderResults } from './pages-config.js';
-import { mountSetup, renderSetup } from './pages-setup.js';
-import { renderWorkspace, mountWorkspace, unmountWorkspace, workspaceActions } from './pages-workspace.js';
-import { renderConnections, mountConnections, unmountConnections } from './pages-connections.js';
-import { renderOrchestration, mountOrchestration, unmountOrchestration } from './pages-orchestration.js';
-import { renderAnaCosts, mountAnaCosts, unmountAnaCosts } from './pages-anacosts.js';
-import { renderHealthBanner, installPalette } from './shell-extras.js';
-import { installLangToggle, t } from './i18n.js';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ * ANAMNÉSIA MAIN APP & HASH ROUTER
+ * Gerencia a navegação entre o App Principal (Workspace, Conexões, Config, Custos)
+ * e o Laboratório Isolado de Comparação (#/compare/*).
+ * Controla modais, paleta de comandos Ctrl+K, toasts e troca de temas.
+ */
 
-// Anamnesia shell: Workspace is the home page. The four top entries are the product; every
-// pre-existing benchmark/observability page is kept and re-routed under Custos > "Benchmark avançado".
-const NAV_MAIN = [
-  ['workspace', 'Workspace', '▦'], ['connections', 'Conexões', '⇌'], ['config', 'Config', '⚙'], ['costs', 'Custos', '$'],
-];
-// Config-adjacent gateway pages (formerly "Configuração" and "Setup").
-const NAV_CONFIG_SUB = [['setup', 'Setup do gateway', '⚒'], ['config-active', 'Configuração ativa', '☰']];
-const NAV = [
-  ['dashboard', 'Dashboard', '◎'], ['benchmarks', 'Benchmarks', '⇄'], ['pipeline', 'Pipeline', '⇉'],
-  ['tokens', 'Tokens', '▤'], ['latency', 'Latência', '◷'], ['costs-model', 'Custo por modelo', '$'],
-  ['results', 'Resultados', '✓'],
-  ['projects', 'Projetos', '▣'], ['memory', 'Memória', '❖'], ['agents', 'Agentes', '◈'],
-  ['models', 'Modelos', '◐'],
-  ['history', 'Histórico', '↻'],
-];
-const NAV_GROUPS = [
-  ['Observabilidade', 0, 6],
-  ['Evidência', 6, 7],
-  ['Entidades', 7, 11],
-  ['Sistema', 11, 12],
-];
-// Old hash ids that moved: keep bookmarks working where the meaning is unchanged.
-const ALIASES = { 'bench-costs': 'costs-model' };
+import { icon } from './icons.js';
+import { I18N } from './i18n.js';
+import { mockProjects, mockCostSummary, mockSessions } from './mock-data.js';
 
-const PAGES = {
-  workspace: {
-    title: 'Workspace', wide: true,
-    sub: 'Projetos, terminais e arquivos no mesmo lugar. Os terminais continuam rodando no servidor ao trocar de página.',
-    render: renderWorkspace, mount: mountWorkspace, unmount: unmountWorkspace, needs: [],
-  },
-  connections: {
-    title: 'Conexões',
-    sub: 'Agentes, modelos e servidores MCP. As chaves são enviadas uma vez ao servidor e nunca são exibidas de volta.',
-    render: renderConnections, mount: mountConnections, unmount: unmountConnections, needs: [],
-  },
-  config: {
-    title: 'Config',
-    sub: 'Predefinições de subagentes: quais classes de modelo cada papel usa.',
-    render: renderOrchestration, mount: mountOrchestration, unmount: unmountOrchestration, needs: [],
-  },
-  costs: {
-    title: 'Custos',
-    sub: 'Livro de custos por chamada do Memory Gateway: medido, estimado ou indisponível — nunca inventado.',
-    render: renderAnaCosts, mount: mountAnaCosts, unmount: unmountAnaCosts, needs: [],
-  },
-  dashboard: {
-    title: 'Dashboard',
-    sub: 'Visão geral dos pipelines de retrieval, com gasto real de tokens e comparação Baseline vs Otimizado.',
-    render: renderDashboard, mount: mountDashboard, needs: ['core', 'details'],
-  },
-  benchmarks: {
-    title: 'Comparação de benchmarks',
-    sub: 'Baseline vs Graphify vs pipelines com juiz. Destaque apenas em diferenças significativas.',
-    render: renderBenchmarks, needs: ['core', 'details'],
-  },
-  pipeline: {
-    title: 'Visualização do pipeline',
-    sub: 'Fluxo query → retrieval → graphify → pré-filtro → JEV → filter → context → model.',
-    render: renderPipeline, mount: mountPipeline, needs: ['core'],
-  },
-  tokens: {
-    title: 'Eficiência de tokens',
-    sub: 'Contexto entregue ao consumidor vs tokens realmente gastos, incluindo os pagos ao juiz.',
-    render: renderTokens, mount: mountTokens, needs: ['core'],
-  },
-  latency: {
-    title: 'Latência', sub: 'Decomposição por estágio do pipeline.',
-    render: renderLatency, mount: mountLatency, needs: ['core'],
-  },
-  'costs-model': {
-    title: 'Custo por modelo', sub: 'Benchmark avançado — custo do modelo consumidor, do juiz, por query e por 1K tokens.',
-    render: renderCosts, mount: mountCosts, needs: ['core'],
-  },
-  results: {
-    title: 'Resultados e procedência',
-    sub: 'O que é Verificado, o que é apenas Experimental e o que foi Invalidado.',
-    render: renderResults, needs: ['core'],
-  },
-  projects: {
-    title: 'Projetos',
-    sub: 'Projetos e áreas descobertos no vault, cruzados com a atividade de retrieval.',
-    render: renderProjects, needs: ['core', 'details', 'projects'],
-  },
-  memory: {
-    title: 'Memória', sub: 'Vault, grafo, áreas e notas mais recuperadas.',
-    render: renderMemory, needs: ['core', 'details', 'system', 'projects'],
-  },
-  agents: {
-    title: 'Agentes', sub: 'Adapters detectados e desempenho por consumidor.',
-    render: renderAgents, needs: ['core', 'system'],
-  },
-  models: {
-    title: 'Modelos', sub: 'Provedores, modelos disponíveis e modelos medidos.',
-    render: renderModels, needs: ['core', 'system'],
-  },
-  history: {
-    title: 'Histórico', sub: 'Séries temporais por sessão e run, ordenadas por created_at.',
-    render: renderHistory, mount: mountHistory, unmount: unmountHistory, needs: ['core'],
-  },
-  'config-active': {
-    title: 'Configuração ativa',
-    sub: 'Configuração ativa, pipeline selecionado, flags de otimização, dataset e estado das runs.',
-    render: renderConfig, needs: ['core', 'system', 'questions', 'latestRun'],
-  },
-  setup: {
-    title: 'Configuração (setup)',
-    sub: 'Conectar chave de modelo, apontar o vault, ligar o veredito e os estágios opcionais — tudo aplicado em runtime (§3, §5.4).',
-    render: renderSetup, mount: mountSetup, needs: [],
-  },
+import * as workspacePage from './pages/workspace.js';
+import * as connectionsPage from './pages/connections.js';
+import * as configPage from './pages/config.js';
+import * as costsPage from './pages/costs.js';
+import * as compareLab from './pages/compare/index.js';
+import { esc } from './format.js';
+import { loadLive, installTerminalObserver, registerProject } from './live.js';
+
+const ROUTES = {
+  '#/workspace': { id: 'workspace', title: I18N.nav.workspace, icon: 'terminal', module: workspacePage },
+  '#/connections': { id: 'connections', title: I18N.nav.connections, icon: 'connections', module: connectionsPage },
+  '#/config': { id: 'config', title: I18N.nav.config, icon: 'config', module: configPage },
+  '#/costs': { id: 'costs', title: I18N.nav.costs, icon: 'costs', module: costsPage },
 };
 
-/** UI state persisted across navigation (toggles). */
-const state = {
-  pipeline: 'graphify_jev_opt', tokenView: 'total', costView: 'total',
-  histSeries: 'tokens', histAgg: 'day', histScale: 'linear', histPeriod: 'all',
-};
-const ctx = {
-  runs: [], sessions: [], stats: null, details: [], systemInfo: null, questions: [],
-  projects: null, health: null, latestRunDetail: null, state, api: API,
-};
+function getInitialTheme() {
+  const saved = localStorage.getItem('anamnesia_theme');
+  if (saved) return saved;
+  // Respeita preferência do sistema na primeira visita, padrão light
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
+  }
+  return 'light';
+}
 
-/** Manual refresh: drop every memoised GET and reload the 5000-run preload + header totals. */
-ctx.refreshCore = async () => {
-  API.invalidate();
-  corePromise = null;
-  await ensure(['core']);
-};
+let currentRoute = '#/workspace';
+let currentTheme = getInitialTheme();
+let activePageModule = null;
+let isCommandPaletteOpen = false;
+let activeModal = null; // null | { type: 'add-project' } | { type: 'snippet', title, snippet }
+let currentDebugState = 'loaded'; // 'loaded' | 'loading' | 'empty' | 'error' | 'backend-unavailable'
 
-const $ = (s) => document.querySelector(s);
-const route = () => {
-  const id = (location.hash.replace(/^#\/?/, '') || 'workspace').split('?')[0];
-  return ALIASES[id] || id;
-};
-const BENCH_IDS = NAV.map((n) => n[0]);
+// Elements cache
+let appRoot = null;
 
-/* ---------------------------------------------------------------- shell */
+export async function init() {
+  appRoot = document.getElementById('app');
+  if (!appRoot) return;
+
+  // Apply saved theme
+  document.documentElement.setAttribute('data-theme', currentTheme);
+
+  // Setup global event listeners
+  window.addEventListener('hashchange', handleRoute);
+  window.addEventListener('keydown', handleKeyboardShortcuts);
+  window.addEventListener('anamnesia:toast', (e) => showToast(e.detail));
+  window.addEventListener('anamnesia:modal:add-project', () => openModal({ type: 'add-project' }));
+  window.addEventListener('anamnesia:modal:snippet', (e) => openModal({ type: 'snippet', ...e.detail }));
+
+  // Dados reais do backend (fallback ao mock se indisponível)
+  await loadLive();
+  installTerminalObserver();
+
+  // Initial routing
+  handleRoute();
+}
+
+function handleRoute() {
+  let hash = window.location.hash || '#/workspace';
+
+  // Normalize root
+  if (hash === '' || hash === '#/') {
+    window.location.hash = '#/workspace';
+    return;
+  }
+
+  currentRoute = hash;
+
+  // Cleanup active page module
+  if (activePageModule && activePageModule.unmount) {
+    const contentArea = appRoot.querySelector('[data-bind="content-slot"]');
+    if (contentArea) activePageModule.unmount(contentArea);
+  }
+
+  renderShell();
+}
+
 function renderShell() {
-  document.body.innerHTML = `
-    <a class="skip" href="#main">Pular para o conteúdo</a>
-    <div id="app-shell">
-      <header id="header">
-        <button id="hamburger" aria-label="Alternar menu" aria-expanded="false">☰</button>
-        <div class="brand">
-          <span class="brand-mark" aria-hidden="true"></span>
-          <span class="brand-text">Memory Gateway<small>otimização de contexto com JEV</small></span>
-        </div>
-        <div class="header-meta">
-          <span class="meta-item hide-md">Runs: <b id="hdr-runs">—</b></span>
-          <span class="meta-item hide-md">Último benchmark: <b id="hdr-last">—</b></span>
-          <span class="meta-item hide-sm">Versão: <b id="hdr-ver">—</b></span>
-          <span id="hdr-health" class="pill"><span class="dot"></span>verificando…</span>
-        </div>
-      </header>
-      <nav id="sidebar" aria-label="Navegação principal">
-        <div class="nav-group">Anamnesia</div>
-        ${NAV_MAIN.map(navLink).join('')}
-        ${NAV_GROUPS.map(([label, a, b]) =>
-    `<div class="nav-group nav-sub">Benchmark avançado · ${esc(label)}</div>${NAV.slice(a, b).map(navLink).join('')}`).join('')}
-        <div class="nav-group nav-sub">Benchmark avançado · Gateway</div>${NAV_CONFIG_SUB.map(navLink).join('')}
-        <div class="nav-foot">Atalhos: Ctrl+K (fora do terminal)</div>
-      </nav>
-      <div id="scrim"></div>
-      <main id="main" tabindex="-1">
-        <div id="health-banner" class="health-banner" role="region" aria-label="Avisos do servidor" aria-live="polite" hidden></div>
-        <div class="page-head" id="page-head"><h1 id="page-title">…</h1><p id="page-sub"></p></div>
-        <div id="page-body"></div>
-      </main>
-    </div>`;
-  installLangToggle($('.header-meta'));
-  const ham = $('#hamburger');
-  ham.addEventListener('click', () => {
-    const open = document.body.classList.toggle('nav-open');
-    ham.setAttribute('aria-expanded', String(open));
-  });
-  $('#scrim').addEventListener('click', () => {
-    document.body.classList.remove('nav-open');
-    ham.setAttribute('aria-expanded', 'false');
-  });
-}
-const navLink = ([id, label, icon]) =>
-  `<a href="#/${id}" data-nav="${id}"><span class="nav-icon" aria-hidden="true">${icon}</span>${esc(label)}</a>`;
+  const isLab = currentRoute.startsWith('#/compare');
 
-/* ---------------------------------------------------------------- header */
-async function refreshHeader() {
-  const pill = $('#hdr-health');
-  if (!pill) return;
-  try {
-    const h = await API.getHealth();
-    ctx.health = h;
-    renderHealthBanner(h.warnings);
-    const ok = h.status === 'ok' && h.vault_exists !== false;
-    pill.className = `pill ${ok ? 'ok' : 'warn'}`;
-    pill.innerHTML = `<span class="dot"></span>${esc(h.status)}${h.vault_exists === false ? ' · vault ausente' : ''}`;
-  } catch {
-    ctx.health = null;
-    pill.className = 'pill err';
-    pill.innerHTML = '<span class="dot"></span>offline';
+  // REGRA DE OURO: Se estiver na rota #/compare, a casca do app some completamente
+  // e entra o Laboratório de Comparação com header próprio
+  if (isLab) {
+    const subRoute = currentRoute.replace('#/compare/', '').replace('#/compare', '') || 'overview';
+    appRoot.innerHTML = `
+      ${compareLab.render(subRoute)}
+      ${renderGlobalToasts()}
+      ${renderCommandPalette()}
+    `;
+    compareLab.mount(appRoot);
+    activePageModule = compareLab;
+    attachShellHandlers();
+    return;
   }
-  // /system/info has no version field; the FastAPI app version lives in /openapi.json.
-  try {
-    const info = await getSystemInfo();
-    ctx.systemInfo = info;
-    const ver = $('#hdr-ver');
-    if (ver) ver.textContent = info.profile ? `perfil ${info.profile}` : '—';
-  } catch { /* header degrades gracefully */ }
-  try {
-    const spec = await API.getOpenApi();
-    const v = get(spec, 'info.version');
-    const ver = $('#hdr-ver');
-    if (v && ver) ver.textContent = `v${v}`;
-  } catch { /* optional */ }
-}
 
-/** Header totals come from the history summary (the whole database), not from the 5000-run preload. */
-async function refreshHistoryTotals() {
-  try {
-    const s = await API.getHistorySummary();
-    const runsEl = $('#hdr-runs');
-    if (runsEl) runsEl.textContent = s.total_runs ? fmtInt(s.total_runs) : 'nenhuma';
-    const lastEl = $('#hdr-last');
-    if (lastEl) lastEl.textContent = s.newest_run_at ? fmtDate(s.newest_run_at) : 'nenhum';
-  } catch { /* keep the preload-derived values */ }
-}
-const fmtInt = (n) => Number(n).toLocaleString('pt-BR');
+  // APP PRINCIPAL ANAMNÉSIA: Sidebar com APENAS 4 itens + Topbar + Statusbar
+  const routeObj = ROUTES[currentRoute] || ROUTES['#/workspace'];
+  activePageModule = routeObj.module;
 
-function updateHeaderCounts() {
-  const rs = realRuns(ctx.runs);
-  const runsEl = $('#hdr-runs');
-  if (runsEl) runsEl.textContent = rs.length ? `${rs.length}${ctx.runs.length >= RUN_LIMIT ? '+' : ''}` : 'nenhuma';
-  const latest = rs.map((r) => num(r.created_at)).filter((x) => x !== null).sort((a, b) => b - a)[0];
-  const lastEl = $('#hdr-last');
-  if (lastEl) lastEl.textContent = latest ? fmtDate(latest) : 'nenhum';
-}
+  const activeProject = mockProjects[0] || { name: 'sem projeto' };
+  const activeSession = mockSessions[0] || { profileId: '—' };
 
-/* ---------------------------------------------------------------- data */
-let corePromise = null;
-async function ensure(needs) {
-  if (needs.includes('core')) {
-    if (!corePromise) {
-      corePromise = loadCore().then((d) => {
-        ctx.runs = d.runs; ctx.sessions = d.sessions; ctx.stats = d.stats;
-        updateHeaderCounts();
-        refreshHistoryTotals();
-      }).catch((e) => { corePromise = null; throw e; });
+  appRoot.innerHTML = `
+    <div class="shell-container" data-bind="app-shell">
+      <!-- SIDEBAR ESQUERDA (Exatamente 4 itens de navegação + Rodapé) -->
+      <aside class="app-sidebar" aria-label="Navegação principal">
+        <div>
+          <!-- Header da Sidebar -->
+          <div class="sidebar-header">
+            <a href="#/workspace" class="brand-logo" aria-label="${I18N.app.title}">
+              <div class="brand-icon">${icon('cpu', '', 22)}</div>
+              <span>${I18N.app.title}</span>
+            </a>
+          </div>
+
+          <!-- Navegação: Apenas Workspace, Conexões, Config, Custos -->
+          <nav class="sidebar-nav" role="navigation">
+            <a href="#/workspace" class="nav-item ${routeObj.id === 'workspace' ? 'is-active' : ''}" aria-current="${routeObj.id === 'workspace' ? 'page' : 'false'}">
+              <span class="nav-item-icon">${icon('terminal', '', 18)}</span>
+              <span>${I18N.nav.workspace}</span>
+            </a>
+            <a href="#/connections" class="nav-item ${routeObj.id === 'connections' ? 'is-active' : ''}" aria-current="${routeObj.id === 'connections' ? 'page' : 'false'}">
+              <span class="nav-item-icon">${icon('connections', '', 18)}</span>
+              <span>${I18N.nav.connections}</span>
+            </a>
+            <a href="#/config" class="nav-item ${routeObj.id === 'config' ? 'is-active' : ''}" aria-current="${routeObj.id === 'config' ? 'page' : 'false'}">
+              <span class="nav-item-icon">${icon('config', '', 18)}</span>
+              <span>${I18N.nav.config}</span>
+            </a>
+            <a href="#/costs" class="nav-item ${routeObj.id === 'costs' ? 'is-active' : ''}" aria-current="${routeObj.id === 'costs' ? 'page' : 'false'}">
+              <span class="nav-item-icon">${icon('costs', '', 18)}</span>
+              <span>${I18N.nav.costs}</span>
+            </a>
+          </nav>
+        </div>
+
+        <!-- Rodapé da Sidebar: Saúde local, tema e versão -->
+        <div class="sidebar-footer">
+          <!-- Mini seletor de depuração de estados (Section 6) -->
+          <div class="debug-state-bar" title="Simulador de estados para teste e avaliação">
+            <span style="font-weight: 600;">Estado:</span>
+            <select class="select-control" data-action="switch-debug-state" style="padding: 2px 18px 2px 6px; font-size: 10px;">
+              <option value="loaded" ${currentDebugState === 'loaded' ? 'selected' : ''}>Normal (Carregado)</option>
+              <option value="loading" ${currentDebugState === 'loading' ? 'selected' : ''}>Carregando (Skeleton)</option>
+              <option value="empty" ${currentDebugState === 'empty' ? 'selected' : ''}>Vazio (Empty State)</option>
+              <option value="error" ${currentDebugState === 'error' ? 'selected' : ''}>Erro (Falha)</option>
+              <option value="backend-unavailable" ${currentDebugState === 'backend-unavailable' ? 'selected' : ''}>Backend Indisponível</option>
+            </select>
+          </div>
+
+          <div class="sidebar-health-row">
+            <span class="status-indicator">
+              <span class="dot dot-success"></span>
+              <span>${I18N.app.localHealthOk}</span>
+            </span>
+            <span class="sidebar-version tabular">${I18N.app.version}</span>
+          </div>
+
+          <div class="sidebar-actions-row">
+            <!-- Alternador de Tema Escuro / Claro -->
+            <button class="btn btn-ghost btn-sm" data-action="toggle-theme" title="Alternar tema" aria-label="Alternar tema">
+              ${icon(currentTheme === 'dark' ? 'sun' : 'moon', '', 14)}
+              <span>${currentTheme === 'dark' ? 'Claro' : 'Escuro'}</span>
+            </button>
+
+            <!-- Atalho da paleta -->
+            <button class="btn btn-ghost btn-sm" data-action="open-command-palette" title="Paleta de Comandos (Ctrl+K)">
+              <kbd>Ctrl+K</kbd>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- VIEWPORT PRINCIPAL: TOPBAR + CONTEÚDO + STATUS BAR -->
+      <div class="main-viewport">
+        <!-- TOPBAR: Breadcrumb, Busca/Ctrl+K e Botão Destacado "Comparar Modelos" -->
+        <header class="app-topbar">
+          <div class="topbar-left">
+            <div class="breadcrumb-trail">
+              <span>${I18N.app.title}</span>
+              <span aria-hidden="true">/</span>
+              <span class="breadcrumb-active">${esc(routeObj.title)}</span>
+              <span aria-hidden="true">·</span>
+              <span style="color: var(--text-tertiary); font-family: var(--font-mono);">${activeProject.name}</span>
+            </div>
+          </div>
+
+          <div class="topbar-center">
+            <button class="command-trigger-btn" data-action="open-command-palette" aria-label="Abrir busca e paleta de comandos">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                ${icon('search', '', 13)}
+                <span>${I18N.app.searchPlaceholder}</span>
+              </div>
+              <kbd>Ctrl+K</kbd>
+            </button>
+          </div>
+
+          <!-- Botão "Comparar Modelos" (destacado no canto direito) -->
+          <div class="topbar-right">
+            <a href="#/compare/overview" class="btn btn-secondary-highlight" data-action="nav-compare" aria-label="${I18N.app.compareModelsBtn}">
+              ${icon('scale', '', 14)}
+              <span>${I18N.app.compareModelsBtn}</span>
+            </a>
+          </div>
+        </header>
+
+        <!-- ÁREA DE CONTEÚDO DA PÁGINA ATIVA -->
+        <div class="app-content" data-bind="content-slot">
+          ${activePageModule ? activePageModule.render() : ''}
+        </div>
+
+        <!-- STATUS BAR INFERIOR (Alta densidade, nativa do app) -->
+        <footer class="app-statusbar" aria-label="Barra de status">
+          <div class="statusbar-section">
+            <div class="statusbar-item">
+              <span class="dot dot-success"></span>
+              <span>${I18N.app.localHealthOk}</span>
+            </div>
+            <span aria-hidden="true">|</span>
+            <div class="statusbar-item">
+              <span>Projeto:</span>
+              <span style="color: var(--text-primary); font-weight: 500;">${activeProject.name}</span>
+            </div>
+            <span aria-hidden="true">|</span>
+            <div class="statusbar-item">
+              <span>Perfil ativo:</span>
+              <span style="color: var(--text-primary); font-weight: 500;">${activeSession.profileId}</span>
+            </div>
+          </div>
+
+          <div class="statusbar-section">
+            <div class="statusbar-item tabular">
+              <span>Memory Gateway:</span>
+              <span style="color: var(--text-primary); font-weight: 600;">${mockCostSummary.total_usd.value == null ? 'custo indisponível' : 'US$ ' + mockCostSummary.total_usd.value.toFixed(2) + ' hoje'}</span>
+              <span class="badge-origin badge-origin-measured" style="margin-left: 4px;">medido</span>
+            </div>
+            <span aria-hidden="true">|</span>
+            <div class="statusbar-item tabular">
+              <span>${mockSessions.length} sessões ativas</span>
+            </div>
+          </div>
+        </footer>
+      </div>
+
+      <!-- Modais Globais & Paleta de Comandos -->
+      ${renderModal()}
+      ${renderCommandPalette()}
+      ${renderGlobalToasts()}
+    </div>
+  `;
+
+  // Mount active page module
+  const contentArea = appRoot.querySelector('[data-bind="content-slot"]');
+  if (contentArea && activePageModule && activePageModule.mount) {
+    activePageModule.mount(contentArea);
+    if (activePageModule.setDebugState) {
+      activePageModule.setDebugState(currentDebugState, contentArea);
     }
-    await corePromise;
   }
-  if (needs.includes('system') && !ctx.systemInfo) ctx.systemInfo = await getSystemInfo();
-  if (needs.includes('questions') && !ctx.questions.length) ctx.questions = await getQuestions().catch(() => []);
-  if (needs.includes('projects') && !ctx.projects) ctx.projects = await getProjects().catch(() => null);
-  if (needs.includes('details') && !ctx.details.length) {
-    ctx.details = await loadRecentDetails(ctx.runs, 36).catch(() => []);
+
+  attachShellHandlers();
+}
+
+function renderModal() {
+  if (!activeModal) return '';
+
+  if (activeModal.type === 'add-project') {
+    return `
+      <div class="modal-backdrop is-active" data-action="close-modal">
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-add-title">
+          <div class="modal-header">
+            <h3 id="modal-add-title" class="card-title">${I18N.workspace.addProjectModalTitle}</h3>
+            <button class="btn btn-ghost btn-icon" data-action="close-modal" aria-label="${I18N.app.close}">${icon('x', '', 16)}</button>
+          </div>
+          <div class="modal-body">
+            <div class="input-group">
+              <label class="input-label">${I18N.workspace.projectNameLabel}</label>
+              <div class="input-control">
+                <input type="text" id="new-project-name" placeholder="meu-novo-projeto" autofocus />
+              </div>
+            </div>
+            <div class="input-group">
+              <label class="input-label">${I18N.workspace.projectPathLabel}</label>
+              <div class="input-control">
+                <input type="text" id="new-project-path" placeholder="/home/dev/meu-novo-projeto" />
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-action="close-modal">${I18N.app.cancel}</button>
+            <button class="btn btn-primary" data-action="submit-add-project">${I18N.app.save}</button>
+          </div>
+        </div>
+      </div>
+    `;
   }
-  // The configuration view needs config_json, which only the run-detail route returns.
-  if (needs.includes('latestRun') && !ctx.latestRunDetail) {
-    const newest = realRuns(ctx.runs)[0];
-    if (newest?.run_id) ctx.latestRunDetail = await API.getRunDetail(newest.run_id).catch(() => null);
+
+  if (activeModal.type === 'snippet') {
+    return `
+      <div class="modal-backdrop is-active" data-action="close-modal">
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-snip-title">
+          <div class="modal-header">
+            <div>
+              <h3 id="modal-snip-title" class="card-title">${I18N.connections.snippetModalTitle}</h3>
+              <div class="card-subtitle">${esc(activeModal.title)}</div>
+            </div>
+            <button class="btn btn-ghost btn-icon" data-action="close-modal" aria-label="${I18N.app.close}">${icon('x', '', 16)}</button>
+          </div>
+          <div class="modal-body">
+            <pre class="code-snippet-box"><code>${esc(activeModal.snippet)}</code></pre>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-action="copy-snippet" data-snippet-text="${encodeURIComponent(activeModal.snippet)}">
+              ${icon('copy', '', 13)} ${I18N.app.copy}
+            </button>
+            <button class="btn btn-primary" data-action="close-modal">${I18N.app.close}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  return '';
+}
+
+function renderCommandPalette() {
+  if (!isCommandPaletteOpen) return '';
+
+  return `
+    <div class="command-palette-backdrop is-active" data-action="close-command-palette">
+      <div class="command-palette-dialog" role="dialog" aria-modal="true">
+        <div class="command-palette-input-wrap">
+          ${icon('search', '', 16)}
+          <input 
+            type="text" 
+            class="command-palette-input" 
+            placeholder="Digite para buscar páginas, projetos ou ações..." 
+            data-action="filter-palette" 
+            autofocus 
+          />
+          <kbd>Esc</kbd>
+        </div>
+        <div class="command-palette-list" data-bind="palette-list">
+          <div class="command-palette-group-title">Navegação Rápida</div>
+          <div class="command-palette-item" data-action="palette-navigate" data-target="#/workspace">
+            <div class="command-palette-item-left">
+              ${icon('terminal', '', 14)}
+              <span>Ir para Workspace (IDE)</span>
+            </div>
+            <kbd>#1</kbd>
+          </div>
+          <div class="command-palette-item" data-action="palette-navigate" data-target="#/connections">
+            <div class="command-palette-item-left">
+              ${icon('connections', '', 14)}
+              <span>Ir para Conexões</span>
+            </div>
+            <kbd>#2</kbd>
+          </div>
+          <div class="command-palette-item" data-action="palette-navigate" data-target="#/config">
+            <div class="command-palette-item-left">
+              ${icon('config', '', 14)}
+              <span>Ir para Configuração</span>
+            </div>
+            <kbd>#3</kbd>
+          </div>
+          <div class="command-palette-item" data-action="palette-navigate" data-target="#/costs">
+            <div class="command-palette-item-left">
+              ${icon('costs', '', 14)}
+              <span>Ir para Livro de Custos</span>
+            </div>
+            <kbd>#4</kbd>
+          </div>
+          <div class="command-palette-item" data-action="palette-navigate" data-target="#/compare/overview">
+            <div class="command-palette-item-left" style="color: var(--lab-accent);">
+              ${icon('scale', '', 14)}
+              <span>Abrir Laboratório de Comparação de Modelos</span>
+            </div>
+            <span class="badge-seal badge-seal-experimental">Lab</span>
+          </div>
+
+          <div class="command-palette-group-title">Ações do Sistema</div>
+          <div class="command-palette-item" data-action="palette-action" data-subaction="new-terminal">
+            <div class="command-palette-item-left">
+              ${icon('plus', '', 14)}
+              <span>Abrir Novo Terminal Local</span>
+            </div>
+            <kbd>Ctrl+T</kbd>
+          </div>
+          <div class="command-palette-item" data-action="palette-action" data-subaction="toggle-theme">
+            <div class="command-palette-item-left">
+              ${icon('sun', '', 14)}
+              <span>Alternar Tema Escuro / Claro</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderGlobalToasts() {
+  return `<div class="toast-container" id="toast-container"></div>`;
+}
+
+function showToast({ type = 'info', message = '' }) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `
+    <span style="color: ${type === 'success' ? 'var(--success)' : type === 'warning' ? 'var(--warning)' : type === 'error' ? 'var(--danger)' : 'var(--primary)'};">
+      ${icon(type === 'success' ? 'check' : type === 'warning' ? 'alertTriangle' : 'info', '', 16)}
+    </span>
+    <span style="flex: 1;">${esc(message)}</span>
+  `;
+
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.2s';
+    setTimeout(() => toast.remove(), 200);
+  }, 3200);
+}
+
+function openModal(modalData) {
+  activeModal = modalData;
+  renderShell();
+}
+
+function closeModal() {
+  activeModal = null;
+  renderShell();
+}
+
+function handleKeyboardShortcuts(e) {
+  // Ctrl+K / Cmd+K opens Command Palette
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    isCommandPaletteOpen = !isCommandPaletteOpen;
+    renderShell();
+    return;
+  }
+
+  // Escape closes Command Palette or Modal
+  if (e.key === 'Escape') {
+    if (isCommandPaletteOpen) {
+      isCommandPaletteOpen = false;
+      renderShell();
+    } else if (activeModal) {
+      closeModal();
+    }
   }
 }
 
-/* ---------------------------------------------------------------- render */
-let rendering = 0;
-let activePage = null;
-let lastPageId = null;
-// The browser would restore a stale scroll offset on reload; the app always opens at the top.
-if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-async function navigate() {
-  const id = route();
-  const known = Boolean(PAGES[id]);
-  const page = PAGES[id] || PAGES.workspace;
-  const token = ++rendering;
+function attachShellHandlers() {
+  appRoot.onclick = (e) => {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
 
-  document.querySelectorAll('[data-nav]').forEach((a) => {
-    const on = a.dataset.nav === (known ? id : 'workspace');
-    a.classList.toggle('active', on);
-    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
-  });
-  document.body.classList.toggle('page-wide', Boolean(page.wide));
-  const pageId = known ? id : 'workspace';
-  const pageTitle = t(`page.title.${pageId}`) === `page.title.${pageId}` ? page.title : t(`page.title.${pageId}`);
-  $('#page-title').textContent = pageTitle;
-  document.title = `${pageTitle} · ${t('app.title.suffix')}`;
-  // A new route starts at the top; toggles re-render the same route and keep the scroll position.
-  if (pageId !== lastPageId) { lastPageId = pageId; window.scrollTo(0, 0); }
-  $('#page-sub').textContent = page.sub;
-  document.body.classList.remove('nav-open');
-  $('#hamburger')?.setAttribute('aria-expanded', 'false');
+    const action = target.getAttribute('data-action');
 
-  // A page that owns a timer (e.g. History's auto-refresh) must stop it before its DOM is
-  // replaced, or the interval keeps firing against a detached node.
-  if (activePage !== page) activePage?.unmount?.();
-  activePage = page;
-
-  const body = $('#page-body');
-  destroyCharts(body);
-  body.innerHTML = skeletonCards(4)
-    + panel('Carregando', skeletonChart(), { sub: 'consultando a API' })
-    + panel('Carregando', skeletonTable(6));
-
-  try {
-    await ensure(page.needs || []);
-    if (token !== rendering) return;               // a newer navigation won
-    body.innerHTML = page.render(ctx);
-    page.mount?.(body, ctx);
-    bindToggles(body);
-    bindSessionLinks(body);
-  } catch (e) {
-    if (token !== rendering) return;
-    body.innerHTML = errorState(e && e.message ? e.message : String(e),
-      'Verifique se o servidor está no ar (<code>python -m app.main</code>) e se o gateway inicializou '
-      + '(<code>GET /health</code> deve responder <code>status: ok</code>). '
-      + 'Recarregue a página para tentar novamente.');
-  }
-}
-
-/** Segmented toggles re-render the current page with new state. */
-function bindToggles(root) {
-  root.querySelectorAll('[data-seg]').forEach((seg) => {
-    seg.querySelectorAll('button[data-val]').forEach((b) => {
-      b.addEventListener('click', () => {
-        state[seg.dataset.seg] = b.dataset.val;
-        navigate();
-      });
-    });
-  });
-}
-
-/** Session drill-down. Rendered into a dedicated slot; failures are shown, never swallowed. */
-function bindSessionLinks(root) {
-  // Delegated, and bound once per root: the sessions table is painted asynchronously and re-painted
-  // on every page change/refresh, so per-button listeners would be lost or duplicated.
-  if (root._sessionDelegated) return;
-  root._sessionDelegated = true;
-  root.addEventListener('click', async (ev) => {
-    const a = ev.target.closest('[data-session]');
-    if (!a) return;
-    {
-      const box = root.querySelector('#session-detail');
-      if (!box) return;
-      const sid = a.dataset.session;
-      box.innerHTML = panel(`Sessão ${esc(String(sid).slice(0, 24))}`, skeletonTable(3));
-      try {
-        const runs = await API.getRunsForSession(sid);
-        const rs = realRuns(runs);
-        const avgTotal = mean(rs.map((r) => totalTokens(metricsOf(r))));
-        const avgCtx = mean(rs.map((r) => num(get(metricsOf(r), 'context_tokens'))));
-        box.innerHTML = panel(`Sessão ${esc(String(sid).slice(0, 24))}`,
-          `<div class="kv-inline">
-             <span><b>${rs.length}</b> runs não-warmup</span>
-             <span>Tokens gastos (média): <b>${avgTotal === null ? 'Não medido' : fmtCompact(avgTotal)}</b></span>
-             <span>Contexto (média): <b>${avgCtx === null ? 'Não medido' : fmtCompact(avgCtx)}</b></span>
-           </div>`, { sub: 'GET /benchmark/runs?session_id=…', prov: 'experimental' });
-      } catch (e) {
-        box.innerHTML = panel(`Sessão ${esc(String(sid).slice(0, 24))}`,
-          `<div class="state error"><div class="state-title">Não foi possível carregar a sessão</div>
-            <code>${esc(e && e.message ? e.message : String(e))}</code></div>`);
+    switch (action) {
+      case 'open-command-palette': {
+        isCommandPaletteOpen = true;
+        renderShell();
+        break;
       }
-      box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      case 'close-command-palette': {
+        if (e.target.classList.contains('command-palette-backdrop')) {
+          isCommandPaletteOpen = false;
+          renderShell();
+        }
+        break;
+      }
+      case 'toggle-theme': {
+        currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('anamnesia_theme', currentTheme);
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        renderShell();
+        break;
+      }
+      case 'close-modal': {
+        if (e.target.classList.contains('modal-backdrop') || target.tagName === 'BUTTON') {
+          closeModal();
+        }
+        break;
+      }
+      case 'submit-add-project': {
+        const nameInput = document.getElementById('new-project-name');
+        const pathInput = document.getElementById('new-project-path');
+        const name = nameInput ? nameInput.value.trim() : '';
+        const path = pathInput ? pathInput.value.trim() : '';
+        if (name && path) {
+          registerProject(name, path).then(() => {
+            closeModal();
+            showToast({ type: 'success', message: `Projeto ${name} registrado com sucesso!` });
+            handleRoute();
+          }).catch((err) => showToast({ type: 'error', message: `Não foi possível registrar: ${err.message || err}` }));
+        }
+        break;
+      }
+      case 'copy-snippet': {
+        const text = decodeURIComponent(target.getAttribute('data-snippet-text') || '');
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text);
+        }
+        showToast({ type: 'success', message: I18N.app.copied });
+        break;
+      }
+      case 'palette-navigate': {
+        const dest = target.getAttribute('data-target');
+        isCommandPaletteOpen = false;
+        window.location.hash = dest;
+        break;
+      }
+      case 'palette-action': {
+        const subaction = target.getAttribute('data-subaction');
+        isCommandPaletteOpen = false;
+        if (subaction === 'toggle-theme') {
+          currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('anamnesia_theme', currentTheme);
+          document.documentElement.setAttribute('data-theme', currentTheme);
+          renderShell();
+        } else if (subaction === 'new-terminal') {
+          window.location.hash = '#/workspace';
+        }
+        break;
+      }
     }
-  });
+  };
+
+  // State switcher onchange handler
+  const debugSelect = appRoot.querySelector('[data-action="switch-debug-state"]');
+  if (debugSelect) {
+    debugSelect.onchange = (e) => {
+      currentDebugState = e.target.value;
+      const contentArea = appRoot.querySelector('[data-bind="content-slot"]');
+      if (activePageModule && activePageModule.setDebugState && contentArea) {
+        activePageModule.setDebugState(currentDebugState, contentArea);
+      }
+    };
+  }
+
+  // Palette input filter
+  const paletteInput = appRoot.querySelector('[data-action="filter-palette"]');
+  if (paletteInput) {
+    paletteInput.oninput = (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      const items = appRoot.querySelectorAll('.command-palette-item');
+      items.forEach(it => {
+        const text = it.textContent.toLowerCase();
+        it.style.display = text.includes(q) ? 'flex' : 'none';
+      });
+    };
+  }
 }
 
-/* ---------------------------------------------------------------- boot */
-// An unexpected rejection must be visible, not silent in the console only.
-window.addEventListener('unhandledrejection', (ev) => {
-  const body = $('#page-body');
-  if (body && !body.querySelector('.state.error')) {
-    body.insertAdjacentHTML('afterbegin',
-      errorState(`Promessa rejeitada sem tratamento: ${ev.reason?.message || ev.reason}`));
-  }
-});
-
-renderShell();
-installPalette(() => [
-  ...NAV_MAIN.map(([id, label]) => ({ id: `go-${id}`, label: `Ir para ${label}`, run: () => { location.hash = `#/${id}`; } })),
-  ...NAV.map(([id, label]) => ({ id: `go-${id}`, label: `Benchmark avançado: ${label}`, run: () => { location.hash = `#/${id}`; } })),
-  ...(activePage === PAGES.workspace ? workspaceActions() : []),
-]);
-window.addEventListener('hashchange', navigate);
-refreshHeader();
-navigate();
-setInterval(refreshHeader, 30000);
-setInterval(refreshHistoryTotals, 30000);
+// Start application when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

@@ -1,0 +1,186 @@
+/* ==========================================================================
+   CONNECTIONS PAGE STYLES (#/connections)
+   Card grid for Agents, LLM Models & MCP Servers with masked keys & snippets
+   ========================================================================== */
+
+.connections-page {
+  padding: var(--space-8);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.page-header-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.page-header-title {
+  font-size: var(--text-2xl);
+  font-weight: 650;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.page-header-subtitle {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.connections-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.section-title {
+  font-size: var(--text-md);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.section-count {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--space-4);
+}
+
+.connection-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-fast) var(--ease-spring),
+              border-color var(--duration-fast) var(--ease-spring),
+              box-shadow var(--duration-fast) var(--ease-spring);
+}
+
+.connection-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.connection-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.connection-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.connection-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--bg-surface-elevated) 0%, var(--bg-surface-subtle) 100%);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-bold);
+  font-size: var(--text-md);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.connection-avatar-agent { color: var(--primary); background: var(--primary-muted); border-color: var(--primary-border); }
+.connection-avatar-model { color: var(--lab-accent); background: var(--lab-accent-muted); border-color: var(--lab-accent-border); }
+.connection-avatar-mcp { color: var(--success); background: var(--success-muted); border-color: var(--success-border); }
+
+.connection-name {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.connection-type {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.connection-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.connection-key-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.connection-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.connection-card-actions-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Code snippet modal tabs & box */
+.snippet-tabs-bar {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+  padding-bottom: var(--space-2);
+}
+
+.snippet-tab-btn {
+  padding: 4px 10px;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+.snippet-tab-btn.is-active {
+  background-color: var(--bg-surface-subtle);
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+}
+
+.code-snippet-box {
+  background-color: var(--term-bg);
+  border: 1px solid var(--term-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--term-fg);
+  line-height: var(--leading-relaxed);
+  overflow-x: auto;
+}

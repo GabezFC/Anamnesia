@@ -1,0 +1,122 @@
+/* ==========================================================================
+   COSTS PAGE STYLES (#/costs)
+   Memory Gateway Cost Ledger, Budget Gauges & Pure SVG Chart Kit Integration
+   ========================================================================== */
+
+.costs-page {
+  padding: var(--space-8);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.costs-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.costs-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+}
+
+@media (max-width: 1100px) {
+  .costs-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .costs-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Budget Panel with Progress Gauges */
+.budget-panel {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.budget-bars-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+@media (max-width: 768px) {
+  .budget-bars-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.budget-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.budget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+
+.budget-track {
+  width: 100%;
+  height: 10px;
+  background-color: var(--bg-surface-subtle);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.budget-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--duration-smooth) var(--ease-spring);
+}
+
+.budget-fill-ok { background-color: var(--success); }
+.budget-fill-warning { background-color: var(--warning); }
+.budget-fill-exceeded { background-color: var(--danger); }
+
+/* Chart Row Grid */
+.charts-dual-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 1024px) {
+  .charts-dual-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Calls Table Section */
+.calls-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.calls-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

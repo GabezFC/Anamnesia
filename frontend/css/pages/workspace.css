@@ -1,0 +1,473 @@
+/* ==========================================================================
+   WORKSPACE PAGE STYLES (#/workspace)
+   3-column IDE layout: Projects | Terminals Canvas | Files & Context
+   ========================================================================== */
+
+.workspace-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+/* --------------------------------------------------------------------------
+   LEFT COLUMN: Projects & Active Sessions (~270px)
+   -------------------------------------------------------------------------- */
+.workspace-left-col {
+  width: 270px;
+  min-width: 240px;
+  max-width: 340px;
+  height: 100%;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.pane-header {
+  height: 44px;
+  padding: 0 var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  background-color: var(--bg-surface-elevated);
+}
+
+.pane-title {
+  font-size: var(--text-2xs);
+  font-weight: var(--font-bold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.projects-list-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.project-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--duration-fast);
+}
+
+.project-item:hover {
+  background-color: var(--bg-surface-elevated);
+  border-color: var(--border-default);
+}
+
+.project-item.is-active {
+  background-color: var(--primary-muted);
+  border-color: var(--primary-border);
+}
+
+.project-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.project-name-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.project-name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-path {
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
+  padding-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.active-sessions-section {
+  border-top: 1px solid var(--border-default);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: var(--bg-surface-elevated);
+}
+
+.session-mini-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   CENTER: Terminal Canvas with Tab Bar & Split Panes
+   -------------------------------------------------------------------------- */
+.workspace-center-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-app);
+  position: relative;
+  padding: var(--space-3);
+}
+
+.terminal-window-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--term-bg);
+  border: 1px solid var(--term-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+
+/* Top Tab Bar of Terminal Window */
+.terminal-tab-bar {
+  height: 40px;
+  background-color: var(--term-header-bg);
+  border-bottom: 1px solid var(--term-border);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  gap: var(--space-2);
+  overflow-x: auto;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.terminal-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: var(--space-2);
+}
+.terminal-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-full);
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.terminal-tab {
+  height: 28px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background-color: transparent;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  white-space: nowrap;
+}
+
+.terminal-tab:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--term-fg);
+}
+
+.terminal-tab.is-active {
+  background-color: var(--term-bg);
+  color: var(--term-white);
+  border: 1px solid var(--term-border);
+  font-weight: var(--font-medium);
+}
+
+.terminal-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-xs);
+  color: var(--text-tertiary);
+  margin-left: 2px;
+}
+.terminal-tab-close:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--term-white);
+}
+
+.terminal-actions-bar {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Profiles dropdown menu */
+.profile-menu {
+  position: absolute;
+  top: 48px;
+  left: 140px;
+  z-index: 500;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+  width: 280px;
+  padding: var(--space-2);
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+}
+.profile-menu.is-open {
+  display: flex;
+}
+
+.profile-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color var(--duration-fast);
+}
+.profile-menu-item:hover:not(.is-disabled) {
+  background-color: var(--bg-surface-elevated);
+}
+.profile-menu-item.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Panes Wrapper (Default Split) */
+.terminal-panes-wrapper {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+.terminal-panes-wrapper.split-vertical {
+  flex-direction: row;
+}
+.terminal-panes-wrapper.split-horizontal {
+  flex-direction: column;
+}
+
+.terminal-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.terminal-pane-header {
+  height: 28px;
+  background-color: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--term-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-3);
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
+.terminal-split-divider {
+  width: 8px;
+  background-color: var(--term-border);
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+  transition: background-color var(--duration-fast);
+}
+.terminal-split-divider:hover {
+  background-color: var(--primary);
+}
+
+/* Native Mount Container: 100% Fluid, Zero Padding */
+.terminal-mount-container {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  padding: 0 !important;
+  margin: 0 !important;
+  background-color: var(--term-bg);
+}
+
+/* Visual Mock Terminal Frame: Begins strictly at Top-Left with 14px padding */
+.terminal-visual-frame {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--term-bg);
+  color: var(--term-fg);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  overflow: hidden;
+  text-align: left;
+}
+
+.terminal-screen {
+  flex: 1;
+  padding: var(--space-4);
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  text-align: left;
+}
+
+.terminal-cursor-block {
+  display: inline-block;
+  width: 8px;
+  height: 16px;
+  background-color: var(--term-cursor);
+  animation: termBlink 1s infinite step-start;
+  vertical-align: text-bottom;
+}
+
+@keyframes termBlink {
+  50% { opacity: 0; }
+}
+
+.terminal-pane-footer {
+  height: 24px;
+  background-color: rgba(0, 0, 0, 0.4);
+  border-top: 1px solid var(--term-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-3);
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
+}
+
+/* --------------------------------------------------------------------------
+   RIGHT COLUMN: Files Tree (~280px)
+   -------------------------------------------------------------------------- */
+.workspace-right-col {
+  width: 280px;
+  min-width: 240px;
+  height: 100%;
+  background-color: var(--bg-surface);
+  border-left: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) var(--ease-spring), width var(--duration-fast);
+}
+
+.workspace-right-col.is-collapsed {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-left: none;
+}
+
+.files-search-wrap {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.file-tree-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-1);
+}
+
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  position: relative;
+}
+
+.file-tree-item:hover {
+  background-color: var(--bg-surface-elevated);
+  color: var(--text-primary);
+}
+
+.file-indent-1 { padding-left: 20px; border-left: 1px solid var(--border-subtle); margin-left: 10px; }
+.file-indent-2 { padding-left: 36px; border-left: 1px solid var(--border-subtle); margin-left: 10px; }
+
+/* --------------------------------------------------------------------------
+   AGENT CONTEXT DRAWER
+   -------------------------------------------------------------------------- */
+.memory-context-card {
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.memory-relevance-bar {
+  width: 100%;
+  height: 5px;
+  background-color: var(--bg-surface-subtle);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.memory-relevance-fill {
+  height: 100%;
+  background-color: var(--primary);
+  border-radius: var(--radius-full);
+}
+
+.project-info { min-width: 0; width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.project-info .project-name-row { justify-content: flex-start; gap: 8px; min-width: 0; }
+.project-info .project-path { display: block; max-width: 100%; }
+.project-item > .badge-origin { align-self: flex-start; width: auto; }

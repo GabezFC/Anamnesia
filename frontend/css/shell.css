@@ -1,0 +1,445 @@
+/* ==========================================================================
+   ANAMNÉSIA APPLICATION SHELL
+   Sidebar (248px, pale blue active item with left accent bar), Topbar, Statusbar
+   and Dedicated Compare Lab Header & Shell
+   ========================================================================== */
+
+.shell-container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-app);
+}
+
+/* --------------------------------------------------------------------------
+   SIDEBAR (248px width, clean light surface, left accent on active item)
+   -------------------------------------------------------------------------- */
+.app-sidebar {
+  width: 248px;
+  min-width: 248px;
+  height: 100vh;
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+  transition: width var(--duration-fast) var(--ease-spring);
+  user-select: none;
+  z-index: 20;
+}
+
+.sidebar-header {
+  height: 54px;
+  padding: 0 var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-primary);
+  font-weight: var(--font-bold);
+  font-size: var(--text-md);
+  letter-spacing: -0.02em;
+}
+
+.brand-icon-box {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--primary) 0%, #1D4ED8 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);
+  flex-shrink: 0;
+}
+
+.sidebar-nav {
+  padding: var(--space-4) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.sidebar-group-label {
+  padding: 8px 12px 4px;
+  font-size: var(--text-2xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  border-left: 3px solid transparent;
+  transition: background-color var(--duration-fast),
+              color var(--duration-fast),
+              border-color var(--duration-fast);
+}
+
+.nav-item:hover {
+  background-color: var(--bg-surface-subtle);
+  color: var(--text-primary);
+}
+
+.nav-item.is-active {
+  background-color: var(--primary-muted);
+  color: var(--primary);
+  border-left-color: var(--primary);
+  font-weight: var(--font-semibold);
+}
+
+.nav-item-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-footer {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-default);
+  background-color: var(--bg-surface-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sidebar-health-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.sidebar-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-1);
+}
+
+/* --------------------------------------------------------------------------
+   MAIN VIEWPORT & TOPBAR
+   -------------------------------------------------------------------------- */
+.main-viewport {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-app);
+  position: relative;
+}
+
+.app-topbar {
+  height: 52px;
+  padding: 0 var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-topbar);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+  gap: var(--space-5);
+  z-index: 15;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.breadcrumb-trail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.breadcrumb-active {
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+}
+
+.topbar-center {
+  flex: 1;
+  max-width: 480px;
+}
+
+.command-trigger-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+
+.command-trigger-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.user-avatar-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background-color: var(--primary-muted);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  border: 1px solid var(--primary-border);
+}
+
+/* Page content area */
+.app-content {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Pinned Status Bar (26px height) */
+.app-statusbar {
+  height: 26px;
+  background-color: var(--bg-surface);
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-5);
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.statusbar-section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.statusbar-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* --------------------------------------------------------------------------
+   LABORATÓRIO DE COMPARAÇÃO SHELL (#/compare)
+   Distinctive visual presence: Subtle violet gradient banner & custom header
+   -------------------------------------------------------------------------- */
+.lab-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-app);
+}
+
+.lab-banner {
+  height: 40px;
+  background: linear-gradient(90deg, var(--lab-banner-bg) 0%, var(--bg-surface) 100%);
+  border-bottom: 1px solid var(--lab-banner-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-6);
+  font-size: var(--text-xs);
+}
+
+.lab-banner-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.lab-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lab-accent);
+  font-weight: var(--font-semibold);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: #FFFFFF;
+  border: 1px solid var(--lab-accent-border);
+  box-shadow: 0 1px 2px rgba(124, 58, 237, 0.08);
+  transition: all var(--duration-fast);
+}
+
+.lab-back-btn:hover {
+  background: var(--lab-accent-muted);
+}
+
+.lab-title-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-weight: var(--font-bold);
+  font-size: var(--text-sm);
+}
+
+.lab-banner-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--text-tertiary);
+}
+
+/* Lab subheader with dataset selector & runs */
+.lab-header {
+  height: 54px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-6);
+  flex-shrink: 0;
+}
+
+.lab-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.lab-dataset-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.lab-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Lab body layout with sub-nav tabs */
+.lab-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lab-nav-bar {
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+  padding: 0 var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.lab-nav-tab {
+  padding: 12px 14px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--duration-fast);
+  white-space: nowrap;
+}
+
+.lab-nav-tab:hover {
+  color: var(--text-primary);
+}
+
+.lab-nav-tab.is-active {
+  color: var(--lab-accent);
+  border-bottom-color: var(--lab-accent);
+  font-weight: var(--font-semibold);
+}
+
+.lab-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+/* --------------------------------------------------------------------------
+   RESPONSIVE (Sidebar collapses to icons on < 900px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .app-sidebar {
+    width: 64px;
+    min-width: 64px;
+  }
+  .brand-logo span,
+  .nav-item span,
+  .sidebar-group-label,
+  .sidebar-health-row span,
+  .sidebar-version {
+    display: none;
+  }
+  .sidebar-header {
+    justify-content: center;
+    padding: 0;
+  }
+  .nav-item {
+    justify-content: center;
+    padding: 10px 0;
+    border-left: none;
+    border-right: 3px solid transparent;
+  }
+  .nav-item.is-active {
+    border-right-color: var(--primary);
+  }
+  .sidebar-footer {
+    padding: var(--space-3) 0;
+    align-items: center;
+  }
+}

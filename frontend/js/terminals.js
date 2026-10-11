@@ -7,7 +7,7 @@
 // server → raw terminal output (text or binary frames). On reconnect the server replays its buffer,
 // so the terminal is reset first to avoid duplicated output.
 import { openSessionSocket } from './anamnesia-api.js';
-import { t } from './i18n.js';
+const t = (k, p = {}) => (k === 'term.loadFail' ? 'Falha ao carregar o terminal: ' + p.src : k);
 
 const VENDOR = '/static/vendor/xterm';
 let loading = null;
@@ -41,7 +41,7 @@ export function loadXterm() {
 }
 
 const THEME = {
-  background: '#070A0E', foreground: '#F2F6FB', cursor: '#4F9CF9', selectionBackground: '#243141',
+  background: '#0B1220', foreground: '#E6EDF7', cursor: '#60A5FA', selectionBackground: '#1E3A5F',
 };
 const RETRY_MS = [500, 1000, 2000, 4000, 8000];
 const MAX_RETRIES = 8;

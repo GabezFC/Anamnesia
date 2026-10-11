@@ -1,0 +1,83 @@
+/* ==========================================================================
+   COMPARE LAB STYLES (#/compare/*)
+   Visual styling for the 8 benchmark tabs with Pure SVG Chart Kit
+   ========================================================================== */
+
+.lab-view-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.lab-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lab-section-title {
+  font-size: var(--text-2xl);
+  font-weight: 650;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.lab-section-desc {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+/* --------------------------------------------------------------------------
+   PIPELINE FLOW DIAGRAM IN SVG (#/compare/pipeline)
+   Query -> Retrieval -> Graphify -> Pre-filter -> JEV -> Filter -> Context -> Model
+   -------------------------------------------------------------------------- */
+.pipeline-flow-wrapper {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.pipeline-svg-container {
+  width: 100%;
+  height: 220px;
+  position: relative;
+  overflow-x: auto;
+}
+
+.stage-inspector-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* --------------------------------------------------------------------------
+   STATISTICAL SIGNIFICANCE BADGES (#/compare/models)
+   -------------------------------------------------------------------------- */
+.stat-sig-card {
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sig-p-value {
+  font-family: var(--font-mono);
+  font-weight: var(--font-bold);
+  color: var(--success);
+}

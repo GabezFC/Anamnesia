@@ -96,7 +96,7 @@ app/                código (gateway, retrieval, services, adapters, api, mcp, c
 memory_gateway/     entrypoint da CLI (python -m memory_gateway)
 config/             configuração por domínio (retrieval, jev, agents, pricing, benchmark)
 benchmark/          questions.json (perguntas baseadas no vault real)
-frontend/           index.html, app.js, style.css
+frontend/           UI Anamnésia (design Google AI Studio): index.html, css/, js/ (app.js, live.js, pages/, pages/compare/), vendor/xterm
 tests/              pytest; mocks para Graphify, JEV, providers, Hermes
 data/               benchmark.db, cache, graphify-out do vault (gitignored)
 logs/               application.log, benchmark.jsonl, jev.jsonl, agents.jsonl

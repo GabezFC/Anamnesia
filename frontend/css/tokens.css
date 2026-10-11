@@ -1,0 +1,256 @@
+/* ==========================================================================
+   ANAMNÉSIA DESIGN TOKENS - LIGHT THEME AS DEFAULT & DUAL THEME
+   Strict CSS variables only. Zero fixed hex in JS/SVG/HTML.
+   ========================================================================== */
+
+:root, [data-theme="light"] {
+  /* Font Stacks (Local system fonts only, zero remote dependencies) */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* Typography Scale */
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 26px;
+  --text-3xl: 32px;
+
+  /* Line Heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* Font Weights */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  /* 4px Spacing Grid */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+  --radius-full: 9999px;
+
+  /* Micro-interactions */
+  --duration-fast: 150ms;
+  --duration-base: 180ms;
+  --duration-smooth: 240ms;
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ------------------------------------------------------------------------
+     LIGHT THEME (Default: Crisp, premium off-white #F6F8FB + #FFFFFF)
+     ------------------------------------------------------------------------ */
+  --bg-app: #F6F8FB;
+  --bg-canvas: #FFFFFF;
+  --bg-surface: #FFFFFF;
+  --bg-surface-elevated: #F8FAFC;
+  --bg-surface-subtle: #F1F5F9;
+  --bg-surface-hover: #F1F5F9;
+  --bg-surface-active: #E2E8F0;
+  --bg-sidebar: #FFFFFF;
+  --bg-topbar: rgba(255, 255, 255, 0.94);
+
+  /* Hairlines & Borders */
+  --border-subtle: #EDF2F7;
+  --border-default: #E6EAF0;
+  --border-strong: #CBD5E1;
+  --border-focus: #2563EB;
+
+  /* Typography / Neutral Contrast */
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #64748B;
+  --text-muted: #94A3B8;
+  --text-inverse: #FFFFFF;
+
+  /* Brand Primary (Electric Elegant Blue #2563EB) */
+  --primary: #2563EB;
+  --primary-hover: #1D4ED8;
+  --primary-muted: #EFF6FF;
+  --primary-border: #BFDBFE;
+  --primary-text: #FFFFFF;
+
+  /* Compare Lab Secondary (Vibrant Violet #7C3AED) */
+  --lab-accent: #7C3AED;
+  --lab-accent-hover: #6D28D9;
+  --lab-accent-muted: #F5F3FF;
+  --lab-accent-border: #DDD6FE;
+  --lab-banner-bg: #FAF5FF;
+  --lab-banner-border: #E9D5FF;
+
+  /* Semantics (Pastel tinted surfaces with high-contrast text) */
+  --success: #059669;
+  --success-muted: #ECFDF5;
+  --success-border: #A7F3D0;
+  --success-text: #065F46;
+
+  --warning: #D97706;
+  --warning-muted: #FFFBEB;
+  --warning-border: #FDE68A;
+  --warning-text: #92400E;
+
+  --danger: #DC2626;
+  --danger-muted: #FEF2F2;
+  --danger-border: #FECACA;
+  --danger-text: #991B1B;
+
+  --info: #0284C7;
+  --info-muted: #F0F9FF;
+  --info-border: #BAE6FD;
+
+  /* Soft Diffuse Shadows */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 10px 24px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-modal: 0 20px 40px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.05);
+
+  /* Terminal Native Theme (Dark card container in both themes) */
+  --term-bg: #090D14;
+  --term-header-bg: #0F1622;
+  --term-fg: #E2E8F0;
+  --term-selection: rgba(37, 99, 235, 0.35);
+  --term-cursor: #38BDF8;
+  --term-border: #1E293B;
+  --term-black: #1E293B;
+  --term-red: #F87171;
+  --term-green: #34D399;
+  --term-yellow: #FBBF24;
+  --term-blue: #60A5FA;
+  --term-magenta: #C084FC;
+  --term-cyan: #38BDF8;
+  --term-white: #F8FAFC;
+  --term-bright-black: #64748B;
+  --term-bright-red: #FCA5A5;
+  --term-bright-green: #6EE7B7;
+  --term-bright-yellow: #FDE68A;
+  --term-bright-blue: #93C5FD;
+  --term-bright-magenta: #E9D5FF;
+  --term-bright-cyan: #A5F3FC;
+  --term-bright-white: #FFFFFF;
+
+  /* Chart Kit Tokens & Grid/Axis aliases */
+  --chart-1: #2563EB; /* Blue */
+  --chart-2: #7C3AED; /* Violet */
+  --chart-3: #059669; /* Emerald */
+  --chart-4: #D97706; /* Amber */
+  --chart-5: #0284C7; /* Sky */
+  --chart-6: #DC2626; /* Coral */
+  --chart-7: #4F46E5; /* Indigo */
+  --chart-8: #94A3B8; /* Slate */
+
+  --grid: #E6EAF0;
+  --axis: #CBD5E1;
+  --chart-grid: #E6EAF0;
+  --chart-axis: #94A3B8;
+  --chart-axis-text: #64748B;
+  --chart-tooltip-bg: #0F172A;
+  --chart-tooltip-text: #FFFFFF;
+  --chart-tooltip-border: #334155;
+}
+
+/* --------------------------------------------------------------------------
+   DARK THEME (Optional toggle, identically polished)
+   -------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  --bg-app: #070A0E;
+  --bg-canvas: #0C1117;
+  --bg-surface: #0C1117;
+  --bg-surface-elevated: #121924;
+  --bg-surface-subtle: #16202E;
+  --bg-surface-hover: #192332;
+  --bg-surface-active: #202D40;
+  --bg-sidebar: #090D13;
+  --bg-topbar: rgba(12, 17, 23, 0.94);
+
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.20);
+  --border-focus: #4F9CF9;
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-tertiary: #64748B;
+  --text-muted: #475569;
+  --text-inverse: #070A0E;
+
+  --primary: #3B82F6;
+  --primary-hover: #2563EB;
+  --primary-muted: rgba(59, 130, 246, 0.14);
+  --primary-border: rgba(59, 130, 246, 0.32);
+  --primary-text: #FFFFFF;
+
+  --lab-accent: #A78BFA;
+  --lab-accent-hover: #8B5CF6;
+  --lab-accent-muted: rgba(167, 139, 250, 0.14);
+  --lab-accent-border: rgba(167, 139, 250, 0.32);
+  --lab-banner-bg: #141026;
+  --lab-banner-border: rgba(167, 139, 250, 0.24);
+
+  --success: #34D399;
+  --success-muted: rgba(52, 211, 153, 0.12);
+  --success-border: rgba(52, 211, 153, 0.28);
+  --success-text: #6EE7B7;
+
+  --warning: #FBBF24;
+  --warning-muted: rgba(251, 191, 36, 0.12);
+  --warning-border: rgba(251, 191, 36, 0.28);
+  --warning-text: #FDE68A;
+
+  --danger: #F87171;
+  --danger-muted: rgba(248, 113, 113, 0.12);
+  --danger-border: rgba(248, 113, 113, 0.28);
+  --danger-text: #FCA5A5;
+
+  --info: #38BDF8;
+  --info-muted: rgba(56, 189, 248, 0.12);
+  --info-border: rgba(56, 189, 248, 0.28);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.65), 0 1px 2px rgba(255, 255, 255, 0.05);
+  --shadow-modal: 0 20px 48px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.12);
+
+  --term-bg: #06090D;
+  --term-header-bg: #0C1117;
+  --term-fg: #E1E7EF;
+  --term-selection: rgba(79, 156, 249, 0.35);
+  --term-cursor: #4F9CF9;
+  --term-border: rgba(255, 255, 255, 0.10);
+
+  --chart-1: #4F9CF9;
+  --chart-2: #A78BFA;
+  --chart-3: #34D399;
+  --chart-4: #FBBF24;
+  --chart-5: #38BDF8;
+  --chart-6: #F87171;
+  --chart-7: #818CF8;
+  --chart-8: #64748B;
+
+  --grid: rgba(255, 255, 255, 0.08);
+  --axis: rgba(255, 255, 255, 0.18);
+  --chart-grid: rgba(255, 255, 255, 0.08);
+  --chart-axis: rgba(255, 255, 255, 0.22);
+  --chart-axis-text: #94A3B8;
+  --chart-tooltip-bg: #1E293B;
+  --chart-tooltip-text: #F8FAFC;
+  --chart-tooltip-border: rgba(255, 255, 255, 0.16);
+}
