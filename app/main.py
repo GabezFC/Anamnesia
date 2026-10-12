@@ -132,7 +132,11 @@ def create_app() -> FastAPI:
 
         @app.get("/", include_in_schema=False)
         def index():
-            return FileResponse(FRONTEND / "index.html")
+            from app.services import ui_challenge  # ANA-040: cookie challenge issued with the page load
+            resp = FileResponse(FRONTEND / "index.html")
+            resp.set_cookie(ui_challenge.COOKIE_NAME, ui_challenge.ui_cookie_value(), httponly=True,
+                            samesite="strict", path="/")
+            return resp
     return app
 
 

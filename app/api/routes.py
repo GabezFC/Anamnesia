@@ -490,9 +490,21 @@ def system_projects():
 # ---------------------------------------------------------------------------------------------
 
 @router.get("/config/token", dependencies=[Depends(require_localhost)])
-def config_token():
+def config_token(request: Request):
     """One-time bootstrap: the frontend fetches this once and attaches it to every write call."""
+    from app.services import ui_challenge  # ANA-040: MG_TOKEN_COOKIE=warn|enforce|off
+    if not ui_challenge.check_token_bootstrap(request):
+        raise HTTPException(status_code=403, detail="ui challenge required")
     return {"token": get_or_create_local_token()}
+
+
+@router.get("/config/shell-confirm", dependencies=[Depends(require_localhost)])
+def config_shell_confirm(request: Request):
+    """ANA-042: value for the X-MG-Confirm header; only the UI (holding the HttpOnly cookie) gets it."""
+    from app.services import ui_challenge
+    if not ui_challenge.has_ui_cookie(request):
+        raise HTTPException(status_code=403, detail="ui challenge required")
+    return {"confirm": ui_challenge.ui_cookie_value()}
 
 
 @router.get("/config/model-keys", dependencies=[Depends(require_localhost)])

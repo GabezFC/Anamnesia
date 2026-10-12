@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 READ_ONLY_OPERATIONS = frozenset({"list", "read", "stat", "hash"})
+_WIN_RESERVED = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
+                           *(f"LPT{i}" for i in range(1, 10))})
 
 
 class VaultAccessError(PermissionError):
@@ -137,6 +139,12 @@ class ObsidianVault:
         return own + self._extra_markdown() if self.extra_roots else own
 
     def read(self, rel_path: str) -> str:
+        # ANA-043 / P-08: no NTFS alternate data streams, no \\?\ prefixes, no reserved device names.
+        rp = str(rel_path).replace("/", "\\")
+        body = rp[2:] if len(rp) > 1 and rp[1] == ":" and rp[0].isalpha() else rp
+        if ":" in body or rp.startswith("\\\\?\\") or rp.startswith("\\\\.\\") or any(
+                seg.split(".")[0].rstrip(" ").upper() in _WIN_RESERVED for seg in rp.split("\\") if seg):
+            raise VaultAccessError(f"Caminho inválido (stream/nome reservado): {rel_path}")
         ex = self._extra_split(rel_path)
         if ex is not None:
             self._guard("read")

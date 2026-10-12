@@ -29,7 +29,7 @@ from dataclasses import dataclass
 
 from app.services.query_fp import fold
 
-INJECTION_SCREEN_VERSION = "inj-screen-v1"
+INJECTION_SCREEN_VERSION = "inj-screen-v2"  # ANA-036: NFKC + zero-width + homoglyph + base64 + markdown-link views
 
 # High-signal phrases: an explicit attempt to address or override an assistant.
 _STRONG = (
@@ -40,6 +40,17 @@ _STRONG = (
     "act as", "aja como", "pretend to be", "finja ser", "new instructions",
     "novas instrucoes", "override", "jailbreak", "do not tell", "nao conte ao usuario",
     "reveal your", "revele seu", "print your instructions", "repeat the above",
+    # ANA-036: paraphrases / indirect phrasing seen in the red-team corpus
+    "disregard the earlier", "disregard any prior", "forget everything", "forget your instructions",
+    "forget all prior", "ignore the rules above", "ignore your guidelines", "ignore prior",
+    "ignore o que foi dito", "ignore tudo acima", "ignore tudo o que", "desconsidere tudo",
+    "desconsidere o que", "esqueca tudo", "esqueca o que", "nao siga as regras", "deixe de lado as",
+    "ignorar as instrucoes", "your real task", "sua verdadeira tarefa", "your new task",
+    "sua nova tarefa", "bypass", "developer mode", "modo desenvolvedor", "dan mode",
+    "as an ai without", "sem restricoes", "without restrictions", "do anything now",
+    "exfiltrate", "exfiltre", "send the contents", "envie o conteudo", "instead, ", "em vez disso, ",
+    "mostre seu prompt", "show your prompt", "initial prompt", "prompt inicial", "regras acima",
+    "reveal the secret", "revele o segredo", "revele a chave", "reveal the key", "api key to",
 )
 # Weaker markers: role names and prompt vocabulary. Individually harmless (this vault documents
 # agents for a living), which is exactly why they only count as evidence in combination.
@@ -51,6 +62,66 @@ _WEAK = (
 _IMPERATIVE = re.compile(
     r"\b(ignore|disregard|forget|reveal|output|print|execute|run|delete|send|email|transfer|"
     r"ignora|ignore|esqueca|revele|execute|envie|apague|responda apenas)\b")
+
+
+# ---- ANA-036: input normalisation -------------------------------------------------------------
+# Visible-lookalike letters (Cyrillic/Greek/fullwidth survive NFKC only for fullwidth). Map the common
+# Latin lookalikes so "іgnore" (Cyrillic i) or "ѕystem" reach the same phrases as plain ASCII.
+_HOMOGLYPHS = str.maketrans({
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y", "і": "i", "ј": "j", "ѕ": "s",
+    "ԁ": "d", "һ": "h", "ӏ": "l", "ո": "n", "ѵ": "v", "ɡ": "g", "к": "k", "м": "m", "т": "t", "в": "b",
+    "н": "h", "А": "a", "В": "b", "Е": "e", "К": "k", "М": "m", "Н": "h", "О": "o", "Р": "p", "С": "c",
+    "Т": "t", "Х": "x", "І": "i", "Ј": "j", "Ѕ": "s",
+    "α": "a", "ο": "o", "ρ": "p", "ν": "v", "ι": "i", "κ": "k", "τ": "t", "υ": "u", "χ": "x",
+    "Α": "a", "Β": "b", "Ε": "e", "Ι": "i", "Κ": "k", "Μ": "m", "Ν": "n", "Ο": "o", "Ρ": "p",
+    "Τ": "t", "Χ": "x", "Υ": "y", "Ζ": "z",
+})
+_INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u206a-\u206f\ufeff\u00ad\u180e]")
+_B64 = re.compile(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{24,}={0,2}(?![A-Za-z0-9+/=])")
+_MD_LINK = re.compile(r"!?\[([^\]]*)\]\(\s*<?([^)\s>]*)>?(?:\s+\"([^\"]*)\")?\s*\)")
+MAX_B64_DECODES = 8
+
+
+def _unescape(s: str) -> str:
+    from urllib.parse import unquote
+    try:
+        return unquote(s)
+    except Exception:  # noqa: BLE001
+        return s
+
+
+def normalized_views(text: str) -> list[str]:
+    """ANA-036: the text as the model would 'read' it. Returns [normalised text, *decoded payloads].
+
+    NFKC (fullwidth, ligatures, compat forms), zero-width/bidi removal, Cyrillic/Greek homoglyph
+    folding, base64 blobs decoded (up to MAX_B64_DECODES, printable UTF-8 only) and markdown link
+    text/target/title unrolled (a link title or URL-encoded target hides instructions from a human
+    reader but not from the model). Deterministic, zero tokens."""
+    import base64
+    import binascii
+    import unicodedata
+    t = unicodedata.normalize("NFKC", str(text))
+    t = _INVISIBLE.sub("", t)
+    t = t.translate(_HOMOGLYPHS)
+    views = [t]
+    extra: list[str] = []
+    for m in _MD_LINK.finditer(t):
+        extra.append(" ".join(x for x in (m.group(1), _unescape(m.group(2) or "").replace("-", " ").replace("_", " "),
+                                          m.group(3) or "") if x))
+    for n, m in enumerate(_B64.finditer(t)):
+        if n >= MAX_B64_DECODES:
+            break
+        blob = m.group(0)
+        try:
+            raw = base64.b64decode(blob + "=" * (-len(blob) % 4), validate=False)
+            dec = raw.decode("utf-8")
+        except (binascii.Error, UnicodeDecodeError, ValueError):
+            continue
+        if dec and sum(ch.isprintable() or ch in "\n	" for ch in dec) / len(dec) > 0.9:
+            extra.append(dec)
+    if extra:
+        views.append("\n".join(extra))
+    return views
 
 
 @dataclass(frozen=True)
@@ -68,7 +139,9 @@ def screen(text: str) -> Screen:
     """Lexical pre-screen of one candidate snippet. Deterministic, zero tokens."""
     if not text:
         return Screen(False, 0.0, ())
-    t = fold(text)
+    views = normalized_views(text)
+    t = fold(views[0])
+    decoded = fold(views[1]) if len(views) > 1 else ""
     signals: list[str] = []
     score = 0.0
     for p in _STRONG:
@@ -86,6 +159,15 @@ def screen(text: str) -> Screen:
     if re.search(r"\b(you|voce|vocês|voces)\b", t) and weak_hits:
         signals.append("second_person+prompt_vocab")
         score += 0.2
+    if decoded:  # hidden payload (base64 / link title / url): any strong hit there is decisive
+        hid = [p for p in _STRONG if p in decoded] or ([p for p in _WEAK if p in decoded and "instruc" in p]
+                                                       if _IMPERATIVE.search(decoded) else [])
+        for p in hid:
+            signals.append(f"hidden:{p}")
+            score += 0.5
+        if not hid and _IMPERATIVE.search(decoded):
+            signals.append("hidden:imperative")
+            score += 0.3
     score = min(1.0, score)
     # Over-inclusive on purpose: ANY signal at all buys the candidate an injection question.
     return Screen(bool(signals), round(score, 3), tuple(signals[:8]))

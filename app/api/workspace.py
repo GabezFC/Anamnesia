@@ -223,11 +223,15 @@ class SessionIn(BaseModel):
 
 
 @router.post("/sessions", status_code=201, dependencies=[Depends(require_local_write)])
-def create_session(body: SessionIn, mgr: TerminalManager = Depends(get_manager),
+def create_session(body: SessionIn, request: Request, mgr: TerminalManager = Depends(get_manager),
                    reg: ProjectRegistry = Depends(get_registry),
                    profiles: dict[str, Profile] = Depends(get_profiles)):
     if not terminals_enabled():
         return _terminals_disabled()
+    from app.services import ui_challenge  # ANA-042: MG_SHELL_CONFIRM=warn|enforce|off
+    if not ui_challenge.check_shell_confirm(request, body.profile):
+        return _err(403, "confirm_required", "sessão shell exige confirmação humana (X-MG-Confirm)",
+                    "obtenha o valor em GET /config/shell-confirm pela UI")
     proj = reg.get(body.project)
     if proj is None:
         return _err(404, "project_not_found", "projeto não encontrado")

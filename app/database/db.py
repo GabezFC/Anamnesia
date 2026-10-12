@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import sqlite3
 import threading
 import time
@@ -170,6 +171,11 @@ class Database:
         row = dict(row)
         self._fill_ledger_fields(row)
         self._dedup_config(row)
+        if os.environ.get("ANAMNESIA_METRICS_ONLY", "").strip().lower() in {"1", "true", "yes", "on"}:
+            # ANA-041 / P-01: keep hash + sources, never the delivered context text.
+            if row.get("context"):
+                row["context_sha256"] = hashlib.sha256(str(row["context"]).encode("utf-8")).hexdigest()
+            row["context"] = None
         self._maybe_compress_context(row)
         cols = ["run_id", "session_id", "created_at", "question_id", "query", "pipeline", "agent", "provider",
                 "model", "mode", "repetition", "warmup", "order_index", "threshold", "jev_mode", "jev_model",
