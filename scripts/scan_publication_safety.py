@@ -64,6 +64,8 @@ CONTENT_RULES = [
     ("obsidian_dir_reference", "low", re.compile(r"\.obsidian\b"), "marker"),
 ]
 # The synthetic corpus deliberately mimics the vault folder layout with invented names.
+# ANA-048: tests assert that secret scanners REJECT these; they are fakes, reported as low severity.
+FAKE_SECRET_FIXTURES = ("tests/", "scripts/e2e_workspace.py")
 SYNTHETIC_PREFIXES = (
     "data/synthetic_vault/", "benchmark/synthetic_questions.json", "benchmark/routing_tasks.json",
     "benchmark/questions.example.json", "scripts/gen_synthetic_corpus.py", "scripts/gen_routing_tasks.py",
@@ -173,7 +175,10 @@ def scan_line(c: Collector, file: str, lineno: int | None, line: str, commit: st
                 continue
             if rule == "assigned_secret" and not _looks_like_secret_value(val):
                 continue
-            c.add(rule, sev, file, lineno, _mask(kind, val, m.group(0)), commit)
+            r_rule, r_sev = rule, sev
+            if sev == "high" and kind != "path" and file.startswith(FAKE_SECRET_FIXTURES):
+                r_rule, r_sev = rule + "_test_fixture", "low"  # ANA-048: deliberate fake secrets in tests
+            c.add(r_rule, r_sev, file, lineno, _mask(kind, val, m.group(0)), commit)
             break  # one hit per rule per line is enough
     if ext in DATA_EXT and not file.startswith(WIKILINK_EXEMPT_PREFIXES):
         m = WIKILINK.search(line)
@@ -311,7 +316,7 @@ def tracked_but_ignored(repo: str) -> list[str]:
 
 def render_md(rep: dict) -> str:
     L = ["# Publication safety report", "",
-         f"- repo: `{rep['repo']}`",
+         f"- repo: `{Path(rep['repo']).name}`",  # ANA-048: no absolute paths in generated reports
          f"- tree: {rep['tree_stats']}",
          f"- history: {rep.get('history_stats', 'not scanned')}", ""]
     for scope in ("tree", "history"):

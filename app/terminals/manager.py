@@ -30,6 +30,9 @@ DEFAULT_JANITOR_SECONDS = 60.0
 ENV_ALLOWLIST = ("PATH", "HOME", "USERPROFILE", "LANG", "TERM", "SystemRoot", "COMSPEC", "TEMP",
                  "TMP", "PATHEXT")
 
+ENV_NEVER = frozenset({"MG_LOCAL_TOKEN", "MG_API_TOKEN", "MG_SESSION_TOKEN", "GITHUB_TOKEN", "GH_TOKEN",
+                       "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AZURE_CLIENT_SECRET"})
+
 
 class SessionLimitError(RuntimeError):
     pass
@@ -50,6 +53,13 @@ def build_env(env_keys=(), environ=None, extra: dict[str, str] | None = None) ->
             out[real if sys.platform == "win32" else key] = src[real]
     if not any(k.upper() == "TERM" for k in out):
         out["TERM"] = "xterm-256color"
+    # ANA-046: least privilege -- never forward the local write token or session secrets, even if a
+    # profile (mis)declares them; MG_PTY_NO_HOME=1 also drops HOME/USERPROFILE (isolated-HOME profiles).
+    for k in [k for k in out if k.upper() in ENV_NEVER]:
+        out.pop(k, None)
+    if os.environ.get("MG_PTY_NO_HOME", "").strip().lower() in {"1", "true", "yes", "on"}:
+        for k in [k for k in out if k.upper() in {"HOME", "USERPROFILE"}]:
+            out.pop(k, None)
     out.update(extra or {})
     return out
 
@@ -283,13 +293,20 @@ class TerminalManager:
         for sid in list(self._sessions):
             self.close(sid, reason)
 
+    def _idle_for(self, s) -> float:
+        """ANA-049: agent sessions expire sooner than interactive shells (default 2 h vs 12 h)."""
+        if s.profile_id in {"shell", "powershell", "pwsh", "cmd", "bash"}:
+            return self.idle_seconds
+        from app.services.hardening import agent_idle_seconds
+        return agent_idle_seconds(self.idle_seconds)
+
     def reap(self, now: float | None = None) -> list[str]:
         """Expire sessions without clients for longer than idle_seconds (active ones are killed;
         ended ones are dropped from the table after the same delay)."""
         now = self._clock() if now is None else now
         with self._lock:
             victims = [s for s in self._sessions.values()
-                       if not s.subscribers and now - s.last_client_at > self.idle_seconds]
+                       if not s.subscribers and now - s.last_client_at > self._idle_for(s)]
         gone = []
         for s in victims:
             self.close(s.id, "expired" if s.state == "active" else "expired_ended")

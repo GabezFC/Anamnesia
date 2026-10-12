@@ -151,8 +151,12 @@ class ObsidianVault:
             with open(self._abs(rel_path), "r", encoding="utf-8", errors="replace") as fh:
                 return fh.read()
         p = self._guard("read", Path(rel_path))
-        with open(p, "r", encoding="utf-8", errors="replace") as fh:  # read-only mode
-            return fh.read()
+        # ANA-051: re-verify on the OPEN handle that the file still lives inside the vault (a junction
+        # swapped in between resolve() and open() is caught here).
+        from app.services.hardening import open_confined
+        with open_confined(p, self.root, "rb") as fh:  # read-only mode
+            text = fh.read().decode("utf-8", errors="replace")
+            return text.replace("\r\n", "\n").replace("\r", "\n")
 
     def fingerprint(self) -> tuple:
         """Cheap change detector: (count, total bytes, newest mtime, hash of the path list).

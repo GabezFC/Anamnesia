@@ -4,11 +4,23 @@ from dataclasses import dataclass, field
 from config import env_str
 
 
+def _url(name: str, default: str) -> str:
+    """ANA-047: provider base URLs are validated (scheme, cloud-metadata, non-loopback opt-in). An invalid
+    value falls back to the default instead of crashing start-up, and the rejection is logged."""
+    from app.services import hardening
+    val = env_str(name, default)
+    try:
+        hardening.note_url_change(name, val)
+        return hardening.validate_provider_url(val, name)
+    except hardening.ProviderURLError:
+        return default
+
+
 @dataclass
 class AgentsConfig:
-    ollama_base_url: str = field(default_factory=lambda: env_str("OLLAMA_BASE_URL", "http://localhost:11434"))
-    vllm_base_url: str = field(default_factory=lambda: env_str("VLLM_BASE_URL", "http://localhost:8001/v1"))
-    openai_compat_base_url: str = field(default_factory=lambda: env_str("OPENAI_COMPAT_BASE_URL", ""))
+    ollama_base_url: str = field(default_factory=lambda: _url("OLLAMA_BASE_URL", "http://localhost:11434"))
+    vllm_base_url: str = field(default_factory=lambda: _url("VLLM_BASE_URL", "http://localhost:8001/v1"))
+    openai_compat_base_url: str = field(default_factory=lambda: _url("OPENAI_COMPAT_BASE_URL", ""))
     openai_compat_model: str = field(default_factory=lambda: env_str("OPENAI_COMPAT_MODEL", ""))
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     hermes_bin: str = field(default_factory=lambda: env_str("HERMES_BIN", "hermes"))

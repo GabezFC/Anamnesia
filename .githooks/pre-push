@@ -1,0 +1,3 @@
+#!/bin/sh
+# ANA-048: block pushes that would publish secrets/personal paths. Enable: git config core.hooksPath .githooks
+exec python scripts/scan_publication_safety.py --fail-on-findings --no-history --out-dir "${TMPDIR:-/tmp}/pubsafety" >/dev/null || { echo "publication safety: findings (run scripts/scan_publication_safety.py)"; exit 1; }

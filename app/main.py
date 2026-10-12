@@ -65,6 +65,8 @@ def create_app() -> FastAPI:
     from config.benchmark import BenchmarkConfig
 
     app = FastAPI(title="Memory Gateway", version="0.1.0", lifespan=lifespan)
+    from app.services import hardening  # ANA-044: no query strings / absolute paths in INFO logs
+    hardening.install_log_redaction()
     cfg = BenchmarkConfig()
     # Explicit own-origin only (never "*"): the dashboard is same-origin (served by this same app
     # below), so this only matters for a developer hitting the API from a separate dev server.

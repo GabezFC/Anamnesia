@@ -97,6 +97,12 @@ def _create_kill_on_close_job(pid: int | None):
         try:
             info = EXT()
             info.BasicLimitInformation.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            from app.services.hardening import job_limits  # ANA-049: memory + process-count ceilings
+            lim = job_limits()
+            if lim:
+                info.BasicLimitInformation.LimitFlags |= 0x8 | 0x200  # ACTIVE_PROCESS | JOB_MEMORY
+                info.BasicLimitInformation.ActiveProcessLimit = lim[1]
+                info.JobMemoryLimit = lim[0] * 1024 * 1024
             if not k32.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info)):  # ExtendedLimit
                 raise ctypes.WinError(ctypes.get_last_error())
             proc = k32.OpenProcess(0x0100 | 0x0001, False, int(pid))  # SET_QUOTA | TERMINATE

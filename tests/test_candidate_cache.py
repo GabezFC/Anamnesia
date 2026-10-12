@@ -61,7 +61,7 @@ def test_primeira_chamada_computa_e_grava(fake, vault, tmp_path):
     assert [c.candidate_id for c in got] == ["a", "b"]
     assert len(fake.calls) == 1
     assert fake.calls[0][2] is False  # allow_ppr=False, the frozen pipeline
-    assert len(list((tmp_path / "cache").glob("*.pkl"))) == 1
+    assert len(list((tmp_path / "cache").glob("*.json"))) == 1
 
 
 def test_segunda_chamada_acerta_o_cache(fake, vault):
@@ -76,16 +76,16 @@ def test_perguntas_diferentes_tem_chaves_diferentes(fake, vault, tmp_path):
     cc.cached_candidates("gw", vault, "q1")
     cc.cached_candidates("gw", vault, "q2")
     assert len(fake.calls) == 2
-    assert len(list((tmp_path / "cache").glob("*.pkl"))) == 2
+    assert len(list((tmp_path / "cache").glob("*.json"))) == 2
 
 
 def test_so_o_primeiro_elemento_e_usado_e_guardado(fake, vault, tmp_path):
     """`uniq` is cached; the metrics dict both scripts discard is not needed to answer."""
     got = cc.cached_candidates("gw", vault, "q1")
-    payload = next(iter((tmp_path / "cache").glob("*.pkl")))
-    import pickle
-    stored = pickle.loads(payload.read_bytes())
-    assert stored["candidates"] == got
+    payload = next(iter((tmp_path / "cache").glob("*.json")))
+    import json
+    stored = json.loads(payload.read_text(encoding="utf-8"))
+    assert stored["candidates"] == [c.to_dict() for c in got]
     assert "metrics" not in stored
 
 
@@ -151,7 +151,7 @@ def test_fingerprint_ignora_pastas_que_nao_tem_notas(fake, vault, tmp_path):
 
 def test_arquivo_de_cache_corrompido_e_tratado_como_miss(fake, vault, tmp_path):
     cc.cached_candidates("gw", vault, "q1")
-    for p in (tmp_path / "cache").glob("*.pkl"):
+    for p in (tmp_path / "cache").glob("*.json"):
         p.write_bytes(b"nao-e-um-pickle")
     got = cc.cached_candidates("gw", vault, "q1")
     assert [c.candidate_id for c in got] == ["a", "b"]
@@ -164,7 +164,7 @@ def test_no_cache_sempre_computa_e_nao_escreve(fake, vault, tmp_path):
     cc.cached_candidates("gw", vault, "q1", use_cache=False)
     cc.cached_candidates("gw", vault, "q1", use_cache=False)
     assert len(fake.calls) == 2
-    assert not (tmp_path / "cache").exists() or not list((tmp_path / "cache").glob("*.pkl"))
+    assert not (tmp_path / "cache").exists() or not list((tmp_path / "cache").glob("*.json"))
 
 
 def test_no_cache_nao_le_o_cache_ja_existente(fake, vault, tmp_path):

@@ -31,6 +31,9 @@ jobs:
         if: failure()
         run: python scripts/ci_annotate_failures.py junit.xml
 
+      - name: Publication safety (ANA-048)
+        run: python scripts/scan_publication_safety.py --fail-on-findings --no-history --out-dir "$RUNNER_TEMP/pubsafety"
+
       - uses: actions/setup-node@v5
         with:
           node-version: '20'

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-import pickle
+import json
 import sys
 from pathlib import Path
 
@@ -40,7 +40,7 @@ SKIP_DIRS = frozenset({".obsidian", ".trash", ".git", "graphify-out", "__pycache
 GRAPH_REL = "graphify-out/graph.json"
 
 #: Bump when the pickled shape changes, so old entries are recomputed instead of misread.
-CACHE_VERSION = 1
+CACHE_VERSION = 2  # ANA-052: JSON (no pickle -> no code execution from a tampered cache file)
 
 
 def _mtime_ns(path: Path) -> int | None:
@@ -81,7 +81,7 @@ def cache_key(vault: Path | str, question: str, fingerprint: str | None = None) 
 
 
 def cache_path(vault: Path | str, question: str) -> Path:
-    return CACHE_DIR / f"{cache_key(vault, question)}.pkl"
+    return CACHE_DIR / f"{cache_key(vault, question)}.json"
 
 
 def _compute(gw, question: str):
@@ -94,9 +94,8 @@ def _compute(gw, question: str):
 def _read(path: Path, fingerprint: str, question: str):
     """Pickled candidates, or None on a miss / anything unexpected in the file."""
     try:
-        payload = pickle.loads(path.read_bytes())
-    except (OSError, ValueError, EOFError, pickle.UnpicklingError, AttributeError, ImportError,
-            IndexError, KeyError, TypeError):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, EOFError, AttributeError, ImportError, IndexError, KeyError, TypeError):
         return None
     if not isinstance(payload, dict):
         return None
@@ -105,17 +104,23 @@ def _read(path: Path, fingerprint: str, question: str):
     if payload.get("fingerprint") != fingerprint or payload.get("question") != question:
         return None
     candidates = payload.get("candidates")
-    return candidates if isinstance(candidates, list) else None
+    if not isinstance(candidates, list):
+        return None
+    try:
+        from app.schemas.models import Candidate
+        return [Candidate(**c) for c in candidates]
+    except (TypeError, ValueError):
+        return None
 
 
 def _store(path: Path, fingerprint: str, question: str, candidates: list) -> None:
     payload = {"version": CACHE_VERSION, "fingerprint": fingerprint, "question": question,
-               "candidates": candidates}
+               "candidates": [c.to_dict() if hasattr(c, "to_dict") else c for c in candidates]}
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     # Write beside the target and rename: a reader never sees a half-written pickle, and a crash
     # leaves the previous entry intact instead of a corrupt one.
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_bytes(pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL))
+    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, path)
 
 
@@ -127,7 +132,7 @@ def cached_candidates(gw, vault: Path | str, question: str, *, use_cache: bool =
     if not use_cache:
         return _compute(gw, question)
     fingerprint = vault_fingerprint(vault)
-    path = CACHE_DIR / f"{cache_key(vault, question, fingerprint)}.pkl"
+    path = CACHE_DIR / f"{cache_key(vault, question, fingerprint)}.json"
     hit = _read(path, fingerprint, question)
     if hit is not None:
         return hit

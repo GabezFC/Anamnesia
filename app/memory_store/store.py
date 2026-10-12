@@ -80,17 +80,57 @@ SECRET_PATTERNS: tuple[tuple[str, re.Pattern], ...] = (
     ("Slack token", re.compile(r"\bxox[abprs]-[A-Za-z0-9\-]{10,}")),
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
     ("JWT", re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}")),
+    # ANA-050 / P-07
+    ("Azure storage key / connection string", re.compile(
+        r"(?i)(?:AccountKey|SharedAccessKey|SharedAccessSignature)\s*=\s*[A-Za-z0-9+/=%]{20,}")),
+    ("Azure SAS token", re.compile(r"(?i)[?&]sig=[A-Za-z0-9%+/=]{30,}")),
+    ("GCP service-account JSON", re.compile(r'"type"\s*:\s*"service_account"|"private_key_id"\s*:\s*"[0-9a-f]{20,}"')),
+    (".npmrc auth token", re.compile(r"(?i)(?://[^\s/]+/)?:?_authToken\s*=\s*\S{10,}")),
+    ("DB connection string with password", re.compile(
+        r"(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp|mssql)://[^\s:@/]+:[^\s@/]{3,}@")),
+    ("Stripe/Twilio/SendGrid key", re.compile(r"\b(?:sk_live|rk_live|pk_live)_[A-Za-z0-9]{16,}|\bSG\.[A-Za-z0-9_\-]{16,}\.[A-Za-z0-9_\-]{16,}")),
     ("credential assignment", re.compile(
         r"(?i)(?:api[_-]?key|secret|token|passw(?:or)?d|MG_LOCAL_TOKEN)\b\s*[:=]\s*[\"']?[A-Za-z0-9_\-./+=]{20,}")),
 )
 
 
+_INVISIBLE = re.compile("[" + "".join(chr(c) for c in (0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2060, 0x2061, 0x2062, 0x2063, 0x2064, 0xfeff, 0x00ad)) + "]")
+_TOKENISH = re.compile(r"[A-Za-z0-9_\-+/=]{32,}")
+
+
+def _shannon(s: str) -> float:
+    from math import log2
+    from collections import Counter
+    n = len(s)
+    return -sum(c / n * log2(c / n) for c in Counter(s).values())
+
+
+def _high_entropy(text: str) -> bool:
+    """A long, mixed-class, high-entropy token (>= 4.2 bits/char) that is not a hash/uuid-looking hex id."""
+    for m in _TOKENISH.finditer(text):
+        tok = m.group(0)
+        if re.fullmatch(r"[0-9a-fA-F\-]+", tok):  # git sha / uuid / content hash: not a secret
+            continue
+        if sum(c.isdigit() for c in tok) < 3 or not any(c.isalpha() for c in tok):
+            continue
+        if _shannon(tok) >= 4.2:
+            return True
+    return False
+
+
 def scan_secrets(*texts: str) -> list[str]:
-    """Labels of the secret patterns found in `texts` (empty list = clean)."""
+    """Labels of the secret patterns found in `texts` (empty list = clean).
+
+    ANA-050: text is NFKC-normalised and stripped of zero-width characters before matching, so
+    fullwidth / split-by-invisible-char obfuscation does not evade the regexes."""
+    import unicodedata
+    norm = [_INVISIBLE.sub("", unicodedata.normalize("NFKC", t or "")) for t in texts]
     found: list[str] = []
     for label, rx in SECRET_PATTERNS:
-        if any(rx.search(t or "") for t in texts) and label not in found:
+        if any(rx.search(t) for t in norm) and label not in found:
             found.append(label)
+    if not found and any(_high_entropy(t) for t in norm):
+        found.append("high-entropy token")
     return found
 
 
@@ -232,6 +272,8 @@ class SavedContextStore:
         source_agent = (source_agent or "").strip() or None
         if not title or not content.strip():
             raise InvalidNote("título e conteúdo são obrigatórios")
+        if len(project or "") > 80 or len(source_agent or "") > 80:  # ANA-050: bound the other free-text fields
+            raise InvalidNote("project/source_agent acima de 80 caracteres")
         if len(title) > 200 or any(len(t) > 60 for t in tags) or len(tags) > 20:
             raise InvalidNote("título (<=200), tags (<=20, <=60 caracteres cada) fora do limite")
         if "\n" in title or "\r" in title:

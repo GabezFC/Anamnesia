@@ -444,10 +444,13 @@ def _settings_section(g) -> dict:
 
 
 @router.get("/system/info")
-def system_info():
+def system_info(request: Request):
     g = gw()
     info = g.system_info()
     info["settings"] = _settings_section(g)
+    from app.services import hardening  # ANA-045: no absolute paths for non-loopback clients
+    if hardening.should_redact_paths(security.is_local_client(request)):
+        info = hardening.redact_info(info, str(g.vault.root))
     return info
 
 

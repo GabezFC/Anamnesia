@@ -5,6 +5,7 @@ exposes the last 4 chars only when the secret is at least 12 chars long.
 """
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -13,6 +14,21 @@ from app.services import security
 from app.services.envfile import EnvValueError, read_env_lines, set_env_var
 
 MASK = "\u2022" * 8
+audit = logging.getLogger("anamnesia.secrets.audit")  # ANA-053: key NAMES only, never values
+SERVICE = "anamnesia"
+
+
+def _keyring():
+    """ANA-053: the `keyring` module when MG_SECRETS_BACKEND=keyring and it is importable, else None
+    (the .env file stays the fallback and the default)."""
+    if os.environ.get("MG_SECRETS_BACKEND", "").strip().lower() != "keyring":
+        return None
+    try:
+        import keyring  # type: ignore
+        return keyring
+    except Exception:  # noqa: BLE001
+        audit.warning("secrets backend keyring solicitado mas indisponivel; usando .env")
+        return None
 
 
 class SecretError(ValueError):
@@ -27,6 +43,15 @@ def _read(env_key: str) -> str | None:
     val = os.environ.get(env_key)
     if val:
         return val
+    kr = _keyring()
+    if kr is not None:
+        try:
+            got = kr.get_password(SERVICE, env_key)
+            if got:
+                audit.info("secret_get key=%s backend=keyring", env_key)
+                return got
+        except Exception:  # noqa: BLE001
+            pass
     prefix = f"{env_key}="
     for line in read_env_lines(_path()):
         if line.startswith(prefix):
@@ -51,20 +76,39 @@ def set_key(env_key: str, value: str) -> None:
     if any(ch in value for ch in "\r\n\x00"):
         raise SecretError("value must not contain line breaks")
     value = value.strip()
+    kr = _keyring()
+    if kr is not None:
+        try:
+            kr.set_password(SERVICE, env_key, value)
+            audit.info("secret_set key=%s backend=keyring", env_key)
+            os.environ[env_key] = value
+            return
+        except Exception:  # noqa: BLE001
+            audit.warning("keyring set falhou key=%s; usando .env", env_key)
     try:
         set_env_var(_path(), env_key, value)  # ANA-006: same validator as /config/model-key
     except EnvValueError as exc:
         raise SecretError(str(exc)) from None
+    audit.info("secret_set key=%s backend=env", env_key)
     os.environ[env_key] = value
 
 
 def delete_key(env_key: str) -> bool:
-    """Remove from .env and the process env. Returns True if something was removed."""
+    """Remove from .env (and keyring when active) and the process env. Returns True if something was removed."""
+    kr = _keyring()
+    kr_removed = False
+    if kr is not None:
+        try:
+            kr.delete_password(SERVICE, env_key)
+            kr_removed = True
+        except Exception:  # noqa: BLE001
+            pass
+    audit.info("secret_delete key=%s", env_key)
     path = _path()
     prefix = f"{env_key}="
     lines = read_env_lines(path)
     kept = [ln for ln in lines if not ln.startswith(prefix)]
-    removed = len(kept) != len(lines)
+    removed = len(kept) != len(lines) or kr_removed
     if removed:
         fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
         try:
