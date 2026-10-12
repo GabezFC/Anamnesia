@@ -19,6 +19,16 @@ models:
     price: null
     local: true
     verified: false
+  - id: ollama-qwen35-9b
+    provider: ollama
+    model: qwen3.5:9b
+    tier: 1
+    context_window: 262144   # ollama /api/show: qwen35.context_length (2026-10-11)
+    capabilities: [cheap_bulk, reasoning]
+    effort_supported: false
+    price: null
+    local: true
+    verified: true   # confirmado em `ollama list` + chamada real (ANA-019)
   - id: ollama-llama
     provider: ollama
     model: llama3.1
