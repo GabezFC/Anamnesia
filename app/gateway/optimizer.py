@@ -82,6 +82,7 @@ class ResultCache:
         self._d: OrderedDict[tuple, tuple[float, Any]] = OrderedDict()
         self._lock = threading.Lock()
         self.hits = self.misses = 0
+        self.stale_evictions = 0
 
     def get(self, key: tuple):
         with self._lock:
@@ -106,9 +107,18 @@ class ResultCache:
         with self._lock:
             self._d.clear()
 
+    def invalidate(self, key: tuple) -> None:
+        """Drop one entry found stale on a hit; the earlier hit is reclassified as a miss."""
+        with self._lock:
+            if self._d.pop(key, None) is not None:
+                self.hits = max(0, self.hits - 1)
+                self.misses += 1
+                self.stale_evictions += 1
+
     def stats(self) -> dict:
         total = self.hits + self.misses
         return {"entries": len(self._d), "hits": self.hits, "misses": self.misses,
+                "stale_evictions": self.stale_evictions,
                 "hit_rate": round(self.hits / total, 4) if total else None}
 
 
@@ -234,6 +244,80 @@ class MemoryOptimizer:
             return None
         return (self.cfg.version, canon, plan.pipeline, int(max_results), scope or "global",
                 budget or 0, tuple(sorted((jev_overrides or {}).items())), self._vault_fp) + extra
+
+    # -- ANA-021: effective-configuration digest ------------------------------------------------
+    def config_digest(self, gw, plan: Plan) -> str:
+        """Digest of everything that changes WHAT a search returns but is not in the cache key's
+        explicit fields: resolved optional stages (env + local_settings.json), retrieval knobs,
+        JEV config, optimizer flags and the graph.json identity (mtime_ns+size). Flipping any of them
+        yields a different key, so a stale answer can never be served after a settings change."""
+        import hashlib
+        import json
+        from dataclasses import asdict, is_dataclass
+
+        def _d(o):
+            if o is None:
+                return None
+            return asdict(o) if is_dataclass(o) else dict(getattr(o, "__dict__", {}))
+
+        try:
+            st = gw.graphify.graph_path.stat()
+            graph_id = [st.st_mtime_ns, st.st_size]
+        except (OSError, AttributeError):
+            graph_id = None
+        rc = gw.retrieval_cfg
+        doc = {
+            "stages": _d(gw.optional_stages_cfg.resolved(plan.pipeline)),
+            "retrieval": {k: getattr(rc, k, None) for k in (
+                "max_candidates", "snippet_max_tokens", "dedup_max_per_note", "model_context_budget",
+                "per_source_max_tokens", "prefilter_top_k", "prefilter_lexical_weight", "jev_min_survivors")},
+            "jev": _d(gw.jev_cfg),
+            "optimizer": _d(self.cfg),
+            "opt": _d(getattr(gw, "opt_cfg", None)),
+            "graph": graph_id,
+        }
+        raw = json.dumps(doc, sort_keys=True, default=str, ensure_ascii=False)
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+    # -- ANA-025: anti-poisoning of the result cache ----------------------------------------------
+    @staticmethod
+    def cacheable(metrics: dict, cands) -> tuple[bool, str]:
+        """A result that carries an error, an optimizer error or an injection flag is never stored."""
+        if metrics.get("error"):
+            return False, "error"
+        for k, v in metrics.items():
+            if (k == "optimizer_errors" or k.endswith("_errors")) and v:
+                return False, k
+        if metrics.get("opt_injection_flagged"):
+            return False, "injection_flag"
+        if any((c.meta or {}).get("injection_flag") for c in cands):
+            return False, "injection_flag"
+        return True, ""
+
+    def source_guard(self, gw, sources) -> dict | None:
+        """Content hashes of the files actually delivered + the vault fingerprint at store time."""
+        import hashlib
+        files: dict[str, str] = {}
+        try:
+            for s in sources:
+                if s.file not in files:
+                    files[s.file] = hashlib.sha1(gw.vault.read(s.file).encode("utf-8")).hexdigest()
+        except Exception:  # noqa: BLE001 -- cannot prove freshness -> do not cache
+            return None
+        return {"files": files, "vault_fp": self._vault_fp}
+
+    def guard_valid(self, gw, guard: dict | None) -> bool:
+        """Re-hash the delivered files on a hit (a few small reads). Any edit/removal -> invalid."""
+        import hashlib
+        if not guard:
+            return False
+        try:
+            for f, h in guard["files"].items():
+                if hashlib.sha1(gw.vault.read(f).encode("utf-8")).hexdigest() != h:
+                    return False
+        except Exception:  # noqa: BLE001
+            return False
+        return True
 
     # -- post-retrieval stages -----------------------------------------------------------------
     def post_filter(self, cands: list[Candidate], plan: Plan, gw=None,

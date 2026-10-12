@@ -261,6 +261,21 @@ class JevService:
         self.cache_namespace = cache_namespace
         self.log = logger or (lambda _e: None)
 
+    def for_request(self, cache: "Any | None") -> "JevService":
+        """ANA-022: per-request view of this service with its own `layered` cache.
+
+        The gateway holds ONE JevService shared by every request thread; assigning `jev.layered = cache`
+        on it let concurrent searches overwrite each other's cache (and stats). This returns a shallow
+        copy that shares config and backend but owns `layered`; the shared instance is never mutated.
+        """
+        import copy
+        clone = copy.copy(self)
+        clone.layered = cache
+        clone._parent = self
+        return clone
+
+    _parent: "JevService | None" = None
+
     def band(self, relevance: float | None) -> str:
         """Routing band ignoring injection — used to compare cached/shadow scores (§33)."""
         return route(relevance, None, self.cfg)
@@ -268,6 +283,8 @@ class JevService:
     @property
     def backend(self) -> JevBackend:
         if self._backend is None:
+            if self._parent is not None:   # share one lazily-built backend with the parent (ANA-022)
+                return self._parent.backend
             self._backend = TypeSafeBackend(self.cfg)
         return self._backend
 
@@ -321,6 +338,17 @@ class JevService:
         # Measured 2026-09-24: real JEV input tokens ≈ 1.3x our estimate -> safety factor keeps batches under budget.
         return int(raw * JEV_TOKEN_SAFETY)
 
+    def _poisoned(self, c: Candidate) -> bool:
+        if (c.meta or {}).get("injection_flag"):
+            return True
+        if c.injection is not None and c.injection >= self.cfg.injection_threshold:
+            return True
+        try:
+            from app.services.injection_screen import screen
+            return any(s.startswith("strong:") for s in screen(c.snippet or "").signals)
+        except Exception:  # noqa: BLE001
+            return False
+
     # -- cache indirection ----------------------------------------------------
     def _cache_lookup(self, query: str, c: Candidate) -> dict | None:
         """Read a judgement from whichever cache is wired. Layered wins when present."""
@@ -332,6 +360,10 @@ class JevService:
         return None
 
     def _cache_store(self, query: str, c: Candidate) -> None:
+        # ANA-025: a judgement of text that looks like an injection (judge-scored or screened) is never
+        # persisted -- a poisoned note must not keep a high cached relevance across edits/sessions.
+        if self._poisoned(c):
+            return
         value = {"relevance": c.relevance, "injection": c.injection}
         if self.layered is not None and self.layered.enabled:
             self.layered.put_judgement(query, c.content_hash, value)

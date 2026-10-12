@@ -186,6 +186,9 @@ class TerminalManager:
         if role:
             extra["MG_AGENT_ROLE"] = role
         env = build_env(profile.env_keys, self._environ, extra)
+        # ANA-024: audit every launch; allowlist is advisory (warn) by default, ANAMNESIA_EXEC_GUARD=enforce blocks
+        from app.services.exec_guard import ExecGuard
+        ExecGuard("terminal_launcher", default_mode="warn").check(argv, cwd)
         with self._lock:
             active = sum(1 for s in self._sessions.values() if s.state == "active")
             if active >= self.max_sessions:

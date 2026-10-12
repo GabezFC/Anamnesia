@@ -213,6 +213,13 @@ def select_pool(gw, query: str, max_results: int, opt=None):
                            clusters=clusters, ze=ze, opt=opt)
 
 
+def _bind_cache_copy(jev, cache):
+    import copy
+    clone = copy.copy(jev)
+    clone.layered = cache
+    return clone
+
+
 def run_graphify_jev_optimized(gw, query: str, max_results: int, jev=None, opt=None):
     """Cascade pipeline. `opt` is an OptimizationConfig; with `opt.enabled=False` this delegates to
     the frozen baseline so a benchmark can use one code path for both arms."""
@@ -230,7 +237,8 @@ def run_graphify_jev_optimized(gw, query: str, max_results: int, jev=None, opt=N
     # ---- PAID stage ------------------------------------------------------------------------
     jev = jev or gw.jev
     if cache is not None:
-        jev.layered = cache
+        # ANA-022: never mutate the gateway-shared service; bind this request's cache to a copy.
+        jev = jev.for_request(cache) if hasattr(jev, "for_request") else _bind_cache_copy(jev, cache)
     t0 = time.perf_counter()
 
     stop_check = None

@@ -23,7 +23,7 @@ def test_default_file_loads_and_no_prices():
     reg = load_registry()
     assert reg.models and len(reg.version_hash()) == 64
     for m in reg.models:
-        assert m.price is None and m.verified is False
+        assert m.price is None and (m.local or m.verified is False)  # local models may be verified (ollama)
         assert reg.price_status(m.id) == ("local_zero" if m.local else "unavailable")
 
 

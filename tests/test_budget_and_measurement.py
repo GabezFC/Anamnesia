@@ -208,8 +208,8 @@ def test_cache_hit_rate_script_runs_on_stub(tmp_path):
     assert r.returncode == 0, r.stderr[-800:]
     d = json.loads(out.read_text(encoding="utf-8"))
     assert d["cold"]["jev_candidate_cache"]["hits"] == 0
-    assert d["warm"]["jev_candidate_cache"]["hits"] > 0 and d["warm"]["jev_candidate_cache"]["hit_rate"] == 1.0
-    assert d["warm"]["jev_backend_calls"] == 0 and d["cold"]["jev_backend_calls"] > 0
+    assert d["warm"]["jev_candidate_cache"]["hits"] > 0 and d["warm"]["jev_candidate_cache"]["hit_rate"] >= 0.95  # ANA-025: injection-looking notes are never cached; lost hits < 5%
+    assert d["warm"]["jev_backend_calls"] <= 1         and  d["cold"]["jev_backend_calls"] > 0
     fw = d["free_pipeline_result_cache"]
     assert fw["warm"]["result_cache"]["hits"] > 0 and fw["cold"]["result_cache"]["hits"] == 0
     assert "mecanismo" in d["disclaimer"]

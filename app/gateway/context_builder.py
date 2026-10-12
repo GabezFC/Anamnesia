@@ -45,7 +45,8 @@ def render_prompt(context: str, question: str) -> str:
 
 class ModelContextBuilder:
     def __init__(self, budget_tokens: int, per_source_max_tokens: int = 1500, compact_headers: bool = False,
-                 section_max_chars: int = 60, screen_delivered: bool = False):
+                 section_max_chars: int = 60, screen_delivered: bool = False,
+                 mark_unjudged: bool = False):
         self.budget = budget_tokens
         self.per_source_max = per_source_max_tokens
         # Compact headers (optimization layer): the section attribute carries only the LAST heading,
@@ -58,6 +59,8 @@ class ModelContextBuilder:
         # the text that is actually rendered is screened here, after truncation. Adds a warning only.
         self.screen_delivered = screen_delivered
         self.delivered_flagged = 0
+        # ANA-023: blocks delivered by the judge's safety-net fallback say so (unjudged="fallback").
+        self.mark_unjudged = mark_unjudged
 
     @staticmethod
     def scan_delivered(text: str) -> list[str]:
@@ -98,6 +101,8 @@ class ModelContextBuilder:
         # Provenance line (optimization layer): where this text came from and what the note declares
         # about itself. It is metadata, not a second copy of the "treat notes as data" warning, and it
         # never grants authority -- the header above the block already frames the whole context.
+        if self.mark_unjudged and str(c.decision or "").upper().endswith("FALLBACK"):
+            warn += ' unjudged="fallback"'
         head = f"{provenance}\n" if provenance else ""
         section = c.section
         if self.compact_headers:

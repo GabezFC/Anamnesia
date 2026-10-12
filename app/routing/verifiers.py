@@ -185,6 +185,12 @@ def verify_tests_pass(command: Sequence[str] | None, sandbox_dir: str | None, ti
         return VerifyResult(None, VerifyLevel.LIGHT, "not_run", {"reason": "disabled"})
     if not command or not sandbox_dir or not os.path.isdir(sandbox_dir):
         return _fail("bad_config")
+    from app.services.exec_guard import ExecDenied, ExecGuard, clamp_timeout, posix_limits
+    timeout_s = clamp_timeout(timeout_s)  # ANA-024: hard cap
+    try:  # ANA-024: allowlist by executable + audit (mode via ANAMNESIA_EXEC_GUARD; default enforce)
+        ExecGuard("verifier", default_mode="enforce").check(list(command), sandbox_dir, timeout_s=timeout_s)
+    except ExecDenied as e:
+        return _fail("exec_denied", error=str(e))
     tmp = tempfile.mkdtemp(prefix="routing_sbx_")
     work = os.path.join(tmp, "work")
     try:
@@ -193,7 +199,7 @@ def verify_tests_pass(command: Sequence[str] | None, sandbox_dir: str | None, ti
                if k in ("PATH", "SYSTEMROOT", "TEMP", "TMP", "HOME", "USERPROFILE")}
         try:
             p = subprocess.run(list(command), cwd=work, env=env, capture_output=True, text=True,
-                               timeout=timeout_s, shell=False)
+                               timeout=timeout_s, shell=False, preexec_fn=posix_limits())
         except subprocess.TimeoutExpired:
             return _fail("timeout", timeout_s=timeout_s)
         except OSError as e:

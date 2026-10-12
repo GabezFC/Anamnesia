@@ -44,6 +44,11 @@ def aggregate_stats(db, session_id: str | None = None) -> dict:
     s["total_runs"] = len(runs)
     s["sessions"] = len(db.list_sessions(limit=100000))
     s["false_negatives"] = db.false_negative_rate()
+    try:  # ANA-023: judge fallback_rate per pipeline/week + alarm
+        from app.services.judge_health import fallback_report
+        s["judge_health"] = fallback_report(runs)
+    except Exception:  # noqa: BLE001 -- reporting must never break the stats endpoint
+        s["judge_health"] = None
     return s
 
 

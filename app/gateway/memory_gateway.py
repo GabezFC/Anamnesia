@@ -167,13 +167,15 @@ class MemoryGateway:
         jev = self.make_jev(replace(self.jev_cfg, **(jev_overrides or {}))) if jev_overrides else self.jev
         return jev.evaluate(query, candidates)
 
-    def build_context(self, candidates, full_texts=None, budget: int | None = None, provenance=None):
+    def build_context(self, candidates, full_texts=None, budget: int | None = None, provenance=None,
+                      mark_unjudged: bool = False):
         oc = self.optimizer.cfg
         b = ModelContextBuilder(budget or self.retrieval_cfg.model_context_budget,
                                 self.retrieval_cfg.per_source_max_tokens,
                                 compact_headers=oc.enabled and oc.compact_headers,
                                 section_max_chars=oc.header_section_max_chars,
-                                screen_delivered=oc.enabled and oc.injection_flag)
+                                screen_delivered=oc.enabled and oc.injection_flag,
+                                mark_unjudged=mark_unjudged)
         return b.build(candidates, full_texts, provenance=provenance)
 
     def provenance_for(self, cands, pipeline: str):
@@ -226,12 +228,22 @@ class MemoryGateway:
         pre.update(budget_m)
         pipeline = plan.pipeline
         cache_on = self.bench_cfg.cache_enabled
-        ckey = opt.cache_key(plan, max_results, parsed_scope.label(), context_budget, jev_overrides) \
-            if cache_on else None
+        # ANA-021: the key carries a digest of the effective configuration (stages, retrieval knobs,
+        # JEV/optimizer config, graph.json identity), not only the vault fingerprint.
+        ckey = None
+        if cache_on:
+            try:
+                ckey = opt.cache_key(plan, max_results, parsed_scope.label(), context_budget, jev_overrides,
+                                     extra=(opt.config_digest(self, plan),))
+            except Exception as exc:  # noqa: BLE001 -- cannot digest the config -> do not cache
+                pre.setdefault("optimizer_errors", []).append(f"config_digest:{type(exc).__name__}")
         if ckey is not None:
             hit = opt.cache.get(ckey)
             if hit is not None:
-                return self._from_cache(hit, query, run_id, plan, pre, t0, jcfg, meta, persist)
+                # ANA-025: re-hash the delivered sources; an edit between searches invalidates the entry.
+                if opt.guard_valid(self, hit[4] if len(hit) > 4 else None):
+                    return self._from_cache(hit, query, run_id, plan, pre, t0, jcfg, meta, persist)
+                opt.cache.invalidate(ckey)
 
         try:
             # Pipelines read gw.active_scope to drop out-of-scope candidates before the judge.
@@ -269,7 +281,10 @@ class MemoryGateway:
                 except Exception as exc:  # noqa: BLE001 — an optional stage must never break search
                     m["optional_stages_errors"] = [f"{type(exc).__name__}: {exc}"]
         prov, prov_m = self.provenance_for(cands, plan.pipeline)
-        context, sources, ctx_tokens = self.build_context(cands, full, context_budget, provenance=prov)
+        from app.gateway.optimizer import FROZEN_PIPELINES
+        # the frozen reference pipeline stays byte-identical: no unjudged attribute there (metric still recorded)
+        context, sources, ctx_tokens = self.build_context(cands, full, context_budget, provenance=prov,
+                                                          mark_unjudged=pipeline not in FROZEN_PIPELINES)
         t1 = time.perf_counter()
 
         before = m.get("candidate_tokens_before_filter") or 0
@@ -306,6 +321,13 @@ class MemoryGateway:
             # interface: mcp/rest/cli). Optional, caller-supplied, never inferred (§5.1).
             "client": meta.get("client"),
         })
+        if is_jev:
+            # ANA-023: fallback = judge failure signal (see app/services/judge_health.py)
+            from app.services.judge_health import is_fallback_decision
+            n_fb = sum(1 for c in cands if is_fallback_decision(c.decision))
+            m["judge_fallback"] = 1 if (n_fb or (m.get("jev_fallback_used") or 0) > 0) else 0
+            m["judge_fallback_blocks"] = n_fb
+            m["judge_unjudged"] = int(m.get("candidates_unjudged") or (m.get("jev") or {}).get("candidates_unjudged") or 0)
         m.update(self._optimizer_metrics(plan, pre, post, cache_hit=False))
         m.update(prov_m)
         if error:
@@ -313,7 +335,12 @@ class MemoryGateway:
         result = MemoryResult(query=query, pipeline=pipeline, context=context, sources=sources, metrics=m,
                               run_id=run_id, candidates=cands)
         if ckey is not None and not error and sources:
-            opt.cache.put(ckey, (context, list(sources), list(cands), dict(m)))
+            ok, why = opt.cacheable(m, cands)
+            guard = opt.source_guard(self, sources) if ok else None
+            if ok and guard is not None:
+                opt.cache.put(ckey, (context, list(sources), list(cands), dict(m), guard))
+            else:
+                m["result_cache_skipped"] = why or "no_guard"
         if persist:
             self._persist(result, jcfg, meta, error, all_judged)
         return result
@@ -358,7 +385,7 @@ class MemoryGateway:
 
     def _from_cache(self, hit, query, run_id, plan, pre, t0, jcfg, meta, persist) -> MemoryResult:
         """Serve an identical earlier result: no retrieval, no judge, no context build."""
-        context, sources, cands, cached_m = hit
+        context, sources, cands, cached_m = hit[:4]
         m = dict(cached_m)
         m.update(self._optimizer_metrics(plan, pre, {}, cache_hit=True))
         m.update({"total_latency_ms": round((time.perf_counter() - t0) * 1000, 1),
