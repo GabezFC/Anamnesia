@@ -17,6 +17,17 @@ CONTENT_MAX_TOTAL_BYTES = 64 * 1024 * 1024
 CONTENT_MAX_SECONDS = 5.0
 SNIPPET_CHARS = 160
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache", ".pytest_cache"}
+# ANA-027 / P-11: the content search must never become a secret grep. Dirs/files below are skipped
+# (name-search and the explorer are unchanged); hit snippets are also scanned with SECRET_PATTERNS.
+SECRET_DIRS = {".ssh", ".aws", ".gnupg", ".azure", ".kube", ".claude", ".docker"}
+SECRET_FILE_EXT = (".pem", ".key", ".p12", ".pfx", ".ppk", ".keystore", ".jks")
+SECRET_FILE_NAMES = {".npmrc", ".pypirc", ".netrc", ".git-credentials", "id_rsa", "id_ed25519", "id_ecdsa",
+                     "credentials", "secrets.json", "secrets.yaml", "secrets.yml"}
+
+
+def is_secret_file(name: str) -> bool:
+    n = name.lower()
+    return n.startswith(".env") or n in SECRET_FILE_NAMES or n.endswith(SECRET_FILE_EXT)
 
 
 class ProjectError(ValueError):
@@ -150,9 +161,11 @@ def search_content(project_path: str, q: str, rel: str = "", cap: int = CONTENT_
         yield from os.walk(base, followlinks=False)
 
     for dirpath, dirnames, filenames in walk():
-        dirnames[:] = sorted(n for n in dirnames if n not in SKIP_DIRS
+        dirnames[:] = sorted(n for n in dirnames if n not in SKIP_DIRS and n.lower() not in SECRET_DIRS
                              and not os.path.islink(os.path.join(dirpath, n)))
         for name in sorted(filenames):
+            if is_secret_file(name):
+                continue
             if clock() > deadline or bytes_scanned >= max_total_bytes:
                 truncated = True
                 break
@@ -180,13 +193,24 @@ def search_content(project_path: str, q: str, rel: str = "", cap: int = CONTENT_
                 if len(results) >= cap:
                     truncated = True
                     break
-                results.append({"path": rel_path, "line": lineno, "snippet": _snippet(line, idx, len(needle))})
+                snippet = _snippet(line, idx, len(needle))
+                if _has_secret(line):  # ANA-027: never echo credential-looking material
+                    snippet = "[redigido: possível segredo]"
+                results.append({"path": rel_path, "line": lineno, "snippet": snippet})
             if truncated:
                 break
         if truncated:
             break
     return {"query": q, "mode": "content", "results": results, "truncated": truncated,
             "files_scanned": files_scanned, "bytes_scanned": bytes_scanned}
+
+
+def _has_secret(text: str) -> bool:
+    try:
+        from app.memory_store.store import scan_secrets
+        return bool(scan_secrets(text))
+    except Exception:  # noqa: BLE001 -- scanning is a safety net, not a dependency
+        return False
 
 
 def _looks_binary(data: bytes) -> bool:

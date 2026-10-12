@@ -222,7 +222,7 @@ def test_gateway_enables_delivered_screen_only_when_optimizer_flag_on(monkeypatc
 
 
 # -- still open in the audit (documented, strict xfail) ------------------------------------------
-@pytest.mark.xfail(strict=True, reason="P-06 envelope forgery: '</note>' inside a note is not neutralised yet")
+# ANA-034: fixed -- the former strict xfail for P-06 is now a plain regression test.
 def test_note_cannot_close_its_own_envelope():
     from app.gateway.context_builder import ModelContextBuilder
     ctx, _, _ = ModelContextBuilder(4000).build(

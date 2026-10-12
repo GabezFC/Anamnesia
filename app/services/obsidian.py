@@ -6,6 +6,7 @@ there is no write/delete/rename function anywhere in the codebase.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -33,6 +34,7 @@ class ObsidianVault:
         # the Gateway-owned agent-saved notes, app/memory_store). Empty by default: with no extra
         # root every method below behaves exactly as before. The user's vault is never written.
         self.extra_roots: dict[str, Path] = {}
+        self.escaped_dropped = 0  # ANA-028: entries skipped because their real path left the vault
 
     def add_extra_root(self, prefix: str, root: Path | str) -> None:
         prefix = prefix.strip("/")
@@ -90,13 +92,39 @@ class ObsidianVault:
         """Every non-hidden file, any extension. Read-only, same walk as `list_markdown`."""
         self._guard("list")
         out: list[str] = []
+        dropped = 0
         for dirpath, dirnames, filenames in os.walk(self.root):
-            dirnames[:] = [d for d in dirnames if d not in self.excluded_dirs and not d.startswith(".")]
+            keep = []
+            for d in dirnames:
+                if d in self.excluded_dirs or d.startswith("."):
+                    continue
+                # ANA-028 / P-08: a junction/symlink whose real target leaves the vault is dropped
+                # (counted + logged), never followed -- and never allowed to fail the whole listing.
+                if not self._inside_root(os.path.join(dirpath, d)):
+                    dropped += 1
+                    continue
+                keep.append(d)
+            dirnames[:] = keep
             for fn in filenames:
                 if fn.startswith("."):
                     continue
+                full = os.path.join(dirpath, fn)
+                if os.path.islink(full) and not self._inside_root(full):
+                    dropped += 1
+                    continue
                 out.append(Path(dirpath, fn).relative_to(self.root).as_posix())
+        if dropped:
+            self.escaped_dropped = dropped
+            logging.getLogger("anamnesia.vault").warning(
+                "vault: %d entrada(s) via junction/symlink fora da raiz ignorada(s)", dropped)
         return sorted(out)
+
+    def _inside_root(self, path: str) -> bool:
+        try:
+            real = Path(os.path.realpath(path))
+        except (OSError, ValueError):
+            return False
+        return real == self.root or self.root in real.parents
 
     def list_markdown(self) -> list[str]:
         """Markdown of the user's vault ONLY (lint, audit, graphify mirror, project counts)."""

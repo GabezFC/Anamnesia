@@ -111,6 +111,7 @@ class SavedNote:
     created: str = ""
     updated: str = ""
     file: str = ""
+    trust: str | None = None  # ANA-029: "untrusted" for agent-written notes (data, never instructions)
 
     def to_dict(self, with_content: bool = True) -> dict:
         d = asdict(self)
@@ -132,7 +133,10 @@ def render(note: SavedNote) -> str:
           f"project: {_q(note.project)}" if note.project else "project: null",
           f"tags: {_q(note.tags)}",
           f"source_agent: {_q(note.source_agent)}" if note.source_agent else "source_agent: null",
-          f"created: {_q(note.created)}", f"updated: {_q(note.updated)}", "---", ""]
+          f"created: {_q(note.created)}", f"updated: {_q(note.updated)}",
+          # ANA-029: `projeto:` makes scope filters (projeto:<slug>) see the note ONLY in its own project
+          *([f"projeto: {_q(note.project)}"] if note.project else []),
+          *([f"trust: {_q(note.trust)}"] if note.trust else []), "---", ""]
     return "\n".join(fm) + f"# {note.title}\n\n{note.content.strip()}\n"
 
 
@@ -163,7 +167,7 @@ def parse(text: str, file: str = "") -> SavedNote:
         id=str(meta.get("id") or ""), title=title, content=body.rstrip("\n"),
         project=meta.get("project"), tags=list(meta.get("tags") or []),
         source_agent=meta.get("source_agent"), created=meta.get("created") or "",
-        updated=meta.get("updated") or "", file=file)
+        updated=meta.get("updated") or "", file=file, trust=meta.get("trust"))
 
 
 def _replace(src, dst) -> None:  # indirection so tests can simulate a crash between temp and replace
@@ -219,7 +223,7 @@ class SavedContextStore:
 
     # -- API -------------------------------------------------------------------------------
     def save(self, title: str, content: str, tags: list[str] | None = None, project: str | None = None,
-             source_agent: str | None = None) -> str:
+             source_agent: str | None = None, trust: str | None = None) -> str:
         """Validate, then write one note atomically. Returns the note id."""
         title = (title or "").strip()
         content = content or ""
@@ -250,7 +254,7 @@ class SavedContextStore:
             else:  # pragma: no cover - 40 bits of entropy
                 raise SavedContextError("não foi possível gerar um id único")
             now = _now()
-            note = SavedNote(note_id, title, content, project, tags, source_agent, now, now, dest.name)
+            note = SavedNote(note_id, title, content, project, tags, source_agent, now, now, dest.name, trust)
             self._write_atomic(dest, render(note))
         return note_id
 

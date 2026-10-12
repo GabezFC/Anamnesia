@@ -25,6 +25,7 @@ from starlette.websockets import WebSocketDisconnect, WebSocketState
 from app.services.security import (get_or_create_local_token, is_local_client, require_local_write,
                                    require_localhost)
 from app.orchestration import roles as role_contracts
+from app.services import project_guard
 from app.terminals import worktrees as wt
 from app.terminals.manager import SessionLimitError, SessionNotFound, TerminalManager
 from app.terminals.profiles import Profile, ProfileError, ProfileUnavailable, load_profiles
@@ -112,7 +113,11 @@ def list_projects(reg: ProjectRegistry = Depends(get_registry)):
 @router.post("/projects", status_code=201, dependencies=[Depends(require_local_write)])
 def add_project(body: ProjectIn, reg: ProjectRegistry = Depends(get_registry)):
     try:
+        project_guard.check(body.path)  # ANA-026: HOME/.ssh/AppData/drive roots -> 403 (mode warn|off via env)
         return reg.add(body.name, body.path).to_dict()
+    except project_guard.ProjectDenied as e:
+        return _err(403, "project_root_denied", str(e),
+                    "use um diretório de projeto; ou defina MG_PROJECT_ROOTS / ANAMNESIA_PROJECT_GUARD=warn")
     except ProjectError as e:
         return _err(422, "invalid_project", str(e), "informe o caminho de um diretório existente")
 

@@ -70,7 +70,7 @@ def create_app() -> FastAPI:
     # below), so this only matters for a developer hitting the API from a separate dev server.
     own_origins = [f"http://{h}:{cfg.port}" for h in (cfg.host, "127.0.0.1", "localhost")]
     app.add_middleware(CORSMiddleware, allow_origins=sorted(set(own_origins)),
-                       allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-MG-Token"])
+                       allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-MG-Token", "X-MG-Session"])
     # S1 (DNS rebinding): a hostile page can point its own domain at 127.0.0.1 and then Origin == Host
     # would still match. Reject any Host header that is not loopback / the configured bind host.
     import os
@@ -79,6 +79,12 @@ def create_app() -> FastAPI:
     allowed |= {h.strip() for h in os.getenv("MG_ALLOWED_HOSTS", "").split(",") if h.strip()}
     allowed.discard("0.0.0.0")  # a wildcard bind is not a valid Host header to trust
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=sorted(allowed))
+
+    # ANA-030 / ANA-033: body ceiling (413 before parsing) and per-IP rate limit on the paid/search paths.
+    # Added last-but-one so they wrap everything below them; env rollbacks documented in request_guards.
+    from app.services.request_guards import BodyLimitMiddleware, RateLimitMiddleware
+    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(BodyLimitMiddleware)
 
     # ANA-005 / P-01: with a non-loopback bind every route except /health and the static shell needs
     # the local token, even for reads (the request body of /memory/search is the user's whole vault).

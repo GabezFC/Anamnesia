@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextvars
 import time
+import os
 import uuid
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -168,14 +169,14 @@ class MemoryGateway:
         return jev.evaluate(query, candidates)
 
     def build_context(self, candidates, full_texts=None, budget: int | None = None, provenance=None,
-                      mark_unjudged: bool = False):
+                      mark_unjudged: bool = False, nonce: bool = False):
         oc = self.optimizer.cfg
         b = ModelContextBuilder(budget or self.retrieval_cfg.model_context_budget,
                                 self.retrieval_cfg.per_source_max_tokens,
                                 compact_headers=oc.enabled and oc.compact_headers,
                                 section_max_chars=oc.header_section_max_chars,
                                 screen_delivered=oc.enabled and oc.injection_flag,
-                                mark_unjudged=mark_unjudged)
+                                mark_unjudged=mark_unjudged, nonce=nonce)
         return b.build(candidates, full_texts, provenance=provenance)
 
     def provenance_for(self, cands, pipeline: str):
@@ -284,7 +285,10 @@ class MemoryGateway:
         from app.gateway.optimizer import FROZEN_PIPELINES
         # the frozen reference pipeline stays byte-identical: no unjudged attribute there (metric still recorded)
         context, sources, ctx_tokens = self.build_context(cands, full, context_budget, provenance=prov,
-                                                          mark_unjudged=pipeline not in FROZEN_PIPELINES)
+                                                          mark_unjudged=pipeline not in FROZEN_PIPELINES,
+                                                          nonce=pipeline not in FROZEN_PIPELINES
+                                                          and os.environ.get("MG_CONTEXT_NONCE", "0").strip().lower()
+                                                          in ("1", "true", "on", "yes", "random"))
         t1 = time.perf_counter()
 
         before = m.get("candidate_tokens_before_filter") or 0

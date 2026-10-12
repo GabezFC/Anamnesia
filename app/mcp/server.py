@@ -83,6 +83,32 @@ def enforce_scope(requested: str | None) -> str | None:
     return pinned.label()
 
 
+def gate_save_project(project: str | None) -> tuple[str | None, str | None, dict]:
+    """ANA-029 / P-07: a session pinned by MG_SCOPE may only save notes into its OWN project.
+
+    Without MG_SCOPE (or a global/area-only pin) nothing changes. Mode `ANAMNESIA_SAVE_GATE`:
+    enforce (default) rejects a mismatching `project`; warn rewrites it to the pinned project and
+    reports `gate_warning`; off disables. A missing `project` is always filled with the pinned one.
+    Returns (project, error, extra_fields_for_the_response).
+    """
+    pinned_raw = os.environ.get("MG_SCOPE", "").strip()
+    mode = os.environ.get("ANAMNESIA_SAVE_GATE", "enforce").strip().lower()
+    if not pinned_raw or mode == "off":
+        return project, None, {}
+    from app.services.scope import parse_scope, slug
+    pinned = parse_scope(pinned_raw)
+    if len(pinned.projects) != 1:
+        return project, None, {}
+    own = next(iter(pinned.projects))
+    if not (project or "").strip():
+        return own, None, {}
+    if slug(project) == own:
+        return project, None, {}
+    if mode == "warn":
+        return own, None, {"gate_warning": f"project reescrito para o escopo da sessão ({own})"}
+    return None, f"memory_save recusado: project deve ser o escopo desta sessão ({own})", {}
+
+
 def _search(query: str, pipeline: str, max_results: int, scope: str | None = None,
             response: str | None = None, client: str | None = None, mode: str = "context") -> dict:
     max_results = max(1, min(int(max_results), 20))
@@ -190,8 +216,12 @@ if SAVE_ENABLED:
         from app.services.security import get_or_create_local_token
         if not get_or_create_local_token():  # the write needs the local token to exist (same-user install)
             return {"error": "token local indisponível; salvar contexto recusado"}
+        project, gate_err, gate_meta = gate_save_project(project)
+        if gate_err:
+            return {"error": gate_err}
         try:
-            note_id = get_store().save(title, content, tags, project, source_agent or "mcp")
+            # ANA-029: everything an agent saves is untrusted DATA (frontmatter `trust: untrusted`)
+            note_id = get_store().save(title, content, tags, project, source_agent or "mcp", trust="untrusted")
         except SavedContextError as exc:
             return {"error": str(exc)}
         if _gateway is not None:
@@ -199,7 +229,7 @@ if SAVE_ENABLED:
                 reindex(_gateway)
             except Exception:  # noqa: BLE001
                 pass
-        return {"id": note_id}
+        return {"id": note_id, **gate_meta}
 
 
 def main():

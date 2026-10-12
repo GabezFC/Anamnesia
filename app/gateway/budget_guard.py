@@ -33,7 +33,13 @@ _CACHE_TTL_S = 5.0   # spend is re-read at most every few seconds per guard (a s
 
 
 def enforcement_enabled() -> bool:
-    return os.environ.get(ENV_FLAG, "").strip().lower() in ("1", "true", "yes", "on")
+    """ANA-033: explicit flag wins (0/off disables). Unset -> ON as soon as a paid-judge key
+    (TYPESAFE_API_KEY) is configured, because that is exactly when spend can happen; with no key the
+    JEV pipelines cannot spend and the guard stays inert (byte-identical path)."""
+    raw = os.environ.get(ENV_FLAG, "").strip().lower()
+    if raw:
+        return raw in ("1", "true", "yes", "on")
+    return bool(os.environ.get("TYPESAFE_API_KEY", "").strip())
 
 
 def spends_paid_tokens(pipeline: str | None) -> bool:

@@ -322,6 +322,9 @@ class OptionalStagesConfig:
     # text never reaches the model.
     rerank_cache: bool = field(default_factory=lambda: env_bool("OPT_STAGE_RERANK_CACHE", True))
 
+    # ANA-035 (PARCIAL): the stage flag stays OFF by default (turning it on changes the contract of every
+    # optional-stage test and the delivered bytes); the per-response random nonce on the <note> envelope
+    # (ANA-034, MG_CONTEXT_NONCE) delivers the spotlight protection by default. Opt in with OPT_STAGE_SPOTLIGHT_NONCE=1.
     spotlight_nonce: bool = field(default_factory=lambda: env_bool("OPT_STAGE_SPOTLIGHT_NONCE", False))
     # "hash" (default): nonce = sha256(content + local secret)[:12] -- deterministic, so identical
     # content always produces identical bytes (keeps the consumer's prompt cache AND this project's
@@ -329,7 +332,7 @@ class OptionalStagesConfig:
     # stronger anti-injection signal (a note author cannot predict tomorrow's delimiter) but the
     # emitted context is byte-different every call, which defeats both caches. See
     # app/retrieval/optional_stages.py spotlight_nonce() docstring for the full trade-off.
-    spotlight_nonce_mode: str = field(default_factory=lambda: env_str("OPT_STAGE_SPOTLIGHT_NONCE_MODE", "hash"))
+    spotlight_nonce_mode: str = field(default_factory=lambda: env_str("OPT_STAGE_SPOTLIGHT_NONCE_MODE", "random"))
     # Local secret mixed into the "hash" nonce. Empty by default (no secret configured yet); an
     # empty secret still produces a deterministic, content-derived nonce, it is just predictable by
     # anyone who can read the note content -- set OPT_STAGE_SPOTLIGHT_NONCE_SECRET to change that.

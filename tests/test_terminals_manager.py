@@ -94,6 +94,8 @@ def test_env_allowlist_and_profile_keys(fake, proj, prof):
     assert env["TERM"]
     # MCP injetado por padrão (agentes): só variáveis MG_*/MEMORY_GATEWAY_URL, nunca segredos
     extra = {k for k in set(env) - {k for k in ENV_ALLOWLIST} - {"FAKE_PROFILE_KEY", "MG_SCOPE"}}
+    assert env["MG_SESSION_TOKEN"].startswith("mgs_")  # ANA-032: server-side scope token
+    extra.discard("MG_SESSION_TOKEN")
     assert all(k.startswith("MG_MCP_") or k == "MEMORY_GATEWAY_URL" for k in extra)
 
 

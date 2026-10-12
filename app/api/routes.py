@@ -12,8 +12,8 @@ import uuid
 from dataclasses import replace as dc_replace
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel, Field, field_validator
 
 from app.adapters.registry import detect_all
 from app.benchmark.evaluator import validate_evaluation, validate_label
@@ -31,6 +31,8 @@ from config.optional_stages_catalog import REJECTED as OPTIONAL_STAGES_REJECTED
 from config.retrieval import resolve_vault_path, validate_vault_path_for_runtime
 
 router = APIRouter()
+MAX_BENCH_QUESTIONS = 200
+MAX_BENCH_UNITS = 2000
 _state: dict = {"gateway": None, "jobs": {}}
 Pipeline = Literal[("auto",) + PIPELINES]
 BenchPipeline = Literal[PIPELINES]
@@ -97,6 +99,46 @@ class BenchmarkRequest(BaseModel):
     notes: str = ""
     background: bool = False
 
+    # ANA-031 / P-09: a hostile or buggy caller cannot queue an unbounded paid run.
+    @field_validator("question_ids")
+    @classmethod
+    def _cap_ids(cls, v):
+        if v is not None and len(v) > MAX_BENCH_QUESTIONS:
+            raise ValueError(f"no máximo {MAX_BENCH_QUESTIONS} question_ids")
+        return v
+
+    @field_validator("questions")
+    @classmethod
+    def _cap_questions(cls, v):
+        if v is not None:
+            if len(v) > MAX_BENCH_QUESTIONS:
+                raise ValueError(f"no máximo {MAX_BENCH_QUESTIONS} questions")
+            if any(len(q) > 2000 for q in v):
+                raise ValueError("pergunta com mais de 2000 caracteres")
+        return v
+
+    @field_validator("pipelines", "consumers")
+    @classmethod
+    def _cap_lists(cls, v):
+        if v is not None and len(v) > 20:
+            raise ValueError("lista longa demais (máx. 20)")
+        return v
+
+
+def _bench_limit(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, "") or default)
+    except ValueError:
+        return default
+
+
+def _check_bench_size(req: "BenchmarkRequest", n_questions: int) -> None:
+    """ANA-031: questions x repetitions ceiling (MG_BENCH_MAX_UNITS, default 2000; 0 = off)."""
+    cap = _bench_limit("MG_BENCH_MAX_UNITS", MAX_BENCH_UNITS)
+    if cap > 0 and n_questions * req.repetitions > cap:
+        raise HTTPException(422, f"benchmark grande demais: {n_questions} perguntas x {req.repetitions} "
+                                 f"repetições > {cap}")
+
 
 def _overrides(jev_mode=None, threshold=None, review_action=None) -> dict | None:
     o = {}
@@ -110,11 +152,22 @@ def _overrides(jev_mode=None, threshold=None, review_action=None) -> dict | None
     return o or None
 
 
-def _search(req: SearchRequest, pipeline: str):
+def session_scope(request: Request | None, requested: str | None) -> str | None:
+    """ANA-032 / P-05: a request carrying a valid `X-MG-Session` token gets the scope bound to that token
+    by the server (the project of the terminal it was minted for); the client-sent `scope` is ignored.
+    Without the header (or with an unknown/expired token) nothing changes."""
+    if request is None:
+        return requested
+    from app.services import session_tokens
+    bound = session_tokens.resolve(request.headers.get(session_tokens.HEADER))
+    return bound if bound else requested
+
+
+def _search(req: SearchRequest, pipeline: str, request: Request | None = None):
     try:
         r = gw().search(req.query, pipeline, req.max_results,
                         jev_overrides=_overrides(req.jev_mode, req.threshold, req.review_action),
-                        context_budget=req.context_budget, scope=req.scope,
+                        context_budget=req.context_budget, scope=session_scope(request, req.scope),
                         run_meta={"kind": "api", "agent": "rest", "client": req.client})
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
@@ -151,8 +204,8 @@ def health():
 
 
 @router.post("/memory/search")
-def memory_search(req: SearchRequest):
-    return _search(req, req.pipeline)
+def memory_search(req: SearchRequest, request: Request):
+    return _search(req, req.pipeline, request)
 
 
 @router.post("/route")
@@ -169,26 +222,26 @@ def route_decision(req: RouteRequest):
 
 
 @router.post("/generate", dependencies=[Depends(require_local_write)])
-def generate(req: GenerateRequest):
+def generate(req: GenerateRequest, request: Request):
     """memory_search mode=answer over REST. Calls a model (may cost money), so it needs the same
     local-write guard (loopback + same-origin + X-MG-Token) as the other state/spend endpoints."""
     return _search(SearchRequest(query=req.query, scope=req.scope, max_results=req.max_results,
-                                 client=req.client, mode="answer", risk=req.risk), "auto")
+                                 client=req.client, mode="answer", risk=req.risk), "auto", request)
 
 
 @router.post("/memory/search/baseline")
-def memory_search_baseline(req: SearchRequest):
-    return _search(req, "baseline")
+def memory_search_baseline(req: SearchRequest, request: Request):
+    return _search(req, "baseline", request)
 
 
 @router.post("/memory/search/graphify")
-def memory_search_graphify(req: SearchRequest):
-    return _search(req, "graphify")
+def memory_search_graphify(req: SearchRequest, request: Request):
+    return _search(req, "graphify", request)
 
 
 @router.post("/memory/search/graphify-jev")
-def memory_search_graphify_jev(req: SearchRequest):
-    return _search(req, "graphify_jev")
+def memory_search_graphify_jev(req: SearchRequest, request: Request):
+    return _search(req, "graphify_jev", request)
 
 
 def _questions(req: BenchmarkRequest) -> list[dict]:
@@ -200,9 +253,15 @@ def _questions(req: BenchmarkRequest) -> list[dict]:
     return qs
 
 
+def _sized_questions(req: BenchmarkRequest) -> list[dict]:
+    qs = _questions(req)
+    _check_bench_size(req, len(qs))   # ANA-031: 422 before anything is queued or paid
+    return qs
+
+
 def _run_benchmark(req: BenchmarkRequest, pipelines):
     runner = BenchmarkRunner(gw())
-    qs = _questions(req)
+    qs = _sized_questions(req)
     if not qs:
         raise HTTPException(422, "nenhuma pergunta selecionada")
     kwargs = dict(pipelines=pipelines, consumers=[c.model_dump() for c in req.consumers],
@@ -243,7 +302,7 @@ def benchmark_estimate(req: BenchmarkRequest):
     toks = [json.loads(r["metrics_json"]).get("jev_input_tokens") for r in rows if r["metrics_json"]]
     toks = [t for t in toks if t]
     avg = sum(toks) / len(toks) if toks else None
-    return estimate_plan(len(_questions(req)), req.pipelines or list(PIPELINES),
+    return estimate_plan(len(_sized_questions(req)), req.pipelines or list(PIPELINES),
                          [c.model_dump() for c in req.consumers], req.repetitions, avg_jev_tokens=avg)
 
 
@@ -257,7 +316,7 @@ def benchmark_job(job_id: str):
 
 @router.post("/benchmark/threshold-sweep", dependencies=[Depends(require_local_write)])
 def threshold_sweep(req: BenchmarkRequest):
-    return BenchmarkRunner(gw()).threshold_sweep(_questions(req))
+    return BenchmarkRunner(gw()).threshold_sweep(_sized_questions(req))
 
 
 @router.get("/benchmark/runs")

@@ -135,6 +135,7 @@ class TerminalManager:
         self._clock = clock
         self._environ = environ  # None => os.environ at create() time
         self._sessions: dict[str, Session] = {}
+        self._session_tokens: dict[str, str] = {}  # ANA-032: session id -> MG_SESSION_TOKEN
         self._lock = threading.RLock()
         self.janitor_interval = janitor_interval
         self._janitor: threading.Thread | None = None
@@ -183,6 +184,11 @@ class TerminalManager:
         inj = mcp_inject.prepare(profile, sid, project.name, role, src_env, want=mcp, config_dir=mcp_config_dir)
         argv = [*argv, *inj.args]
         extra = {"MG_SCOPE": project.name, **inj.env}
+        # ANA-032: per-session token whose scope is fixed on the server (X-MG-Session on /memory/search*)
+        from app.services import session_tokens
+        from app.services.scope import parse_scope
+        session_token = session_tokens.mint(parse_scope(project.name).label())
+        extra[session_tokens.ENV_VAR] = session_token
         if role:
             extra["MG_AGENT_ROLE"] = role
         env = build_env(profile.env_keys, self._environ, extra)
@@ -197,11 +203,13 @@ class TerminalManager:
                 handle = self.backend.spawn(argv, cwd, env, rows, cols)
             except BaseException:
                 mcp_inject.cleanup(inj.config_path)
+                session_tokens.revoke(session_token)
                 raise
             s = Session(sid, project.id, cwd, profile.id, handle, rows, cols,
                         time.time(), last_client_at=self._clock(), worktree_id=worktree_id,
                         branch=branch, role=role, mcp=inj)
             self._sessions[s.id] = s
+            self._session_tokens[s.id] = session_token
         self._ensure_janitor()
         t = threading.Thread(target=self._pump, args=(s,), name=f"pty-reader-{s.id}", daemon=True)
         s.thread = t
@@ -241,6 +249,8 @@ class TerminalManager:
             s.state = "ended"
             s.ended_at = time.time()
             s.close_reason = reason
+            from app.services import session_tokens
+            session_tokens.revoke(self._session_tokens.pop(s.id, None))
             try:
                 s.exit_code = s.handle.exit_code
             except Exception:
