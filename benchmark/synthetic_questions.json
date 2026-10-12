@@ -1428,5 +1428,305 @@
     "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
     "answerable": false,
     "paraphrase_of": null
+  },
+  {
+    "id": "sq121",
+    "question": "Onde esta documentado o procedimento de rollback do servico Quorblax?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq122",
+    "question": "Qual foi a decisao registrada sobre a migracao do modulo Zimtrel?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq123",
+    "question": "Que versao da biblioteca Vandorqui o projeto adotou?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq124",
+    "question": "Quem e o responsavel pelo componente Plixomar segundo as notas?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq125",
+    "question": "Qual o limite de requisicoes configurado para o gateway Ghentoru?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq126",
+    "question": "Em que nota esta o post-mortem do incidente Fyrnadel?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq127",
+    "question": "Onde esta documentado o procedimento de rollback do servico Mosquivar?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq128",
+    "question": "Qual foi a decisao registrada sobre a migracao do modulo Ulthrenix?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq129",
+    "question": "Que versao da biblioteca Dravopeq o projeto adotou?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq130",
+    "question": "Quem e o responsavel pelo componente Kellumbra segundo as notas?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq131",
+    "question": "Qual o limite de requisicoes configurado para o gateway Xandyrol?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq132",
+    "question": "Em que nota esta o post-mortem do incidente Brivoshka?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq133",
+    "question": "Onde esta documentado o procedimento de rollback do servico Ostrelwin?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq134",
+    "question": "Qual foi a decisao registrada sobre a migracao do modulo Jandupel?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq135",
+    "question": "Que versao da biblioteca Nuvrelka o projeto adotou?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq136",
+    "question": "Quem e o responsavel pelo componente Tharsolin segundo as notas?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq137",
+    "question": "Qual o limite de requisicoes configurado para o gateway Wexorbit?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq138",
+    "question": "Em que nota esta o post-mortem do incidente Yamplequ?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq139",
+    "question": "Onde esta documentado o procedimento de rollback do servico Cindrovak?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq140",
+    "question": "Qual foi a decisao registrada sobre a migracao do modulo Hulbaxen?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq141",
+    "question": "Que versao da biblioteca Ibrathel o projeto adotou?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq142",
+    "question": "Quem e o responsavel pelo componente Lopquenar segundo as notas?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq143",
+    "question": "Qual o limite de requisicoes configurado para o gateway Mervitzo?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq144",
+    "question": "Em que nota esta o post-mortem do incidente Qasdrubal?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq145",
+    "question": "Onde esta documentado o procedimento de rollback do servico Rumbelot?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq146",
+    "question": "Qual foi a decisao registrada sobre a migracao do modulo Svintarex?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq147",
+    "question": "Que versao da biblioteca Tolquimar o projeto adotou?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq148",
+    "question": "Quem e o responsavel pelo componente Urvadenko segundo as notas?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq149",
+    "question": "Qual o limite de requisicoes configurado para o gateway Valxorin?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
+  },
+  {
+    "id": "sq150",
+    "question": "Em que nota esta o post-mortem do incidente Zephrodak?",
+    "category": "projetos",
+    "qclass": "unanswerable",
+    "expected_sources": [],
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "paraphrase_of": null
   }
 ]

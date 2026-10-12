@@ -59,6 +59,8 @@ def build_prompt(task: Task, context: str | None = None) -> str:
     without it the prompt is self-contained."""
     if task.kind == "extraction":
         return task.query + "\nResponda APENAS com o JSON, sem texto adicional."
+    if task.kind == "code":  # ANA-039
+        return task.query
     tail = "\nResponda de forma curta e objetiva. Se a informação não existir, diga que não existe."
     if context is not None:
         return (f"{CONTEXT_PREAMBLE}\n<contexto>\n{context or '(nenhum contexto recuperado)'}\n</contexto>\n\n"
@@ -68,7 +70,7 @@ def build_prompt(task: Task, context: str | None = None) -> str:
 
 def is_self_contained(task: Task) -> bool:
     """Tasks answerable from the prompt alone. memory_qa needs retrieved context (see GatewayContext)."""
-    return task.kind == "extraction"
+    return task.kind in ("extraction", "code")
 
 
 class GatewayContext:
@@ -229,6 +231,27 @@ def _extract_json(text: str):
     return t[a:b + 1] if a != -1 and b > a else t
 
 
+def _extract_code(text: str) -> str:
+    """The python source in a model answer: the first fenced block if any, else the raw text."""
+    import re
+    m = re.search(r"```(?:python|py)?\s*\n(.*?)```", text or "", re.S)
+    return (m.group(1) if m else (text or "")).strip() + "\n"
+
+
+def verify_code_task(task: Task, answer: str) -> VerifyResult:
+    """ANA-039: write the answer as solution.py next to the hidden test script and run it through the
+    sandboxed verifier (ExecGuard allowlist, hard timeout, temp copy). Exit code 0 == pass."""
+    import sys
+    import tempfile
+    from pathlib import Path
+    from app.routing.verifiers import verify_tests_pass
+    v = task.verifier
+    with tempfile.TemporaryDirectory(prefix="code_task_") as d:
+        (Path(d) / "solution.py").write_text(_extract_code(answer), encoding="utf-8")
+        (Path(d) / "test_solution.py").write_text(v.get("tests", ""), encoding="utf-8")
+        return verify_tests_pass([sys.executable, "test_solution.py"], d, float(v.get("timeout_s", 20)), enabled=True)
+
+
 def verify_task(task: Task, answer: str | None) -> VerifyResult:
     """The objective success check of docs/ROUTING_SUCCESS_DEFINITION.md (citation check needs retrieval: skipped)."""
     v, gt = task.verifier, task.ground_truth
@@ -246,6 +269,8 @@ def verify_task(task: Task, answer: str | None) -> VerifyResult:
         return res if not bad else VerifyResult(False, res.level, "value_mismatch", {"fields": bad})
     if kind == "abstention":
         return verify_abstention(answer)
+    if kind == "tests_pass":
+        return verify_code_task(task, answer)
     return verify_fact_match(answer, gt.get("expected_facts", []))
 
 

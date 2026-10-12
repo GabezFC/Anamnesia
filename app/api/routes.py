@@ -339,10 +339,12 @@ def benchmark_runs(response: Response, limit: int = 100, offset: int = 0, sessio
 
 
 @router.get("/benchmark/runs/{run_id}")
-def benchmark_run_detail(run_id: str):
+def benchmark_run_detail(run_id: str, request: Request):
     r = gw().db.get_run(run_id)
     if not r:
         raise HTTPException(404, "run não encontrado")
+    if not security.is_local_client(request):  # ANA-041: the delivered context never leaves loopback
+        r = {k: v for k, v in r.items() if k not in ("context", "answer")}
     return r
 
 

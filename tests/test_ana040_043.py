@@ -63,3 +63,14 @@ def test_ana041_metrics_only(tmp_path, monkeypatch):
     db.save_run(row)
     got = db.get_run("r1")
     assert got is not None and not got.get("context")
+
+
+def test_ana041_ttl_and_lan_detail(tmp_path, monkeypatch):
+    import time
+    from app.database.db import Database
+    db = Database(tmp_path / "b.db")
+    db.save_run({"run_id": "old", "query": "q", "pipeline": "baseline", "context": "CTX", "created_at": time.time() - 10 * 86400})
+    db.save_run({"run_id": "new", "query": "q", "pipeline": "baseline", "context": "CTX", "created_at": time.time()})
+    assert db.purge_context(0) == 0
+    assert db.purge_context(7) == 1
+    assert not db.get_run("old").get("context") and db.get_run("new").get("context") == "CTX"

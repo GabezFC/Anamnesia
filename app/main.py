@@ -41,6 +41,13 @@ async def lifespan(_app: FastAPI):
     info = g.warm()
     g.log.info("gateway warm: %s", info)
     routes._state["gateway"] = g
+    try:  # ANA-041: optional short TTL for the stored context text (ANAMNESIA_CONTEXT_TTL_DAYS, 0 = off)
+        import os as _os
+        _ttl = float(_os.environ.get("ANAMNESIA_CONTEXT_TTL_DAYS", "0") or 0)
+        if _ttl > 0:
+            g.log.info("context TTL purge: %s rows", g.db.purge_context(_ttl))
+    except Exception as exc:  # noqa: BLE001
+        g.log.warning("context TTL purge failed: %s", type(exc).__name__)
     # Mint (or load) the local write-protection token before serving any request, so the very
     # first dashboard load can fetch it from GET /config/token (§5.4, §3). Never logged.
     get_or_create_local_token()

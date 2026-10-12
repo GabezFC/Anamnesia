@@ -293,6 +293,17 @@ class Database:
                 r.pop(k, None)
         return r
 
+    def purge_context(self, older_than_days: float) -> int:
+        """ANA-041: blank the stored `context` of runs older than N days (hash/sources/metrics stay).
+        Returns the number of rows touched. N <= 0 is a no-op."""
+        if not older_than_days or older_than_days <= 0:
+            return 0
+        cutoff = time.time() - older_than_days * 86400
+        cur = self._exec(
+            "UPDATE runs SET context = NULL, context_encoding = NULL WHERE context IS NOT NULL AND created_at < ?",
+            (cutoff,))
+        return cur.rowcount or 0
+
     def get_run(self, run_id: str) -> dict | None:
         rows = self.query("SELECT * FROM runs WHERE run_id=?", (run_id,))
         if not rows:

@@ -2842,6 +2842,576 @@
    }
   },
   {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq121"
+   },
+   "id": "rt-sq121",
+   "kind": "memory_qa",
+   "query": "Onde esta documentado o procedimento de rollback do servico Quorblax?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq122"
+   },
+   "id": "rt-sq122",
+   "kind": "memory_qa",
+   "query": "Qual foi a decisao registrada sobre a migracao do modulo Zimtrel?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq123"
+   },
+   "id": "rt-sq123",
+   "kind": "memory_qa",
+   "query": "Que versao da biblioteca Vandorqui o projeto adotou?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq124"
+   },
+   "id": "rt-sq124",
+   "kind": "memory_qa",
+   "query": "Quem e o responsavel pelo componente Plixomar segundo as notas?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq125"
+   },
+   "id": "rt-sq125",
+   "kind": "memory_qa",
+   "query": "Qual o limite de requisicoes configurado para o gateway Ghentoru?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq126"
+   },
+   "id": "rt-sq126",
+   "kind": "memory_qa",
+   "query": "Em que nota esta o post-mortem do incidente Fyrnadel?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq127"
+   },
+   "id": "rt-sq127",
+   "kind": "memory_qa",
+   "query": "Onde esta documentado o procedimento de rollback do servico Mosquivar?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq128"
+   },
+   "id": "rt-sq128",
+   "kind": "memory_qa",
+   "query": "Qual foi a decisao registrada sobre a migracao do modulo Ulthrenix?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq129"
+   },
+   "id": "rt-sq129",
+   "kind": "memory_qa",
+   "query": "Que versao da biblioteca Dravopeq o projeto adotou?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq130"
+   },
+   "id": "rt-sq130",
+   "kind": "memory_qa",
+   "query": "Quem e o responsavel pelo componente Kellumbra segundo as notas?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq131"
+   },
+   "id": "rt-sq131",
+   "kind": "memory_qa",
+   "query": "Qual o limite de requisicoes configurado para o gateway Xandyrol?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq132"
+   },
+   "id": "rt-sq132",
+   "kind": "memory_qa",
+   "query": "Em que nota esta o post-mortem do incidente Brivoshka?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq133"
+   },
+   "id": "rt-sq133",
+   "kind": "memory_qa",
+   "query": "Onde esta documentado o procedimento de rollback do servico Ostrelwin?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq134"
+   },
+   "id": "rt-sq134",
+   "kind": "memory_qa",
+   "query": "Qual foi a decisao registrada sobre a migracao do modulo Jandupel?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq135"
+   },
+   "id": "rt-sq135",
+   "kind": "memory_qa",
+   "query": "Que versao da biblioteca Nuvrelka o projeto adotou?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq136"
+   },
+   "id": "rt-sq136",
+   "kind": "memory_qa",
+   "query": "Quem e o responsavel pelo componente Tharsolin segundo as notas?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq137"
+   },
+   "id": "rt-sq137",
+   "kind": "memory_qa",
+   "query": "Qual o limite de requisicoes configurado para o gateway Wexorbit?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq138"
+   },
+   "id": "rt-sq138",
+   "kind": "memory_qa",
+   "query": "Em que nota esta o post-mortem do incidente Yamplequ?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq139"
+   },
+   "id": "rt-sq139",
+   "kind": "memory_qa",
+   "query": "Onde esta documentado o procedimento de rollback do servico Cindrovak?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq140"
+   },
+   "id": "rt-sq140",
+   "kind": "memory_qa",
+   "query": "Qual foi a decisao registrada sobre a migracao do modulo Hulbaxen?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq141"
+   },
+   "id": "rt-sq141",
+   "kind": "memory_qa",
+   "query": "Que versao da biblioteca Ibrathel o projeto adotou?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq142"
+   },
+   "id": "rt-sq142",
+   "kind": "memory_qa",
+   "query": "Quem e o responsavel pelo componente Lopquenar segundo as notas?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq143"
+   },
+   "id": "rt-sq143",
+   "kind": "memory_qa",
+   "query": "Qual o limite de requisicoes configurado para o gateway Mervitzo?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq144"
+   },
+   "id": "rt-sq144",
+   "kind": "memory_qa",
+   "query": "Em que nota esta o post-mortem do incidente Qasdrubal?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq145"
+   },
+   "id": "rt-sq145",
+   "kind": "memory_qa",
+   "query": "Onde esta documentado o procedimento de rollback do servico Rumbelot?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq146"
+   },
+   "id": "rt-sq146",
+   "kind": "memory_qa",
+   "query": "Qual foi a decisao registrada sobre a migracao do modulo Svintarex?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq147"
+   },
+   "id": "rt-sq147",
+   "kind": "memory_qa",
+   "query": "Que versao da biblioteca Tolquimar o projeto adotou?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq148"
+   },
+   "id": "rt-sq148",
+   "kind": "memory_qa",
+   "query": "Quem e o responsavel pelo componente Urvadenko segundo as notas?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq149"
+   },
+   "id": "rt-sq149",
+   "kind": "memory_qa",
+   "query": "Qual o limite de requisicoes configurado para o gateway Valxorin?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "answer_hint": "Nao existe nota no vault sintetico com essa informacao.",
+    "answerable": false,
+    "difficulty_score": 2,
+    "expected_facts": [],
+    "gold_notes": [],
+    "qclass": "unanswerable",
+    "source_question": "sq150"
+   },
+   "id": "rt-sq150",
+   "kind": "memory_qa",
+   "query": "Em que nota esta o post-mortem do incidente Zephrodak?",
+   "risk": "high",
+   "verifier": {
+    "type": "abstention"
+   }
+  },
+  {
    "difficulty_label": "medium",
    "ground_truth": {
     "expected_json": {

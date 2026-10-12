@@ -1,0 +1,374 @@
+{
+ "seed": 0,
+ "tasks": [
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "function": "soma_pares",
+    "reference": "def soma_pares(nums):\n    return sum(n for n in nums if n % 2 == 0)\n"
+   },
+   "id": "rt-code001",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `soma_pares(nums)` que retorna a soma dos numeros pares da lista (0 se nao houver). Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = soma_pares([1,2,3,4])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 6:\n    fails.append(('soma_pares([1,2,3,4])', got))\ntry:\n    got = soma_pares([])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 0:\n    fails.append(('soma_pares([])', got))\ntry:\n    got = soma_pares([1,3])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 0:\n    fails.append(('soma_pares([1,3])', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "function": "inverte_palavras",
+    "reference": "def inverte_palavras(s):\n    return ' '.join(reversed(s.split()))\n"
+   },
+   "id": "rt-code002",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `inverte_palavras(s)` que inverte a ORDEM das palavras de uma frase separada por espacos simples. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = inverte_palavras('a b c')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 'c b a':\n    fails.append((\"inverte_palavras('a b c')\", got))\ntry:\n    got = inverte_palavras('x')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 'x':\n    fails.append((\"inverte_palavras('x')\", got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "function": "eh_palindromo",
+    "reference": "def eh_palindromo(s):\n    t=[c.lower() for c in s if c.isalnum()]\n    return t==t[::-1]\n"
+   },
+   "id": "rt-code003",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `eh_palindromo(s)` que True se s e palindromo ignorando maiusculas, espacos e pontuacao. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = eh_palindromo('Anotaram a data da maratona')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != True:\n    fails.append((\"eh_palindromo('Anotaram a data da maratona')\", got))\ntry:\n    got = eh_palindromo('abc')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != False:\n    fails.append((\"eh_palindromo('abc')\", got))\ntry:\n    got = eh_palindromo('A man, a plan, a canal: Panama')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != True:\n    fails.append((\"eh_palindromo('A man, a plan, a canal: Panama')\", got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "function": "fatorial",
+    "reference": "def fatorial(n):\n    if n<0:\n        raise ValueError\n    r=1\n    for i in range(2,n+1):\n        r*=i\n    return r\n"
+   },
+   "id": "rt-code004",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `fatorial(n)` que fatorial de n>=0; levanta ValueError se n<0. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = fatorial(0)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 1:\n    fails.append(('fatorial(0)', got))\ntry:\n    got = fatorial(5)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 120:\n    fails.append(('fatorial(5)', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "function": "fibonacci",
+    "reference": "def fibonacci(n):\n    a,b=0,1\n    for _ in range(n):\n        a,b=b,a+b\n    return a\n"
+   },
+   "id": "rt-code005",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `fibonacci(n)` que n-esimo Fibonacci com fibonacci(0)=0 e fibonacci(1)=1. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = fibonacci(0)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 0:\n    fails.append(('fibonacci(0)', got))\ntry:\n    got = fibonacci(1)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 1:\n    fails.append(('fibonacci(1)', got))\ntry:\n    got = fibonacci(10)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 55:\n    fails.append(('fibonacci(10)', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "function": "conta_vogais",
+    "reference": "def conta_vogais(s):\n    return sum(1 for c in s.lower() if c in 'aeiou')\n"
+   },
+   "id": "rt-code006",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `conta_vogais(s)` que conta vogais (aeiou, sem acento, maiusculas contam). Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = conta_vogais('Abacaxi')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 4:\n    fails.append((\"conta_vogais('Abacaxi')\", got))\ntry:\n    got = conta_vogais('xyz')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 0:\n    fails.append((\"conta_vogais('xyz')\", got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "function": "remove_duplicados",
+    "reference": "def remove_duplicados(xs):\n    seen=set(); out=[]\n    for x in xs:\n        if x not in seen:\n            seen.add(x); out.append(x)\n    return out\n"
+   },
+   "id": "rt-code007",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `remove_duplicados(xs)` que remove duplicados preservando a ordem da primeira ocorrencia. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = remove_duplicados([3,1,3,2,1])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != [3, 1, 2]:\n    fails.append(('remove_duplicados([3,1,3,2,1])', got))\ntry:\n    got = remove_duplicados([])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != []:\n    fails.append(('remove_duplicados([])', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "function": "maximo_segundo",
+    "reference": "def maximo_segundo(xs):\n    u=sorted(set(xs), reverse=True)\n    return u[1] if len(u)>1 else None\n"
+   },
+   "id": "rt-code008",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `maximo_segundo(xs)` que segundo maior VALOR distinto; None se houver menos de 2 valores distintos. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = maximo_segundo([1,5,5,3])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 3:\n    fails.append(('maximo_segundo([1,5,5,3])', got))\ntry:\n    got = maximo_segundo([2,2])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != None:\n    fails.append(('maximo_segundo([2,2])', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "function": "rle",
+    "reference": "def rle(s):\n    out=[]; i=0\n    while i<len(s):\n        j=i\n        while j<len(s) and s[j]==s[i]:\n            j+=1\n        out.append(s[i]+str(j-i)); i=j\n    return ''.join(out)\n"
+   },
+   "id": "rt-code009",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `rle(s)` que run-length encoding: 'aaabcc' -> 'a3b1c2'; string vazia -> ''. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = rle('aaabcc')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 'a3b1c2':\n    fails.append((\"rle('aaabcc')\", got))\ntry:\n    got = rle('')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != '':\n    fails.append((\"rle('')\", got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "function": "anagramas",
+    "reference": "def anagramas(a, b):\n    f=lambda x: sorted(x.lower().replace(' ',''))\n    return f(a)==f(b)\n"
+   },
+   "id": "rt-code010",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `anagramas(a, b)` que True se a e b sao anagramas ignorando maiusculas e espacos. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = anagramas('Amor','Roma')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != True:\n    fails.append((\"anagramas('Amor','Roma')\", got))\ntry:\n    got = anagramas('abc','abd')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != False:\n    fails.append((\"anagramas('abc','abd')\", got))\ntry:\n    got = anagramas('a b','ba')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != True:\n    fails.append((\"anagramas('a b','ba')\", got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "function": "binaria",
+    "reference": "def binaria(xs, alvo):\n    lo,hi=0,len(xs)-1\n    while lo<=hi:\n        m=(lo+hi)//2\n        if xs[m]==alvo:\n            return m\n        if xs[m]<alvo:\n            lo=m+1\n        else:\n            hi=m-1\n    return -1\n"
+   },
+   "id": "rt-code011",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `binaria(xs, alvo)` que busca binaria em lista ordenada; retorna o indice ou -1. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = binaria([1,3,5,7],5)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 2:\n    fails.append(('binaria([1,3,5,7],5)', got))\ntry:\n    got = binaria([1,3,5,7],4)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != -1:\n    fails.append(('binaria([1,3,5,7],4)', got))\ntry:\n    got = binaria([],1)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != -1:\n    fails.append(('binaria([],1)', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "function": "merge_ordenado",
+    "reference": "def merge_ordenado(a, b):\n    i=j=0; out=[]\n    while i<len(a) and j<len(b):\n        if a[i]<=b[j]:\n            out.append(a[i]); i+=1\n        else:\n            out.append(b[j]); j+=1\n    return out+a[i:]+b[j:]\n"
+   },
+   "id": "rt-code012",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `merge_ordenado(a, b)` que intercala duas listas ja ordenadas em uma lista ordenada. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = merge_ordenado([1,4],[2,3,5])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != [1, 2, 3, 4, 5]:\n    fails.append(('merge_ordenado([1,4],[2,3,5])', got))\ntry:\n    got = merge_ordenado([],[1])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != [1]:\n    fails.append(('merge_ordenado([],[1])', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "function": "parenteses",
+    "reference": "def parenteses(s):\n    pairs={')':'(',']':'[','}':'{'}; st=[]\n    for c in s:\n        if c in '([{':\n            st.append(c)\n        elif c in pairs:\n            if not st or st.pop()!=pairs[c]:\n                return False\n    return not st\n"
+   },
+   "id": "rt-code013",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `parenteses(s)` que True se os parenteses/colchetes/chaves de s estao balanceados. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = parenteses('([]{})')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != True:\n    fails.append((\"parenteses('([]{})')\", got))\ntry:\n    got = parenteses('(]')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != False:\n    fails.append((\"parenteses('(]')\", got))\ntry:\n    got = parenteses('((')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != False:\n    fails.append((\"parenteses('((')\", got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "function": "mdc",
+    "reference": "def mdc(a, b):\n    while b:\n        a,b=b,a%b\n    return a\n"
+   },
+   "id": "rt-code014",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `mdc(a, b)` que maximo divisor comum de inteiros positivos. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = mdc(12,18)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 6:\n    fails.append(('mdc(12,18)', got))\ntry:\n    got = mdc(7,13)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 1:\n    fails.append(('mdc(7,13)', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "function": "primos_ate",
+    "reference": "def primos_ate(n):\n    return [p for p in range(2,n+1) if all(p%d for d in range(2,int(p**0.5)+1))]\n"
+   },
+   "id": "rt-code015",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `primos_ate(n)` que lista de primos <= n em ordem crescente. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = primos_ate(10)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != [2, 3, 5, 7]:\n    fails.append(('primos_ate(10)', got))\ntry:\n    got = primos_ate(1)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != []:\n    fails.append(('primos_ate(1)', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "function": "transpoe",
+    "reference": "def transpoe(m):\n    return [list(r) for r in zip(*m)]\n"
+   },
+   "id": "rt-code016",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `transpoe(m)` que transposta de uma matriz (lista de listas retangular); [] -> []. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = transpoe([[1,2,3],[4,5,6]])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != [[1, 4], [2, 5], [3, 6]]:\n    fails.append(('transpoe([[1,2,3],[4,5,6]])', got))\ntry:\n    got = transpoe([])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != []:\n    fails.append(('transpoe([])', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "easy",
+   "ground_truth": {
+    "function": "camel_para_snake",
+    "reference": "def camel_para_snake(s):\n    out=''\n    for c in s:\n        out += ('_'+c.lower()) if c.isupper() else c\n    return out\n"
+   },
+   "id": "rt-code017",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `camel_para_snake(s)` que converte camelCase para snake_case (letras maiusculas viram _minuscula). Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = camel_para_snake('minhaVariavelLonga')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 'minha_variavel_longa':\n    fails.append((\"camel_para_snake('minhaVariavelLonga')\", got))\ntry:\n    got = camel_para_snake('abc')\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 'abc':\n    fails.append((\"camel_para_snake('abc')\", got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "function": "agrupa_por_tamanho",
+    "reference": "def agrupa_por_tamanho(palavras):\n    d={}\n    for p in palavras:\n        d.setdefault(len(p),[]).append(p)\n    return d\n"
+   },
+   "id": "rt-code018",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `agrupa_por_tamanho(palavras)` que dict {tamanho: [palavras na ordem de entrada]}. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = agrupa_por_tamanho(['a','bb','c','dd'])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != {1: ['a', 'c'], 2: ['bb', 'dd']}:\n    fails.append((\"agrupa_por_tamanho(['a','bb','c','dd'])\", got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "function": "intervalos",
+    "reference": "def intervalos(xs):\n    out=[]\n    for a,b in sorted(xs):\n        if out and a<=out[-1][1]:\n            out[-1][1]=max(out[-1][1],b)\n        else:\n            out.append([a,b])\n    return out\n"
+   },
+   "id": "rt-code019",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `intervalos(xs)` que mescla intervalos [a,b] sobrepostos/adjacentes (b>=proximo a) e retorna lista ordenada de listas. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = intervalos([[1,3],[2,6],[8,10]])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != [[1, 6], [8, 10]]:\n    fails.append(('intervalos([[1,3],[2,6],[8,10]])', got))\ntry:\n    got = intervalos([[1,2],[2,3]])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != [[1, 3]]:\n    fails.append(('intervalos([[1,2],[2,3]])', got))\ntry:\n    got = intervalos([])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != []:\n    fails.append(('intervalos([])', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "function": "lru_simula",
+    "reference": "def lru_simula(capacidade, ops):\n    from collections import OrderedDict\n    c=OrderedDict(); out=[]\n    for op in ops:\n        if op[0]=='set':\n            c[op[1]]=op[2]; c.move_to_end(op[1])\n            if len(c)>capacidade:\n                c.popitem(last=False)\n        else:\n            if op[1] in c:\n                c.move_to_end(op[1]); out.append(c[op[1]])\n            else:\n                out.append(None)\n    return out\n"
+   },
+   "id": "rt-code020",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `lru_simula(capacidade, ops)` que simula cache LRU: ops = lista de ('set',k,v) ou ('get',k); retorna lista com o resultado de cada get (None se ausente). Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = lru_simula(2,[('set','a',1),('set','b',2),('get','a'),('set','c',3),('get','b'),('get','c')])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != [1, None, 3]:\n    fails.append((\"lru_simula(2,[('set','a',1),('set','b',2),('get','a'),('set','c',3),('get','b'),('get','c')])\", got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "function": "romano",
+    "reference": "def romano(n):\n    t=[(1000,'M'),(900,'CM'),(500,'D'),(400,'CD'),(100,'C'),(90,'XC'),(50,'L'),(40,'XL'),(10,'X'),(9,'IX'),(5,'V'),(4,'IV'),(1,'I')]\n    out=''\n    for v,s in t:\n        while n>=v:\n            out+=s; n-=v\n    return out\n"
+   },
+   "id": "rt-code021",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `romano(n)` que converte inteiro 1..3999 para numeral romano. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = romano(4)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 'IV':\n    fails.append(('romano(4)', got))\ntry:\n    got = romano(1994)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 'MCMXCIV':\n    fails.append(('romano(1994)', got))\ntry:\n    got = romano(58)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != 'LVIII':\n    fails.append(('romano(58)', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "medium",
+   "ground_truth": {
+    "function": "duas_somas",
+    "reference": "def duas_somas(xs, alvo):\n    for i in range(len(xs)):\n        for j in range(i+1,len(xs)):\n            if xs[i]+xs[j]==alvo:\n                return (i,j)\n    return None\n"
+   },
+   "id": "rt-code022",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `duas_somas(xs, alvo)` que retorna o par de INDICES (i, j), i<j, com xs[i]+xs[j]==alvo, menor i primeiro; None se nao existir. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = duas_somas([2,7,11,15],9)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != (0, 1):\n    fails.append(('duas_somas([2,7,11,15],9)', got))\ntry:\n    got = duas_somas([1,2],10)\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != None:\n    fails.append(('duas_somas([1,2],10)', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  },
+  {
+   "difficulty_label": "hard",
+   "ground_truth": {
+    "function": "achata",
+    "reference": "def achata(x):\n    out=[]\n    for e in x:\n        if isinstance(e,list):\n            out.extend(achata(e))\n        else:\n            out.append(e)\n    return out\n"
+   },
+   "id": "rt-code023",
+   "kind": "code",
+   "query": "Escreva em Python a funcao `achata(x)` que achata listas aninhadas em profundidade arbitraria (apenas listas) em uma lista simples. Responda APENAS com o codigo da funcao (sem testes, sem explicacao).",
+   "risk": "low",
+   "verifier": {
+    "tests": "from solution import *\nimport sys\nfails = []\ntry:\n    got = achata([1,[2,[3,[4]]],5])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != [1, 2, 3, 4, 5]:\n    fails.append(('achata([1,[2,[3,[4]]],5])', got))\ntry:\n    got = achata([])\nexcept Exception as e:\n    got = ('EXC', type(e).__name__)\nif got != []:\n    fails.append(('achata([])', got))\nsys.exit(1 if fails else 0)\n",
+    "timeout_s": 20,
+    "type": "tests_pass"
+   }
+  }
+ ],
+ "version": 1
+}
