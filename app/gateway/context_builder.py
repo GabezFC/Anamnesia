@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from app.gateway.token_budget import estimate_tokens, truncate_to_tokens
 from app.schemas.models import Candidate, Source
+from app.services.injection_screen import screen
 
 CONSUMER_PROMPT_TEMPLATE = """Você é um assistente de gestão de conhecimento.
 
@@ -44,7 +45,7 @@ def render_prompt(context: str, question: str) -> str:
 
 class ModelContextBuilder:
     def __init__(self, budget_tokens: int, per_source_max_tokens: int = 1500, compact_headers: bool = False,
-                 section_max_chars: int = 60):
+                 section_max_chars: int = 60, screen_delivered: bool = False):
         self.budget = budget_tokens
         self.per_source_max = per_source_max_tokens
         # Compact headers (optimization layer): the section attribute carries only the LAST heading,
@@ -52,6 +53,20 @@ class ModelContextBuilder:
         # the repeated "Title > Section > Subsection" path whose first segment restates the file name.
         self.compact_headers = compact_headers
         self.section_max_chars = section_max_chars
+        # ANA-020: the optimizer flags the SNIPPET, but what is delivered is usually the whole note
+        # (full_texts), so an injection outside the snippet used to go through unflagged. When on,
+        # the text that is actually rendered is screened here, after truncation. Adds a warning only.
+        self.screen_delivered = screen_delivered
+        self.delivered_flagged = 0
+
+    @staticmethod
+    def scan_delivered(text: str) -> list[str]:
+        """Strong injection signals (+ invisible Unicode) in the exact text about to be delivered."""
+        from app.gateway.optimizer import _INVISIBLE
+        sig = [s for s in screen(text).signals if s.startswith("strong:")]
+        if _INVISIBLE.search(text):
+            sig.append("invisible_unicode")
+        return sig
 
     @staticmethod
     def rank(cands: list[Candidate]) -> list[Candidate]:
@@ -95,6 +110,17 @@ class ModelContextBuilder:
                 section = section[: self.section_max_chars - 1].rstrip() + "…"
         return f'<note source="{c.source_file}" section="{section}"{rel}{warn}>\n{head}{text}\n</note>'
 
+    def _flag_delivered(self, c: Candidate, text: str) -> None:
+        if not self.screen_delivered or (c.meta or {}).get("injection_flag"):
+            return
+        try:
+            sig = self.scan_delivered(text)
+        except Exception:  # noqa: BLE001 -- screening must never break delivery
+            return
+        if sig:
+            c.meta = {**(c.meta or {}), "injection_flag": sig[:3], "injection_flag_scope": "delivered_text"}
+            self.delivered_flagged += 1
+
     def build(self, cands: list[Candidate], full_texts: dict[str, str] | None = None,
               provenance: dict[str, str] | None = None) -> tuple[str, list[Source], int]:
         """full_texts: candidate_id -> expanded text (full note/section) for survivors (§28).
@@ -110,6 +136,7 @@ class ModelContextBuilder:
         for c in self.rank(cands):
             text = full_texts.get(c.candidate_id, c.snippet)
             text = truncate_to_tokens(text, self.per_source_max)
+            self._flag_delivered(c, text)
             line = provenance.get(c.candidate_id)
             b = self.block(c, text, line)
             t = estimate_tokens(b)
@@ -118,6 +145,7 @@ class ModelContextBuilder:
                 if remaining < 120:
                     continue
                 text = truncate_to_tokens(text, remaining)
+                self._flag_delivered(c, text)
                 b = self.block(c, text, line)
                 t = estimate_tokens(b)
             blocks.append(b)

@@ -9,12 +9,65 @@ Extraction tasks: seeded sample of MANIFEST facts, JSON schema verifier.
 """
 import json
 import random
+import re
 import sys
+import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 20261006
 N_EXTRACTION = 24
+VERSION = 2  # v2 (ANA-001): memory_qa queries no longer contain the expected fact (cloze style)
+MASK = "___"
+
+
+def norm(text):
+    t = unicodedata.normalize("NFKD", str(text).lower())
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def leaks(query, facts):
+    """True if any expected fact appears verbatim (normalized) in the query."""
+    nq = norm(query)
+    return any(norm(f) in nq for f in facts if f)
+
+
+def topic_of(path):
+    """Human topic from the note path: 'x/reranker-local-023.md' -> 'reranker local'."""
+    stem = Path(path).stem
+    stem = re.sub(r"[-_]?\d+$", "", stem)
+    return stem.replace("-", " ").replace("_", " ").strip()
+
+
+def masked_query(q, fact):
+    """Describe the CONTEXT of the target fact, never its value (ANA-001).
+
+    The cloze sentence is the manifest fact with its token blanked out, anchored by the note topic.
+    """
+    cloze = fact["fact"].replace(fact["token"], MASK)
+    topic = topic_of(fact["path"])
+    qc = q["qclass"]
+    if qc == "short":
+        return f"{topic}: {cloze}?"
+    if qc == "long":
+        return (f"Preciso reconstruir a linha de raciocinio sobre {topic}: em que nota esta registrado "
+                f"que {cloze}, qual era o contexto da decisao na epoca e que consequencia pratica "
+                "ficou anotada para quem for mexer nisso depois?")
+    if qc == "navigation":
+        return f"Em que arquivo do vault esta a anotacao sobre {topic} em que {cloze}?"
+    if qc == "multi_hop":
+        return (f"A nota sobre {topic} em que {cloze} aponta para outra nota relacionada; "
+                "quais sao as duas e como se conectam?")
+    if qc == "paraphrased":
+        return f"Me lembra o que ficou registrado na nota de {topic} a respeito de: {cloze}?"
+    if qc == "ambiguous":
+        return f"E sobre aquilo de {topic}, em que {cloze}, tem algo?"
+    if qc == "technical":
+        return f"Em qual contexto tecnico da nota {topic} aparece que {cloze} e qual foi a implicacao para o pipeline?"
+    if qc == "rare_terms":
+        return f"O que a nota {topic} diz exatamente quando {cloze}?"
+    return f"Qual o registro na nota {topic} em que {cloze}?"
 
 
 def difficulty_score(q, dup, arch):
@@ -53,13 +106,18 @@ def build():
         gold = q["expected_sources"]
         if q["answerable"]:
             exp = [facts[p]["token"] for p in gold if p in facts][:1]
+            fobj = next(facts[p] for p in gold if p in facts)
+            query = masked_query(q, fobj)
+            if leaks(query, exp):  # ANA-001 guard: the generator itself refuses a leaking query
+                raise AssertionError(f"{q['id']}: expected fact leaked into query: {query!r}")
             gt = {"gold_notes": gold, "expected_facts": exp, "answer_hint": q["answer_hint"], "answerable": True}
             ver = {"type": "fact_match+citation", "mode": "all"}
         else:
             gt = {"gold_notes": [], "expected_facts": [], "answer_hint": q["answer_hint"], "answerable": False}
+            query = q["question"]
             ver = {"type": "abstention"}
         risk = "high" if not q["answerable"] else "medium" if q["qclass"] == "multi_hop" else "low"
-        tasks.append({"id": f"rt-{q['id']}", "kind": "memory_qa", "query": q["question"],
+        tasks.append({"id": f"rt-{q['id']}", "kind": "memory_qa", "query": query,
                       "difficulty_label": label(sc),
                       "ground_truth": {**gt, "source_question": q["id"], "qclass": q["qclass"],
                                        "difficulty_score": sc},
@@ -76,7 +134,7 @@ def build():
                       "ground_truth": {"expected_json": {"path": f["path"], "token": f["token"]}},
                       "verifier": {"type": "json_schema", "schema": schema, "match_expected": True},
                       "risk": "low"})
-    return {"seed": SEED, "version": 1, "tasks": tasks}
+    return {"seed": SEED, "version": VERSION, "tasks": tasks}
 
 
 def main():

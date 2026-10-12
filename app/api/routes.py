@@ -22,7 +22,7 @@ from app.benchmark.statistics import aggregate_stats
 from app.benchmark.timeseries import DEFAULT_MAX_POINTS, MAX_POINTS_CEILING, build_timeseries
 from app.schemas.models import DEFAULT_EXPLICIT_PIPELINE, PIPELINES
 from app.services import security
-from app.services.envfile import set_env_var
+from app.services.envfile import EnvValueError, set_env_var
 from app.services.security import (MODEL_KEY_ENV_VARS, get_or_create_local_token, mask_secret,
                                    require_local_write, require_localhost)
 from config import local_settings as local_cfg
@@ -453,7 +453,10 @@ def set_model_key(req: ModelKeyRequest):
     if req.key_name not in MODEL_KEY_ENV_VARS:
         raise HTTPException(422, f"key_name inválido: {req.key_name!r}. Use um de {MODEL_KEY_ENV_VARS}")
     # Never logged: no logger call anywhere in this path touches req.value.
-    set_env_var(security.ENV_PATH, req.key_name, req.value)
+    try:
+        set_env_var(security.ENV_PATH, req.key_name, req.value)  # ANA-006: validates before writing
+    except EnvValueError as exc:
+        raise HTTPException(422, str(exc)) from None
     os.environ[req.key_name] = req.value
     return {"key_name": req.key_name, "masked": mask_secret(req.value)}
 

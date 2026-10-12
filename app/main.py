@@ -80,6 +80,17 @@ def create_app() -> FastAPI:
     allowed.discard("0.0.0.0")  # a wildcard bind is not a valid Host header to trust
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=sorted(allowed))
 
+    # ANA-005 / P-01: with a non-loopback bind every route except /health and the static shell needs
+    # the local token, even for reads (the request body of /memory/search is the user's whole vault).
+    @app.middleware("http")
+    async def _require_read_auth(request, call_next):
+        from fastapi.responses import JSONResponse
+        from app.services import security
+        if security.read_auth_required(cfg.host, request) and not security.has_valid_token(request):
+            return JSONResponse({"detail": "X-MG-Token (ou Bearer) obrigatório: servidor exposto na rede"},
+                                status_code=401)
+        return await call_next(request)
+
     @app.middleware("http")
     async def _security_headers(request, call_next):
         resp = await call_next(request)

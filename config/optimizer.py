@@ -22,7 +22,7 @@ from config import PROJECT_ROOT, env_bool, env_float, env_int, env_str  # noqa: 
 # Part of the result-cache key and of every run's metrics. Bump when a stage changes MEANING.
 # mol-v2 (2026-10-02): provenance lines, temporality (supersession/archived) and conflict demotion
 # joined the layer, so the same query over the same vault now delivers a different context.
-OPTIMIZER_VERSION = "mol-v2"
+OPTIMIZER_VERSION = "mol-v3"
 
 ROUTE_TARGETS = ("baseline", "graphify", "graphify_jev", "graphify_jev_opt")
 

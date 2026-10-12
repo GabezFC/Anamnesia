@@ -64,9 +64,29 @@ def gateway():
     return _gateway
 
 
+def enforce_scope(requested: str | None) -> str | None:
+    """ANA-008 / P-05: the terminal launcher injects MG_SCOPE; the MCP server must honour it.
+
+    With MG_SCOPE set the caller can only NARROW (ask for a subset of the pinned projects/areas),
+    never widen or move sideways to another project. Without MG_SCOPE nothing changes.
+    """
+    pinned_raw = os.environ.get("MG_SCOPE", "").strip()
+    if not pinned_raw:
+        return requested or None
+    from app.services.scope import parse_scope
+    pinned = parse_scope(pinned_raw)
+    if pinned.is_global:
+        return requested or None
+    want = parse_scope(requested)
+    if not want.is_global and want.projects <= pinned.projects and want.areas <= pinned.areas:
+        return want.label()
+    return pinned.label()
+
+
 def _search(query: str, pipeline: str, max_results: int, scope: str | None = None,
             response: str | None = None, client: str | None = None, mode: str = "context") -> dict:
     max_results = max(1, min(int(max_results), 20))
+    scope = enforce_scope(scope)
     r = gateway().search(query, pipeline, max_results, scope=scope or None,
                          run_meta={"kind": "mcp", "agent": "mcp", "client": client})
     extras = {}

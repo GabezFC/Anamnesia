@@ -7,11 +7,33 @@ Never touches the vault; the file lives at the project root and is gitignored.
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import threading
 from pathlib import Path
 
 _LOCK = threading.Lock()
+
+# ANA-006: the single choke point for every .env write. A value holding CR/LF/NUL would start a new
+# line in the file (injecting e.g. `MG_HOST=0.0.0.0`), so it is rejected here, not in each caller.
+KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+MAX_VALUE_LEN = 4096
+_FORBIDDEN = (chr(13), chr(10), chr(0))
+
+
+class EnvValueError(ValueError):
+    """Key or value refused by set_env_var; the .env file is left untouched."""
+
+
+def validate_env_pair(key: str, value: str) -> None:
+    if not isinstance(key, str) or not KEY_RE.match(key):
+        raise EnvValueError("nome de variável inválido")
+    if not isinstance(value, str):
+        raise EnvValueError("valor deve ser texto")
+    if any(ch in value for ch in _FORBIDDEN):
+        raise EnvValueError("valor não pode conter quebra de linha ou NUL")
+    if len(value) > MAX_VALUE_LEN:
+        raise EnvValueError(f"valor excede {MAX_VALUE_LEN} caracteres")
 
 
 def read_env_lines(path: Path) -> list[str]:
@@ -26,6 +48,7 @@ def set_env_var(path: Path, key: str, value: str) -> None:
 
     Atomic (temp file + os.replace): a crash mid-write never leaves a half-written `.env`.
     """
+    validate_env_pair(key, value)
     prefix = f"{key}="
     with _LOCK:
         lines = read_env_lines(path)

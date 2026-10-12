@@ -1,0 +1,19 @@
+{
+ "corpus_hash": "d940b27123886488007841da55760f162dcdf7f4d0786a250f9707c12649f892",
+ "coverage": {
+  "gap_items": 30,
+  "gap_unanswerable": 20,
+  "meets_targets": false,
+  "n": 120,
+  "splits": {
+   "test": 24,
+   "train": 75,
+   "val": 21
+  },
+  "unanswerable": 10
+ },
+ "items_sha256": "a1118d5ee683c80ce247dff2e42f1885aa8df2d0bc6a3c8ebfe1c2a9e25ae1b6",
+ "owner": "Gabriel",
+ "split_salt": "anamnesia-eval-v1",
+ "version": "golden-v1"
+}

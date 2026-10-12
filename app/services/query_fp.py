@@ -66,12 +66,16 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+# NEGATORS must never be added to STOPWORDS (ANA-003).
 # Part of every cache key that depends on query normalization. Bump on ANY behaviour change here.
 # qn-v2 (2026-09-27): L3 fingerprint became ANCHOR-based (carrier vocabulary removed) after qn-v1
 # measured 0/20 hits on the declared paraphrase pairs; the -ar/-er/-ir infinitive suffixes were also
 # removed from the stemmer because they truncated agent nouns ("driver" -> "driv") and desynchronized
 # singular from plural. Every qn-v1 entry is unreachable under this version, which is the point.
-QUERY_NORMALIZER_VERSION = "qn-v2"
+# qn-v3 (2026-10-11, ANA-003): negators (nao, nem, sem, not) are no longer stop-words. "Qual porta o
+# servico usa?" and "Qual porta o servico NAO usa?" used to share one canonical key, so the cache
+# served the context of the opposite question. Every qn-v2 entry is unreachable under this version.
+QUERY_NORMALIZER_VERSION = "qn-v3"
 
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9\-\.:_]*")
 
@@ -79,11 +83,11 @@ _TOKEN = re.compile(r"[a-z0-9][a-z0-9\-\.:_]*")
 # that carries no retrieval signal must not carry cache-identity signal either.
 STOPWORDS = frozenset("""
 a o as os um uma uns umas de do da dos das em no na nos nas por pelo pela pelos pelas para pra com
-sem e ou que qual quais quando como onde porque porque se ser foi era eh sao esta estao estao mais
+e ou que qual quais quando como onde porque porque se ser foi era eh sao esta estao estao mais
 menos ja ainda sobre entre ate tambem foram tem ter ha fazer feito sido usa usam use usado usar
 meu minha meus minhas seu sua seus suas nosso nossa isso isto esse essa este esta aquele aquela
-ao aos eu voce ele ela lhe nao nem mas the of and to in is are was were what how why which who
-whom for on with be being been it its this that these those there then than at from by as or not
+ao aos eu voce ele ela lhe mas the of and to in is are was were what how why which who
+whom for on with be being been it its this that these those there then than at from by as or
 no do does did can could should would will shall may might must about into over under
 me mim te ti se si nos vos lhes meu minha teu tua dele dela deles delas
 """.split())

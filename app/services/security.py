@@ -96,3 +96,32 @@ def require_local_write(request: Request) -> None:
     got = request.headers.get("x-mg-token")
     if not got or not secrets.compare_digest(got, expected):
         raise HTTPException(403, "X-MG-Token ausente ou inválido")
+
+
+# -- ANA-005 / P-01: authentication for READS when the server is reachable from the network ------
+_OPEN_PATHS = {"/health", "/", "/favicon.ico"}
+_OPEN_PREFIXES = ("/static/",)
+
+
+def is_exposed_bind(host: str | None) -> bool:
+    """True when the server listens on something other than loopback (0.0.0.0, a LAN IP, ::)."""
+    h = (host or "").strip().lower().strip("[]")
+    return h not in {"127.0.0.1", "localhost", "::1"}
+
+
+def read_auth_required(host: str | None, request: Request) -> bool:
+    """Reads need a token iff the bind is exposed, the caller is not loopback, and the path is not
+    one of the few public ones (/health, the static shell). Loopback callers keep working unchanged."""
+    if not is_exposed_bind(host) or is_local_client(request):
+        return False
+    path = request.url.path
+    return not (path in _OPEN_PATHS or path.startswith(_OPEN_PREFIXES))
+
+
+def has_valid_token(request: Request) -> bool:
+    got = request.headers.get("x-mg-token")
+    if not got:
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            got = auth[7:].strip()
+    return bool(got) and secrets.compare_digest(got, get_or_create_local_token())

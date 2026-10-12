@@ -153,6 +153,7 @@ class MemoryGateway:
             self.optimizer.mark_built(self.vault.fingerprint())
         except Exception:  # noqa: BLE001
             pass
+        self.graphify_warm = g  # ANA-017: the benchmark runner reads this to refuse degraded graphify arms
         return {"baseline_sections": self.baseline.sections_indexed, "graphify": g,
                 "warm_ms": round((time.perf_counter() - t0) * 1000, 1)}
 
@@ -171,7 +172,8 @@ class MemoryGateway:
         b = ModelContextBuilder(budget or self.retrieval_cfg.model_context_budget,
                                 self.retrieval_cfg.per_source_max_tokens,
                                 compact_headers=oc.enabled and oc.compact_headers,
-                                section_max_chars=oc.header_section_max_chars)
+                                section_max_chars=oc.header_section_max_chars,
+                                screen_delivered=oc.enabled and oc.injection_flag)
         return b.build(candidates, full_texts, provenance=provenance)
 
     def provenance_for(self, cands, pipeline: str):

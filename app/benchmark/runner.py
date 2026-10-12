@@ -44,6 +44,10 @@ def estimate_plan(n_questions: int, pipelines: list[str], consumers: list[dict],
             "formula": f"{n_questions} × {len(pipelines)} × {n_consumers} × {repetitions}"}
 
 
+class GraphifyUnavailable(RuntimeError):
+    """ANA-017: benchmark refused because graphify did not build."""
+
+
 class BenchmarkRunner:
     def __init__(self, gateway, progress: Callable[[dict], None] | None = None):
         self.gw = gateway
@@ -90,6 +94,8 @@ class BenchmarkRunner:
                   "jev": {**self.gw.jev_cfg.__dict__, **(jev_overrides or {})}, "mode": mode,
                   "cache_enabled": False, "max_results": max_results,
                   "plan": estimate_plan(len(questions), pipelines, consumers, repetitions)}
+        if any(p.startswith("graphify") for p in pipelines):
+            self._require_graphify()
         self.gw.db.create_session(session_id, mode, config, notes)
         results: list[dict] = []
         try:
@@ -113,6 +119,24 @@ class BenchmarkRunner:
         return {"session_id": session_id, "mode": mode, "runs": len(results), "config": config,
                 "comparison": compare(results)}
 
+    def _require_graphify(self) -> None:
+        """ANA-017: in benchmark mode a failed graphify build is an ERROR, not a warning followed by a
+        run whose 'graphify' numbers are really BM25 seeds. Callers may opt out with allow_degraded."""
+        if getattr(self, "allow_degraded", False):
+            return
+        g = getattr(self.gw, "graphify_warm", None)
+        if isinstance(g, dict) and g.get("error"):
+            raise GraphifyUnavailable(
+                f"graphify build falhou ({g['error']}); bracos graphify* nao sao comparaveis. "
+                "Corrija o binario ou rode sem pipelines graphify.")
+
+    def _graphify_ok(self, pipeline: str) -> bool | None:
+        """ANA-017: None for pipelines that never use the graph; False when the build failed."""
+        if not pipeline.startswith("graphify"):
+            return None
+        g = getattr(self.gw, "graphify_warm", None)
+        return None if g is None else not (isinstance(g, dict) and g.get("error"))
+
     def _one(self, session_id, q, pipeline, spec, rep, idx, jev_overrides, max_results, mode) -> dict:
         meta = {"session_id": session_id, "question_id": q.get("id"), "repetition": rep, "order_index": idx,
                 "kind": mode, "mode": mode, "agent": spec["agent"] if spec else None,
@@ -121,6 +145,7 @@ class BenchmarkRunner:
         m = r.metrics
         m["retrieval_total_latency_ms"] = m["total_latency_ms"]
         m["expected_sources_found"] = _expected_hits(q, r)
+        m["graphify_ok"] = self._graphify_ok(pipeline)
         if spec:
             gen = self._generate(spec, r.context, q["question"])
             m.update({k: v for k, v in gen.items() if k not in ("answer", "error", "agent_meta")})
@@ -192,13 +217,62 @@ class BenchmarkRunner:
                 "note": "threshold = corte efetivo de sobrevivência (relevance_threshold = review_threshold = t)"}
 
 
+def _norm_text(text: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(text or "").lower())
+    return " ".join("".join(c for c in t if not unicodedata.combining(c)).split())
+
+
+def rank_metrics(expected: list[str], ranked: list[str], k: int | None = None) -> dict:
+    """ANA-012: MRR, nDCG@k and P@k over the ORDERED source list (binary relevance)."""
+    import math
+    k = k or max(len(ranked), 1)
+    top = ranked[:k]
+    rel = [1 if f in set(expected) else 0 for f in top]
+    first = next((i for i, r in enumerate(rel, 1) if r), None)
+    dcg = sum(r / math.log2(i + 1) for i, r in enumerate(rel, 1))
+    ideal = sum(1 / math.log2(i + 1) for i in range(1, min(len(set(expected)), k) + 1))
+    return {"k": k, "mrr": round(1 / first, 4) if first else 0.0,
+            "ndcg": round(dcg / ideal, 4) if ideal else 0.0,
+            "precision_at_k": round(sum(rel) / len(top), 4) if top else 0.0}
+
+
+def fact_in_context(hint: str | None, context: str, min_ratio: float = 0.6) -> bool | None:
+    """ANA-012: does the delivered context actually contain the answer? The answer_hint is a sentence,
+    so we accept it when >= `min_ratio` of its distinctive tokens (len>=4) appear in the context."""
+    if not hint:
+        return None
+    toks = {t for t in _norm_text(hint).replace(".", " ").replace(",", " ").split() if len(t) >= 4}
+    if not toks:
+        return None
+    ctx = _norm_text(context)
+    return sum(t in ctx for t in toks) / len(toks) >= min_ratio
+
+
+def section_hit(q: dict, r) -> bool | None:
+    """ANA-012: right NOTE and right SECTION (when the question names sections)."""
+    secs = q.get("expected_sections")
+    if not secs:
+        return None
+    got = {(s.file, s.section) for s in r.sources}
+    return all(any((f, sec) in got for f in (q.get("expected_sources") or [])) for sec in secs)
+
+
 def _expected_hits(q: dict, r) -> dict | None:
     exp = q.get("expected_sources")
     if not exp:
         return None
-    got = {s.file for s in r.sources}
+    ranked = [s.file for s in r.sources]
+    got = set(ranked)
     hits = [e for e in exp if e in got]
-    return {"expected": len(exp), "found": len(hits), "recall": round(len(hits) / len(exp), 3)}
+    out = {"expected": len(exp), "found": len(hits), "recall": round(len(hits) / len(exp), 3)}
+    out.update(rank_metrics(list(exp), ranked))
+    out["fact_in_context"] = fact_in_context(q.get("answer_hint") if q.get("answerable", True) else None,
+                                             getattr(r, "context", "") or "")
+    sh = section_hit(q, r)
+    if sh is not None:
+        out["section_hit"] = sh
+    return out
 
 
 def compare(results: list[dict]) -> dict:

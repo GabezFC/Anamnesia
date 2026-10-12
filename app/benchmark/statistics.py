@@ -45,3 +45,96 @@ def aggregate_stats(db, session_id: str | None = None) -> dict:
     s["sessions"] = len(db.list_sessions(limit=100000))
     s["false_negatives"] = db.false_negative_rate()
     return s
+
+
+# ---------------------------------------------------------------------------------------------
+# ANA-013 / ANA-014: confidence intervals, paired comparison and sample size.
+# Pure stdlib, deterministic (explicit seed). A rate without its interval must not be quoted.
+# ---------------------------------------------------------------------------------------------
+import random as _random
+
+_Z95 = 1.959963984540054
+
+
+def wilson_ci(k: int, n: int, z: float = _Z95) -> dict:
+    """Wilson score interval for a binomial rate k/n. n == 0 -> no estimate (never a fake 0%)."""
+    if n <= 0:
+        return {"k": k, "n": n, "rate": None, "low": None, "high": None, "half_width": None}
+    p = k / n
+    d = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / d
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    lo, hi = max(0.0, centre - half), min(1.0, centre + half)
+    return {"k": k, "n": n, "rate": round(p, 4), "low": round(lo, 4), "high": round(hi, 4),
+            "half_width": round((hi - lo) / 2, 4)}
+
+
+def bootstrap_ci(values: Iterable[float | None], seed: int = 20261011, n_boot: int = 2000,
+                 alpha: float = 0.05) -> dict:
+    """Percentile bootstrap CI of the mean. Deterministic for a given seed."""
+    v = [float(x) for x in values if x is not None]
+    if not v:
+        return {"n": 0, "mean": None, "low": None, "high": None}
+    rng = _random.Random(seed)
+    n = len(v)
+    means = sorted(sum(v[rng.randrange(n)] for _ in range(n)) / n for _ in range(n_boot))
+    lo = means[int((alpha / 2) * n_boot)]
+    hi = means[min(n_boot - 1, int((1 - alpha / 2) * n_boot))]
+    return {"n": n, "mean": round(sum(v) / n, 4), "low": round(lo, 4), "high": round(hi, 4)}
+
+
+def paired_diff_ci(a: Iterable[float | None], b: Iterable[float | None], seed: int = 20261011,
+                   n_boot: int = 2000) -> dict:
+    """Paired bootstrap of mean(a - b) over items present in BOTH. `excludes_zero` is the only honest
+    basis for saying 'A is better/cheaper than B'."""
+    pairs = [(x, y) for x, y in zip(a, b) if x is not None and y is not None]
+    if not pairs:
+        return {"n": 0, "mean_diff": None, "low": None, "high": None, "excludes_zero": None}
+    ci = bootstrap_ci([x - y for x, y in pairs], seed=seed, n_boot=n_boot)
+    ez = ci["low"] > 0 or ci["high"] < 0
+    return {"n": ci["n"], "mean_diff": ci["mean"], "low": ci["low"], "high": ci["high"], "excludes_zero": ez}
+
+
+def mcnemar_exact(a_ok: Iterable[bool], b_ok: Iterable[bool]) -> dict:
+    """Exact two-sided McNemar test on paired binary outcomes (A vs B)."""
+    only_a = only_b = 0
+    for x, y in zip(a_ok, b_ok):
+        only_a += bool(x) and not y
+        only_b += bool(y) and not x
+    n = only_a + only_b
+    if n == 0:
+        return {"only_a": 0, "only_b": 0, "p_value": 1.0}
+    k = min(only_a, only_b)
+    tail = sum(math.comb(n, i) for i in range(k + 1)) / 2 ** n
+    return {"only_a": only_a, "only_b": only_b, "p_value": round(min(1.0, 2 * tail), 6)}
+
+
+def required_n_two_proportions(p1: float, delta: float, power: float = 0.8, alpha: float = 0.05) -> int:
+    """Per-arm n to detect a difference `delta` from baseline rate p1 (two-sided normal approximation)."""
+    if not 0 < delta < 1:
+        raise ValueError("delta must be in (0,1)")
+    p2 = min(max(p1 + delta, 0.0), 1.0)
+    nd = st.NormalDist()
+    za, zb = nd.inv_cdf(1 - alpha / 2), nd.inv_cdf(power)
+    pbar = (p1 + p2) / 2
+    num = (za * math.sqrt(2 * pbar * (1 - pbar)) + zb * math.sqrt(p1 * (1 - p1) + p2 * (1 - p2))) ** 2
+    return max(2, math.ceil(num / (p2 - p1) ** 2))
+
+
+def achieved_power(n: int, p1: float, delta: float, alpha: float = 0.05) -> float:
+    """Power of a two-proportion test with `n` per arm (normal approximation)."""
+    p2 = min(max(p1 + delta, 0.0), 1.0)
+    if n < 2 or p2 == p1:
+        return 0.0
+    nd = st.NormalDist()
+    za = nd.inv_cdf(1 - alpha / 2)
+    pbar = (p1 + p2) / 2
+    se0 = math.sqrt(2 * pbar * (1 - pbar) / n)
+    se1 = math.sqrt((p1 * (1 - p1) + p2 * (1 - p2)) / n)
+    return round(nd.cdf((abs(p2 - p1) - za * se0) / se1), 4)
+
+
+def power_report(n: int, p1: float = 0.5, delta: float = 0.10) -> dict:
+    need = required_n_two_proportions(p1, delta)
+    return {"n": n, "baseline_rate": p1, "min_detectable_delta": delta, "required_n_per_arm": need,
+            "achieved_power": achieved_power(n, p1, delta), "sufficient": n >= need}

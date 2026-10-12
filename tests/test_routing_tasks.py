@@ -66,3 +66,43 @@ def test_task_validation():
         Task("x", "memory_qa", "q", "impossible")
     with pytest.raises(ValueError):
         Task("x", "nope", "q", "easy")
+
+
+# -- ANA-001 / ANA-002: anti-leak invariant ----------------------------------------------------
+def _norm(text):
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(text).lower())
+    return " ".join("".join(c for c in t if not unicodedata.combining(c)).split())
+
+
+def test_no_expected_fact_in_query_invariant():
+    """The expected fact must never be recoverable from the query (otherwise the benchmark is circular)."""
+    leaks = []
+    for t in load_tasks():
+        if t.kind != "memory_qa":
+            continue  # extraction tasks hand the note over by design; they do not test retrieval
+        for f in t.ground_truth.get("expected_facts", []):
+            if _norm(f) in _norm(t.query):
+                leaks.append((t.id, f))
+    assert not leaks, f"{len(leaks)} tasks leak the expected fact: {leaks[:5]}"
+
+
+def test_no_gold_path_or_token_in_query():
+    for t in load_tasks():
+        if t.kind != "memory_qa":
+            continue
+        for p in t.ground_truth.get("gold_notes", []):
+            assert p.lower() not in t.query.lower(), t.id
+        hint_tokens = [w for w in t.ground_truth.get("expected_facts", [])]
+        assert all(_norm(h) not in _norm(t.query) for h in hint_tokens), t.id
+
+
+def test_leak_guard_rejects_a_leaking_query():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import gen_routing_tasks as g
+    assert g.leaks('Qual o registro sobre "KrampusDB v7.111-rc0"?', ["KrampusDB v7.111-rc0"])
+    assert not g.leaks("o snapshot foi validado contra ___", ["KrampusDB v7.111-rc0"])
+
+
+def test_dataset_version_bumped_after_unleak():
+    assert json.loads(DEFAULT_PATH.read_text(encoding="utf-8"))["version"] >= 2

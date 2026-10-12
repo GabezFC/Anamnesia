@@ -76,9 +76,10 @@ JEV_COST_PER_REQUEST = 340
 JEV_COST_PER_QUESTION = 209
 
 # Query normalization for the cache key: accent-folded, stopword-filtered, order-independent.
-_CACHE_TOKEN = re.compile(r"[a-z0-9]{3,}")
+_CACHE_TOKEN = re.compile(r"[a-z0-9]+")
+# ANA-003: negators (nao, nem, sem, not, never...) must stay OUT of this list.
 _CACHE_STOP = set("""
-a o as os um uma de do da dos das em no na nos nas por pelo pela para pra com sem e ou que qual
+a o as os um uma de do da dos das em no na nos nas por pelo pela para pra com e ou que qual
 quais quando como onde porque se ser foi era sao esta estao mais menos ja ainda sobre entre ate
 tambem foram tem ter fazer feito sido usa usam use usado the of and to in is are was what how why
 which who for on with be it this that
@@ -88,7 +89,10 @@ which who for on with be it this that
 def _cache_terms(query: str) -> set[str]:
     folded = unicodedata.normalize("NFKD", query.lower())
     folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
-    return {t for t in _CACHE_TOKEN.findall(folded) if t not in _CACHE_STOP}
+    # ANA-004: tokens shorter than 3 chars used to be dropped, so "porta 80" and "porta 90" (or v2/v3)
+    # collided on one key. Keep anything with a digit and any 2+ char token; single letters are noise.
+    return {t for t in _CACHE_TOKEN.findall(folded)
+            if t not in _CACHE_STOP and (len(t) >= 2 or t.isdigit())}
 
 
 class JevBackend(Protocol):

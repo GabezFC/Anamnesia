@@ -40,12 +40,20 @@ def main(argv=None) -> int:
     ap.add_argument("--db", default=None, help="explicit SQLite path to persist runs (never defaults to benchmark.db)")
     ap.add_argument("--out", default=None, help="report path (default docs/ROUTING_BENCHMARK_<date>[_SIMULATED].md)")
     ap.add_argument("--tasks", default=None, help="tasks json (default benchmark/routing_tasks.json)")
+    ap.add_argument("--with-memory", action="store_true",
+                    help="--real: include memory_qa, injecting context retrieved by the gateway (ANA-019)")
+    ap.add_argument("--min-n", type=int, default=None,
+                    help="--real: minimum sample size; default = n needed to detect a 10 p.p. difference at 80%% "
+                         "power (ANA-014). Below it the run is refused unless --allow-underpowered")
+    ap.add_argument("--allow-underpowered", action="store_true", help="--real: run below --min-n (report says so)")
     a = ap.parse_args(argv)
 
     strategies = (a.strategies.split(",") if a.strategies
                   else ([rb.STATIC_CHEAP, rb.STATIC_STRONG] if a.real else list(rb.ALL_STRATEGIES)))
     strategies = [s.strip() for s in strategies if s.strip()]
-    bad = [s for s in strategies if s not in rb.ALL_STRATEGIES]
+    if not a.strategies:   # ANA-016: negative controls always ride along (free: no model call)
+        strategies += [c for c in rb.CONTROL_STRATEGIES if c not in strategies]
+    bad = [s for s in strategies if s not in rb.ALL_STRATEGIES + rb.CONTROL_STRATEGIES]
     if bad:
         print(f"unknown strategies: {bad}", file=sys.stderr)
         return 2
@@ -60,15 +68,36 @@ def main(argv=None) -> int:
                   "No call was made. Run without --real for the SIMULATED stub.", file=sys.stderr)
             return 2
         models = usable.models
-        runner = rb.RealRunner(timeout_s=a.timeout)
         full = len(tasks)
-        tasks = [t for t in tasks if rb.is_self_contained(t)]
-        notes.append(f"--real: {len(tasks)} de {full} tarefas autocontidas (extraction); memory_qa excluída (sem contexto injetado)")
+        if a.with_memory:
+            from app.gateway.memory_gateway import MemoryGateway
+            gw = MemoryGateway()
+            gw.warm()
+            runner = rb.RealRunner(timeout_s=a.timeout, context_fn=rb.GatewayContext(gw))
+            notes.append(f"--real --with-memory: memory_qa com contexto recuperado pelo gateway ({full} tarefas)")
+        else:
+            runner = rb.RealRunner(timeout_s=a.timeout)
+            tasks = [t for t in tasks if rb.is_self_contained(t)]
+            notes.append(f"--real: {len(tasks)} de {full} tarefas autocontidas (extraction); memory_qa excluída (use --with-memory)")
     else:
         models = registry.models
         runner = rb.StubRunner()
         print(f"*** {rb.STUB_BANNER} ***")
     sample = rb.sample_tasks(tasks, a.sample, a.seed)
+    if a.real:   # ANA-014: refuse an underpowered paid run, and always print the power
+        from app.benchmark.statistics import power_report, required_n_two_proportions
+        need = a.min_n if a.min_n is not None else required_n_two_proportions(0.5, 0.10)
+        pw = power_report(len(sample))
+        msg = (f"N={pw['n']} por braço; poder estimado={pw['achieved_power']} para detectar {pw['min_detectable_delta']:.0%} "
+               f"(taxa-base {pw['baseline_rate']:.0%}); necessário ~{pw['required_n_per_arm']} por braço")
+        print(msg)
+        notes.append("poder: " + msg)
+        if len(sample) < need and not a.allow_underpowered:
+            print(f"REFUSED: amostra {len(sample)} < minimo {need} (ANA-014). Nenhuma chamada foi feita. "
+                  "Aumente --sample, reduza --min-n ou use --allow-underpowered.", file=sys.stderr)
+            return 2
+        if len(sample) < need:
+            notes.append(f"**SUBDIMENSIONADO**: N={len(sample)} < {need}; diferenças pequenas não são detectáveis")
     cache = rb.ResultCache(a.cache)
     result = rb.run_benchmark(sample, models, runner, strategies, a.policies.split(","), a.default_model, cache)
 

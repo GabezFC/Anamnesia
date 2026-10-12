@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 from app.services import security
-from app.services.envfile import read_env_lines, set_env_var
+from app.services.envfile import EnvValueError, read_env_lines, set_env_var
 
 MASK = "\u2022" * 8
 
@@ -51,7 +51,10 @@ def set_key(env_key: str, value: str) -> None:
     if any(ch in value for ch in "\r\n\x00"):
         raise SecretError("value must not contain line breaks")
     value = value.strip()
-    set_env_var(_path(), env_key, value)
+    try:
+        set_env_var(_path(), env_key, value)  # ANA-006: same validator as /config/model-key
+    except EnvValueError as exc:
+        raise SecretError(str(exc)) from None
     os.environ[env_key] = value
 
 
