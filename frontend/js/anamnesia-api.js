@@ -28,6 +28,12 @@ export async function call(method, path, body) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   try { headers['X-MG-Token'] = await getLocalToken(); } catch { /* reads work without it on loopback */ }
+  if (method === 'POST' && path === '/api/sessions') { // ANA-042: human-confirmation header, only the UI (cookie holder) gets it
+    try {
+      const c = await fetch('/config/shell-confirm', { cache: 'no-store' });
+      if (c.ok) headers['X-MG-Confirm'] = (await c.json()).confirm;
+    } catch { /* MG_SHELL_CONFIRM=warn (default) still accepts the session */ }
+  }
   let r;
   try {
     r = await fetch(path, {
