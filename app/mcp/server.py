@@ -110,15 +110,21 @@ def gate_save_project(project: str | None) -> tuple[str | None, str | None, dict
 
 
 def _search(query: str, pipeline: str, max_results: int, scope: str | None = None,
-            response: str | None = None, client: str | None = None, mode: str = "context") -> dict:
+            response: str | None = None, client: str | None = None, mode: str = "context",
+            budget: int | None = None, pack: bool = False) -> dict:
     max_results = max(1, min(int(max_results), 20))
     scope = enforce_scope(scope)
-    r = gateway().search(query, pipeline, max_results, scope=scope or None,
+    if budget is not None:  # ANA-151: first-class context budget, same bounds as the REST API
+        budget = max(200, min(int(budget), 100000))
+    r = gateway().search(query, pipeline, max_results, scope=scope or None, context_budget=budget,
                          run_meta={"kind": "mcp", "agent": "mcp", "client": client})
     extras = {}
     if mode != "context":      # context (default) never touches the routing code: response unchanged
         from app.routing.answer import apply_mode
         extras = apply_mode(gateway(), r, mode)
+    if pack:  # ANA-147: opt-in; the default response is byte-identical
+        from app.services import context_pack as cp
+        extras = {**extras, "pack_id": cp.save_pack(cp.build_pack(gateway(), r, scope=scope, token_budget=budget))}
     return _merge(_shape(r, response), extras)
 
 
@@ -146,7 +152,8 @@ def _shape(r, response: str | None) -> dict:
 @server.tool()
 def memory_search(query: str, pipeline: PipelineT = "auto", max_results: int = 10,
                   scope: str | None = None, client: str | None = None,
-                  mode: Literal["context", "answer", "delegate"] = "context") -> dict:
+                  mode: Literal["context", "answer", "delegate"] = "context",
+                  budget: int | None = None, pack: bool = False) -> dict:
     """Recupera contexto relevante da memória Obsidian do usuário para a pergunta `query`.
     pipeline: auto (padrão, otimizado), baseline, graphify, graphify_jev_opt (juiz pago com
     otimizações) ou graphify_jev (juiz pago, referência congelada).
@@ -154,8 +161,9 @@ def memory_search(query: str, pipeline: PipelineT = "auto", max_results: int = 1
     client: opcional, identifica quem chamou (ex. "hermes", "claude_code", "codex", "opencode").
     mode: context (padrão, contexto compacto), answer (resposta curta com fontes por modelo escolhido
     pelo router; cai para context se não houver modelo/fundamentação) ou delegate (com ANAMNESIA_DELEGATE=1 e
-    projeto resolvível cria um run do orquestrador e devolve `delegate.run_id`; senão = context)."""
-    return _search(query, pipeline, max_results, scope, client=client, mode=mode)
+    projeto resolvível cria um run do orquestrador e devolve `delegate.run_id`; senão = context).
+    budget: teto de tokens do contexto (200..100000). pack: true devolve `pack_id` (contrato verificável das fontes)."""
+    return _search(query, pipeline, max_results, scope, client=client, mode=mode, budget=budget, pack=pack)
 
 
 if TOOLSET == "full":
@@ -208,9 +216,13 @@ if SAVE_ENABLED:
     # (never the user's vault). Adds ~one tool schema to every turn, hence not in the default set.
     @server.tool()
     def memory_save(title: str, content: str, tags: list[str] | None = None, project: str | None = None,
-                    source_agent: str | None = None) -> dict:
+                    source_agent: str | None = None, kind: str | None = None, ttl_days: float | None = None,
+                    confidence: float | None = None, source: str | None = None,
+                    supersedes: str | None = None, dedupe: str | None = None) -> dict:
         """Salva uma nota de contexto (decisão, fato, preferência) na memória própria do Gateway.
-        Segredos (chaves de API, tokens, chaves privadas) são rejeitados. Retorna {id}."""
+        kind: decision|fact|preference|task|episodic. ttl_days expira a nota. supersedes=<id> marca a antiga
+        como substituída. dedupe: warn (padrão)|skip|update|off. Segredos são rejeitados.
+        Retorna {id, saved, similar, action}."""
         from app.memory_store.index import reindex
         from app.memory_store.store import SavedContextError, get_store
         from app.services.security import get_or_create_local_token
@@ -221,7 +233,12 @@ if SAVE_ENABLED:
             return {"error": gate_err}
         try:
             # ANA-029: everything an agent saves is untrusted DATA (frontmatter `trust: untrusted`)
-            note_id = get_store().save(title, content, tags, project, source_agent or "mcp", trust="untrusted")
+            from app.memory_store import lifecycle
+            v2 = {k: v for k, v in (("kind", kind), ("ttl_days", ttl_days), ("confidence", confidence),
+                                    ("source", source), ("supersedes", supersedes)) if v is not None}
+            res = lifecycle.save_checked(get_store(), title, content, tags, project, source_agent or "mcp",
+                                         "untrusted", dedupe=dedupe, **v2)
+            note_id = res["id"]
         except SavedContextError as exc:
             return {"error": str(exc)}
         if _gateway is not None:
@@ -229,7 +246,29 @@ if SAVE_ENABLED:
                 reindex(_gateway)
             except Exception:  # noqa: BLE001
                 pass
-        return {"id": note_id, **gate_meta}
+        return {"id": note_id, "saved": res["saved"], "similar": res["similar"][:5], "action": res["action"], **gate_meta}
+
+    @server.tool()
+    def memory_feedback(note_id: str, verdict: Literal["useful", "wrong", "stale"], reason: str | None = None,
+                        client: str | None = None) -> dict:
+        """Avalia uma nota salva: useful, wrong ou stale. Duas avaliações `wrong` tiram a nota do top-k padrão.
+        O autor (`client`) é gravado; o feedback só entra em calibração depois de revisão humana."""
+        from app.memory_store import lifecycle
+        from app.memory_store.index import reindex
+        from app.memory_store.store import SavedContextError, get_store
+        from app.services.security import get_or_create_local_token
+        if not get_or_create_local_token():
+            return {"error": "token local indisponível; feedback recusado"}
+        try:
+            res = lifecycle.feedback(get_store(), note_id, verdict, reason, author=client or "mcp", source="agent")
+        except SavedContextError as exc:
+            return {"error": str(exc)}
+        if _gateway is not None:
+            try:
+                reindex(_gateway)
+            except Exception:  # noqa: BLE001
+                pass
+        return res
 
 
 def main():

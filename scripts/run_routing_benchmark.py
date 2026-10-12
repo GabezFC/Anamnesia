@@ -46,6 +46,10 @@ def main(argv=None) -> int:
                     help="--real: minimum sample size; default = n needed to detect a 10 p.p. difference at 80%% "
                          "power (ANA-014). Below it the run is refused unless --allow-underpowered")
     ap.add_argument("--allow-underpowered", action="store_true", help="--real: run below --min-n (report says so)")
+    ap.add_argument("--repeats", type=int, default=1,
+                    help="ANA-110: run each (task, model) K times (key task,model,rep) and report the std between reps")
+    ap.add_argument("--strata", choices=("cell", "difficulty"), default="cell",
+                    help="ANA-112: sample stratification (default kind x difficulty x answerable)")
     a = ap.parse_args(argv)
 
     strategies = (a.strategies.split(",") if a.strategies
@@ -83,7 +87,10 @@ def main(argv=None) -> int:
         models = registry.models
         runner = rb.StubRunner()
         print(f"*** {rb.STUB_BANNER} ***")
-    sample = rb.sample_tasks(tasks, a.sample, a.seed)
+    sample = rb.sample_tasks(tasks, a.sample, a.seed, strata=a.strata)
+    coverage = rb.sample_coverage(tasks, sample)
+    notes.append(f"amostra: {len(sample)} tarefas; células kind×dificuldade×answerable cobertas "
+                 f"{coverage['cells_covered']}/{coverage['cells_total']}; abstenções {coverage['unanswerable_in_sample']}")
     if a.real:   # ANA-014: refuse an underpowered paid run, and always print the power
         from app.benchmark.statistics import power_report, required_n_two_proportions
         need = a.min_n if a.min_n is not None else required_n_two_proportions(0.5, 0.10)
@@ -99,7 +106,9 @@ def main(argv=None) -> int:
         if len(sample) < need:
             notes.append(f"**SUBDIMENSIONADO**: N={len(sample)} < {need}; diferenças pequenas não são detectáveis")
     cache = rb.ResultCache(a.cache)
-    result = rb.run_benchmark(sample, models, runner, strategies, a.policies.split(","), a.default_model, cache)
+    result = rb.run_benchmark(sample, models, runner, strategies, a.policies.split(","), a.default_model, cache,
+                              repeats=a.repeats)
+    result.meta["sample_coverage"] = coverage
 
     if a.db:
         from app.database.db import Database

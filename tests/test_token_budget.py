@@ -1,6 +1,6 @@
 import pytest
 
-from app.gateway.token_budget import estimate_tokens, fit_within, pack_batches, truncate_to_tokens
+from app.core.tokens import estimate_tokens, fit_within, pack_batches, truncate_to_tokens
 
 
 def test_estimate_tokens_empty_zero_and_nonzero():

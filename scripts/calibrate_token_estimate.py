@@ -1,7 +1,7 @@
 """Empirical token-estimator ratio from provider-reported usage (T2.1 fallback, no tokenizer needed).
 
 Compares `model_input_tokens` (provider-reported, answer mode, generic consumer = no agent overhead)
-with `prompt_tokens_estimate` (app.gateway.token_budget.estimate_tokens of the SAME prompt), both
+with `prompt_tokens_estimate` (app.core.tokens.estimate_tokens of the SAME prompt), both
 already stored in runs.metrics_json. Reads a database passed on the command line, opened read-only
 (`mode=ro`): COPY benchmark.db first and pass the copy. Never pass the live file.
 

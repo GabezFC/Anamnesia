@@ -1,6 +1,6 @@
 """Token estimate with an optional, MEASURED per-language correction (T2.1 hook).
 
-`estimate_tokens(text, lang="auto")` is, by default, EXACTLY `app.gateway.token_budget.estimate_tokens`
+`estimate_tokens(text, lang="auto")` is, by default, EXACTLY `app.core.tokens.estimate_tokens`
 (heuristic max(chars/4, words*1.3) * PT_CALIBRATION_FACTOR), for every language. Nothing changes
 unless a calibration file is supplied through `ANAMNESIA_TOKEN_CALIBRATION` (path to a JSON like
 `{"pt": 1.25, "other": 1.0, "source": "tiktoken cl100k_base, n=...", "tokenizer": "..."}`). Factors in
@@ -19,7 +19,7 @@ import os
 import re
 from pathlib import Path
 
-from app.gateway import token_budget as tb
+from app.core import tokens as tb
 
 ENV_CALIBRATION = "ANAMNESIA_TOKEN_CALIBRATION"
 _PT_STOP = {"de", "do", "da", "dos", "das", "em", "no", "na", "que", "para", "com", "uma", "não", "nao",

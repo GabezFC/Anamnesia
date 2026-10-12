@@ -45,6 +45,7 @@ class Source:
     relevance: float | None = None
     decision: str | None = None
     tokens: int = 0
+    why: str = ""            # ANA-149: why this block was delivered (channel, score, JEV verdict, flags)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

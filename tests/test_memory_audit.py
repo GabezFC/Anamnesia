@@ -10,6 +10,7 @@ import sqlite3
 
 import pytest
 
+from app.core.state import STATE
 from app.services.memory_audit import (DEFAULT_NEAR_DUP_THRESHOLD, MemoryAuditor, body_key,
                                        clear_cache)
 from app.services.obsidian import ObsidianVault
@@ -394,12 +395,12 @@ def test_system_memory_returns_counts_for_the_running_gateway(vault, tmp_path):
         bench_cfg=BenchmarkConfig(db_path=str(tmp_path / "b.db")), optimizer_cfg=OptimizerConfig())
     app = FastAPI()
     app.include_router(routes.router)
-    old = routes._state["gateway"]
-    routes._state["gateway"] = gw
+    old = STATE.gateway
+    STATE.gateway = gw
     try:
         body = TestClient(app).get("/system/memory").json()
     finally:
-        routes._state["gateway"] = old
+        STATE.gateway = old
     assert body["note_content_included"] is False
     assert body["summary"]["notes_scanned"] == 15, "excluded_dirs came from the running gateway"
     assert "redis" not in json.dumps(body), "the endpoint returns counts, never note content"

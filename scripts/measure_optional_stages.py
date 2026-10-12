@@ -23,7 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.gateway.token_budget import estimate_tokens  # noqa: E402
+from app.core.tokens import estimate_tokens  # noqa: E402
 from app.retrieval.optional_stages import sentence_dedup_mmr, spotlight_nonce  # noqa: E402
 from app.schemas.models import Candidate  # noqa: E402
 from config.optimization import OptionalStagesConfig  # noqa: E402

@@ -20,6 +20,7 @@ from app.benchmark.evaluator import validate_evaluation, validate_label
 from app.benchmark.runner import BenchmarkRunner, estimate_plan, load_questions
 from app.benchmark.statistics import aggregate_stats
 from app.benchmark.timeseries import DEFAULT_MAX_POINTS, MAX_POINTS_CEILING, build_timeseries
+from app.core.state import STATE, GatewayNotReady, LegacyStateView
 from app.schemas.models import DEFAULT_EXPLICIT_PIPELINE, PIPELINES
 from app.services import security
 from app.services.envfile import EnvValueError, set_env_var
@@ -33,15 +34,26 @@ from config.retrieval import resolve_vault_path, validate_vault_path_for_runtime
 router = APIRouter()
 MAX_BENCH_QUESTIONS = 200
 MAX_BENCH_UNITS = 2000
-_state: dict = {"gateway": None, "jobs": {}}
 Pipeline = Literal[("auto",) + PIPELINES]
 BenchPipeline = Literal[PIPELINES]
 
 
 def gw():
-    if _state["gateway"] is None:
-        raise HTTPException(503, "gateway não inicializado")
-    return _state["gateway"]
+    """Current gateway (ANA-106: state lives in app.core.state.STATE; endpoints may also take
+    `Depends(app.api.deps.get_gateway)`, which tests override via `dependency_overrides`)."""
+    try:
+        return STATE.require_gateway()
+    except GatewayNotReady as exc:
+        raise HTTPException(503, "gateway não inicializado") from exc
+
+
+def __getattr__(name: str):  # deprecated alias (ANA-106): use app.core.state.STATE
+    if name == "_state":
+        import warnings
+        warnings.warn("routes." + name + " is deprecated; use app.core.state.STATE",
+                      DeprecationWarning, stacklevel=2)
+        return LegacyStateView(STATE)
+    raise AttributeError(name)
 
 
 class SearchRequest(BaseModel):
@@ -198,7 +210,7 @@ def _health_warnings(g) -> list[dict]:
 
 @router.get("/health")
 def health():
-    g = _state["gateway"]
+    g = STATE.gateway
     return {"status": "ok" if g else "starting", "vault_exists": bool(g and g.vault.exists()),
             "warnings": _health_warnings(g)}
 
@@ -270,15 +282,15 @@ def _run_benchmark(req: BenchmarkRequest, pipelines):
     if not req.background:
         return runner.run(qs, **kwargs)
     job = uuid.uuid4().hex[:8]
-    _state["jobs"][job] = {"status": "running", "progress": []}
+    STATE.jobs.create(job)
 
     def work():
         try:
-            runner.progress = lambda e: _state["jobs"][job]["progress"].append(
-                {k: e[k] for k in ("question_id", "pipeline", "run_id")})
-            _state["jobs"][job].update(status="done", result=runner.run(qs, **kwargs))
+            runner.progress = lambda e: STATE.jobs.append_progress(
+                job, {k: e[k] for k in ("question_id", "pipeline", "run_id")})
+            STATE.jobs.update(job, status="done", result=runner.run(qs, **kwargs))
         except Exception as exc:  # noqa: BLE001
-            _state["jobs"][job].update(status="error", error=str(exc))
+            STATE.jobs.update(job, status="error", error=str(exc))
 
     threading.Thread(target=work, daemon=True).start()
     return {"job_id": job, "status": "running"}
@@ -308,7 +320,7 @@ def benchmark_estimate(req: BenchmarkRequest):
 
 @router.get("/benchmark/jobs/{job_id}")
 def benchmark_job(job_id: str):
-    j = _state["jobs"].get(job_id)
+    j = STATE.jobs.get(job_id)
     if not j:
         raise HTTPException(404, "job não encontrado")
     return j
@@ -562,10 +574,12 @@ def set_vault_path(req: VaultPathRequest):
         new_gw = MemoryGateway(retrieval_cfg=new_retrieval_cfg, jev_cfg=old.jev_cfg, bench_cfg=old.bench_cfg,
                                db=old.db, jev_backend=old._jev_backend, opt_cfg=old.opt_cfg,
                                optimizer_cfg=old.optimizer.cfg)
+        from app.memory_store.index import attach_saved_context  # ANA-078: keep saved notes after a vault switch
+        attach_saved_context(new_gw)
         new_gw.warm()
     except Exception as exc:  # noqa: BLE001 -- a bad rebuild must not brick the running server
         raise HTTPException(422, f"falha ao reapontar o gateway: {exc}") from exc
-    _state["gateway"] = new_gw
+    STATE.gateway = new_gw
     return {"vault_path": str(validated), "markdown_files": len(new_gw.vault.list_markdown())}
 
 

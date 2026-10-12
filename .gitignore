@@ -52,6 +52,7 @@ credentials.json
 *.sqlite-wal
 benchmark.db
 benchmark.db-*
+benchmark.db.bak-*
 
 # --- Logs / run output ---
 logs/

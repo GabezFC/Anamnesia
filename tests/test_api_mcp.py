@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.core.state import STATE
 from app.schemas.models import Candidate
 from app.services.obsidian import split_sections
 from config.benchmark import BenchmarkConfig
@@ -63,8 +64,8 @@ def client(tiny_vault, tmp_path):
                        graphify_service=FakeGraphify(tiny_vault, rcfg.mirror_dir))
     app = FastAPI()
     app.include_router(routes.router)
-    old = routes._state["gateway"]
-    routes._state["gateway"] = gw
+    old = STATE.gateway
+    STATE.gateway = gw
     try:
         # `client=("127.0.0.1", ...)` makes request.client.host loopback, matching what a real
         # localhost dashboard looks like to require_local_write (§5.4); the token is attached so
@@ -73,7 +74,7 @@ def client(tiny_vault, tmp_path):
         tc = TestClient(app, client=("127.0.0.1", 51234), headers={"X-MG-Token": token})
         yield tc
     finally:
-        routes._state["gateway"] = old
+        STATE.gateway = old
         gw.db.conn.close() if hasattr(gw.db, "conn") else None
 
 

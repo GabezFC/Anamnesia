@@ -1,4 +1,6 @@
-# Python >= 3.14 (venv: uv venv --python 3.14 .venv). Versions verified 2026-09-24.
+# Python >= 3.12 (CI runs 3.12 and 3.14; venv: uv venv --python 3.14 .venv). Versions verified 2026-09-24.
+# SOURCE OF TRUTH is pyproject.toml [project.dependencies] (ANA-121): this file mirrors it and
+# tests/test_ci_consistency.py fails on any divergence. Edit pyproject first, then this file.
 # Runtime only. Dev/test tools -> requirements-dev.txt. Optional retrieval stages (§1.4/§5.5,
 # app/retrieval/optional_stages.py) -> requirements-optional.txt (none of them are runtime deps).
 typesafe-sdk==0.7.1
@@ -10,4 +12,5 @@ python-dotenv==1.2.3
 pydantic==2.13.5
 anthropic==1.8.0
 openai==3.19.2
+PyYAML==6.0.3
 # External CLIs (not pip): graphify 0.9.59, hermes 0.20.5, ollama 0.34.2

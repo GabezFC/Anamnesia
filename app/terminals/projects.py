@@ -249,11 +249,13 @@ class ProjectRegistry:
 
     def _init(self) -> None:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        from app.database.migrations import ANAMNESIA_MIGRATIONS, run_migrations
+
         c = self._conn()
         try:
-            c.execute("CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL,"
-                      " path TEXT NOT NULL UNIQUE, created_at REAL NOT NULL)")
-            c.commit()
+            # ANA-061: same versioned runner as benchmark.db (user_version, backup, refuse newer)
+            self.migration_report = run_migrations(c, ANAMNESIA_MIGRATIONS, path=self.db_path,
+                                                   label="anamnesia.db")
         finally:
             c.close()
 

@@ -39,12 +39,13 @@ def _fail(code: str, level=VerifyLevel.LIGHT, **d) -> VerifyResult:
 
 
 # ---------------------------------------------------------------- normalization
-def normalize(text: str) -> str:
+def normalize(text: str, glue_units: bool = True) -> str:
     """Lowercase, strip accents, unify decimal comma and '157 ms' -> '157ms', collapse punctuation."""
     t = unicodedata.normalize("NFKD", str(text))
     t = "".join(c for c in t if not unicodedata.combining(c)).lower()
     t = re.sub(r"(?<=\d),(?=\d)", ".", t)
-    t = re.sub(r"(?<=\d)\s+(?=[a-z%])", "", t)
+    if glue_units:
+        t = re.sub(r"(?<=\d)\s+(?=[a-z%])", "", t)
     t = re.sub(r"[^a-z0-9.%:/_\-]+", " ", t)
     t = re.sub(r"(?<![a-z0-9])\.+|\.+(?![a-z0-9])", " ", t)  # drop sentence dots, keep 7.111
     return re.sub(r"\s+", " ", t).strip()
@@ -102,17 +103,61 @@ def verify_citation(cited_ids: Iterable[str], retrieved_ids: Iterable[str],
 
 
 # ---------------------------------------------------------------- fact match
+_FACT_RE_CACHE: dict[str, "re.Pattern[str]"] = {}
+
+
+def fact_in_text(nfact: str, ntext: str) -> bool:
+    """ANA-092: `nfact` occurs in `ntext` (both already `normalize`d) delimited by token boundaries.
+
+    A bare substring test made "42" match "1420" / "3.14" match "13.145" and "rust" match "trust".
+    The fact must not be glued to an alphanumeric on either side, nor continue a number through
+    a decimal/thousands separator ("3" must not match "3.5" or "1.3").
+    """
+    pat = _FACT_RE_CACHE.get(nfact)
+    if pat is None:
+        left = r"(?<![a-z0-9])(?<!\d\.)(?<!\d,)"
+        right = r"(?![a-z0-9])(?!\.\d)(?!,\d)"
+        pat = _FACT_RE_CACHE[nfact] = re.compile(left + re.escape(nfact) + right)
+    return pat.search(ntext) is not None
+
+
 def verify_fact_match(answer: str, expected_facts: Sequence[str], mode: str = "all") -> VerifyResult:
     """Expected facts (ground truth) must appear in answer after normalization. mode: all|any."""
     if not expected_facts:
         return _fail("no_expected_facts")
     na = normalize(answer or "")
-    found = [f for f in expected_facts if normalize(f) and normalize(f) in na]
+    # ANA-092: also try the text WITHOUT unit gluing, so "1,5 do modulo" (-> "1.5do") still holds "1.5"
+    na_open = normalize(answer or "", glue_units=False)
+    found = [f for f in expected_facts if normalize(f)
+             and (fact_in_text(normalize(f), na) or fact_in_text(normalize(f, glue_units=False), na_open))]
     missing = [f for f in expected_facts if f not in found]
     ok = (len(found) == len(expected_facts)) if mode == "all" else bool(found)
     if ok:
         return _ok(found=found)
     return _fail("fact_missing", found=found, missing=missing)
+
+
+_CITED_PATH = re.compile(r"(?<![\w/.-])((?:[\w.-]+/)*[\w.-]+\.md)\b", re.I)
+
+
+def extract_cited_ids(answer: str) -> list[str]:
+    """ANA-111: note paths (`dir/nota.md`) cited in an answer, in order, deduplicated, lower-cased."""
+    seen = dict.fromkeys(m.group(1).replace("\\", "/").lower() for m in _CITED_PATH.finditer(answer or ""))
+    return list(seen)
+
+
+def match_cited_to_retrieved(cited: Iterable[str], retrieved: Iterable[str]) -> list[str]:
+    """Map each cited path to the retrieved path it denotes (exact, or a unique suffix such as the bare file
+    name). A citation with no counterpart is kept verbatim so verify_citation reports it as not retrieved."""
+    ret = [str(r).replace("\\", "/").lower() for r in retrieved]
+    out = []
+    for c in cited:
+        if c in ret:
+            out.append(c)
+            continue
+        suf = [r for r in ret if r.endswith("/" + c)]
+        out.append(suf[0] if len(suf) == 1 else c)
+    return out
 
 
 _ABSTAIN = ("nao existe", "nao ha ", "nao encontr", "nao tenho", "sem informacao", "nao consta",

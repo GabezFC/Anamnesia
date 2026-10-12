@@ -11,6 +11,7 @@ call time so tests can inject a stub adapter without network or keys.
 from __future__ import annotations
 
 import dataclasses
+import importlib
 import os
 import re
 from dataclasses import dataclass, field
@@ -249,7 +250,8 @@ def _delegate(result, extras: dict) -> dict:
     orchestrator (background run) and answer with its run id; the retrieved context stays in the response.
     Otherwise context fallback: disabled keeps the legacy `fallback_reason` (+ `delegate_status`),
     `delegate_no_project` / `delegate_error:<Tipo>` are new. No model is called here."""
-    from app.orchestration import delegate as dg
+    # ANA-108: resolved by name (orchestration depends on routing, not the reverse).
+    dg = importlib.import_module("app.orchestration.delegate")
     if not dg.delegate_enabled():
         extras["fallback_reason"] = "delegate_not_implemented"      # legacy value kept for clients
         extras["delegate_status"] = "delegate_disabled"
@@ -347,7 +349,19 @@ def _answer(gateway, result, risk, task_kind, extras):
                 return extras
         failed += 1
         model_id = next_model(decision, failed)
+    if produced:
+        _grounding_signal(cands, result)
     return fallback("grounding_failed" if produced else "generation_failed")
+
+
+def _grounding_signal(cands, result) -> None:
+    """ANA-158: `grounding_failed` is an automatic (weak, unreviewed) `stale` signal for saved notes."""
+    try:
+        from app.memory_store.lifecycle import record_grounding_failure
+        from app.memory_store.store import get_store
+        record_grounding_failure(get_store(), [{"file": c.source_file} for c in cands], run_id=result.run_id)
+    except Exception:  # noqa: BLE001 - a feedback signal must never break answer mode
+        pass
 
 
 def merge_mode(base: dict, extras: dict) -> dict:

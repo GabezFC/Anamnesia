@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 from config.benchmark import ALLOWED_REPETITIONS, SWEEP_THRESHOLDS
 from app.gateway.context_builder import render_prompt
-from app.gateway.token_budget import estimate_tokens
+from app.core.tokens import estimate_tokens
 from app.schemas.models import JEV_PIPELINES, PIPELINES
 from app.services.metrics import jsonl
 from app.services.pricing import add_costs, break_even, cost_usd

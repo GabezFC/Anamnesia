@@ -1,0 +1,43 @@
+# ANA-081: layer contract for scripts/check_architecture.py (enforced by tests/test_architecture.py).
+# A module may import (at module level) only modules of the SAME or a LOWER layer.
+# Keys are module prefixes; the longest matching prefix wins. Higher number = higher layer.
+
+roots = ["app", "config", "anamnesia", "memory_gateway"]
+
+[layers]
+"config" = 0
+"app.config" = 0
+"app.core" = 0
+"app.schemas" = 0
+"app.services" = 1
+"app.database" = 1
+"app.adapters" = 1
+"app.memory_store" = 1
+"app.retrieval" = 2
+"app.gateway" = 2
+"app.routing" = 2
+"app.benchmark" = 3
+"app.terminals" = 3
+"app.connections" = 3
+"app.orchestration" = 4
+"app.mcp" = 4
+"app.api" = 5
+"app.cli" = 5
+"app.main" = 6
+"anamnesia" = 6
+"memory_gateway" = 6
+
+# Pre-existing UPWARD imports. They are all lazy (inside functions), which is why there is no
+# module-level cycle today. Do NOT add entries to hide a new dependency: fix the layering instead
+# (move the shared code down, or invert the dependency). Format: [importer package, imported package].
+[[allowed_upward]]
+edge = ["config", "app.services"]
+[[allowed_upward]]
+edge = ["app.services", "app.gateway"]
+[[allowed_upward]]
+edge = ["app.gateway", "app.benchmark"]
+
+# Known module-level cycle: costs.py registers the sub-routes by importing costs_ext at the BOTTOM
+# of the file (intentional, noqa E402). Any NEW cycle fails the gate.
+[[allowed_cycles]]
+modules = ["app.api.costs", "app.api.costs_ext"]

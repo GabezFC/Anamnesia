@@ -27,7 +27,7 @@ import uuid
 from collections import OrderedDict
 from typing import Any, Callable
 
-from app.gateway.token_budget import estimate_tokens
+from app.core.tokens import estimate_tokens
 from app.schemas.models import Candidate
 from app.services.metrics import get_logger
 from app.services.near_dup import jaccard, shingles

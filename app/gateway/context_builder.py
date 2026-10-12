@@ -9,8 +9,9 @@ from __future__ import annotations
 import re
 import secrets
 
-from app.gateway.token_budget import estimate_tokens, truncate_to_tokens
+from app.core.tokens import estimate_tokens, truncate_to_tokens
 from app.schemas.models import Candidate, Source
+from app.services.context_pack import explain_candidate  # ANA-149
 from app.services.injection_screen import screen
 
 CONSUMER_PROMPT_TEMPLATE = """Você é um assistente de gestão de conhecimento.
@@ -184,7 +185,7 @@ class ModelContextBuilder:
             used += t
             sources.append(Source(file=c.source_file, section=c.section, score=round(c.score, 4),
                                   relevance=None if c.relevance is None else round(c.relevance, 4),
-                                  decision=c.decision, tokens=t))
+                                  decision=c.decision, tokens=t, why=explain_candidate(c)))
         if not blocks:
             return "", [], 0
         context = CONTEXT_HEADER + "\n\n" + "\n\n".join(blocks)

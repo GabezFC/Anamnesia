@@ -1,5 +1,5 @@
 from app.gateway.context_builder import CONTEXT_HEADER, ModelContextBuilder, render_prompt
-from app.gateway.token_budget import estimate_tokens
+from app.core.tokens import estimate_tokens
 from app.schemas.models import Candidate
 
 

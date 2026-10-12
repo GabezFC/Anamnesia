@@ -4,12 +4,12 @@ from __future__ import annotations
 import asyncio
 import importlib
 import json
-import os
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.core.state import STATE
 from app.adapters.models.providers import GenerationResult
 from app.routing import answer as ans
 from app.routing.policy import preset
@@ -95,8 +95,8 @@ def env(tiny_vault, tmp_path, monkeypatch):
                        graphify_service=FakeGraphify(tiny_vault, rcfg.mirror_dir))
     app = FastAPI()
     app.include_router(routes.router)
-    old = routes._state["gateway"]
-    routes._state["gateway"] = gw
+    old = STATE.gateway
+    STATE.gateway = gw
     reg = Registry([_entry("m1", 1), _entry("m2", 2, "anthropic", False, PRICE), _entry("m3", 3, "openai", False)],
                    "h")
     avail = {p: {"available": True, "models": []} for p in ("ollama", "anthropic", "openai")}
@@ -110,7 +110,7 @@ def env(tiny_vault, tmp_path, monkeypatch):
     try:
         yield type("E", (), {"client": tc, "gw": gw, "stub": stub, "mp": monkeypatch})
     finally:
-        routes._state["gateway"] = old
+        STATE.gateway = old
         gw.db.conn.close() if hasattr(gw.db, "conn") else None
 
 

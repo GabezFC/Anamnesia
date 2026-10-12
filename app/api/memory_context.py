@@ -34,7 +34,7 @@ def view_of_run(run: dict, metrics_only: bool) -> dict:
         "pipeline": run.get("pipeline"), "agent": run.get("agent"), "client": m.get("client"),
         "sources": [{"file": s.get("file"), "section": s.get("section"), "score": s.get("score"),
                      "relevance": s.get("relevance"), "decision": s.get("decision"),
-                     "tokens": s.get("tokens", 0)} for s in srcs],
+                     "tokens": s.get("tokens", 0), "why": s.get("why", "")} for s in srcs],
         "tokens": {"context": _num(m.get("context_tokens")), "candidates": _num(m.get("candidate_tokens_before_filter")),
                    "total_spent": _num(m.get("total_tokens_spent")),
                    "sources_sum": sum(int(s.get("tokens") or 0) for s in srcs)},

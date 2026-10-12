@@ -415,9 +415,10 @@ class MemoryOptimizer:
         index = self.provenance_index(gw)
         if index is None:
             return out, {}
-        for c in cands:
-            line = index.line(c.source_file)
-            if (c.meta or {}).get("historical"):
+        compact = getattr(self.cfg, "provenance_mode", "full") == "compact"  # ANA-161
+        for n, c in enumerate(cands, 1):
+            line = index.compact_line(c.source_file, n) if compact else index.line(c.source_file)
+            if (c.meta or {}).get("historical") or (c.meta or {}).get("expired"):
                 line = f"{line} {index.marker(c.source_file)}".strip()
             if line:
                 out[c.candidate_id] = line

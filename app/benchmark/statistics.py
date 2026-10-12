@@ -58,20 +58,7 @@ def aggregate_stats(db, session_id: str | None = None) -> dict:
 # ---------------------------------------------------------------------------------------------
 import random as _random
 
-_Z95 = 1.959963984540054
-
-
-def wilson_ci(k: int, n: int, z: float = _Z95) -> dict:
-    """Wilson score interval for a binomial rate k/n. n == 0 -> no estimate (never a fake 0%)."""
-    if n <= 0:
-        return {"k": k, "n": n, "rate": None, "low": None, "high": None, "half_width": None}
-    p = k / n
-    d = 1 + z * z / n
-    centre = (p + z * z / (2 * n)) / d
-    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
-    lo, hi = max(0.0, centre - half), min(1.0, centre + half)
-    return {"k": k, "n": n, "rate": round(p, 4), "low": round(lo, 4), "high": round(hi, 4),
-            "half_width": round((hi - lo) / 2, 4)}
+from app.core.stats import _Z95, wilson_ci  # noqa: E402,F401  (ANA-108: lives in core, breaks the cycle)
 
 
 def bootstrap_ci(values: Iterable[float | None], seed: int = 20261011, n_boot: int = 2000,

@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol
 
 from config.jev import JevConfig
-from app.gateway.token_budget import estimate_tokens, pack_batches
+from app.core.tokens import estimate_tokens, pack_batches
 from app.schemas.models import Candidate
 
 RELEVANCE_QUESTION = "Does this candidate contain information directly useful for answering the query?"

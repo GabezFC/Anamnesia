@@ -34,7 +34,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from app.gateway.token_budget import estimate_tokens
+from app.core.tokens import estimate_tokens
 from app.services.near_dup import hamming, jaccard, shingles, similarity, simhash
 from app.services.obsidian import (ObsidianVault, Section, frontmatter_fields, split_frontmatter,
                                      split_sections)

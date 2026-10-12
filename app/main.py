@@ -38,9 +38,12 @@ def local_ip() -> str:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     g = MemoryGateway()
+    from app.memory_store.index import attach_saved_context  # ANA-078: saved notes searchable
+    attach_saved_context(g)  # no-op while data/saved_context is empty
     info = g.warm()
     g.log.info("gateway warm: %s", info)
-    routes._state["gateway"] = g
+    from app.core.state import STATE  # ANA-106
+    STATE.gateway = g
     try:  # ANA-041: optional short TTL for the stored context text (ANAMNESIA_CONTEXT_TTL_DAYS, 0 = off)
         import os as _os
         _ttl = float(_os.environ.get("ANAMNESIA_CONTEXT_TTL_DAYS", "0") or 0)
@@ -133,6 +136,10 @@ def create_app() -> FastAPI:
     app.include_router(settings_api.router)
     app.include_router(benchmark_report_api.router)
     app.include_router(memory_context_api.router)
+    from app.api import memory_store as memory_store_api  # ANA-078: /api/memory/notes* (Fase 7 + Onda 3)
+    app.include_router(memory_store_api.router)
+    from app.api import context_pack as context_pack_api  # ANA-147/152/153
+    app.include_router(context_pack_api.router)
     app.include_router(connections_api.router)
     app.include_router(orchestration_api.router)
     app.include_router(workspace_api.router)

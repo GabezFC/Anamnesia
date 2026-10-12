@@ -211,7 +211,7 @@ def test_sq070_recut_never_drops_the_answer_token():
 
 def test_fit_or_keep_never_grows_the_snippet():
     """RULE 1 (ceiling): a cheap candidate must never be inflated to fill a larger policy budget."""
-    from app.gateway.token_budget import estimate_tokens
+    from app.core.tokens import estimate_tokens
     out, _ = fit_or_keep(SQ070_NOTE, SQ070_CURRENT, SQ070_QUERY, budget=5000, min_saving=0)
     assert estimate_tokens(out) <= estimate_tokens(SQ070_CURRENT)
 
@@ -252,7 +252,7 @@ def test_evidence_loss_is_disqualifying_regardless_of_the_size_of_the_win():
 def test_fit_or_keep_is_never_worse_than_the_baseline():
     """RULE 4 (fail safe): on any doubt the original is returned, so the worst case EQUALS the
     baseline. Property-checked over a range of budgets."""
-    from app.gateway.token_budget import estimate_tokens
+    from app.core.tokens import estimate_tokens
     for budget in (8, 16, 32, 64, 128, 256, 512, 1024):
         out, _ = fit_or_keep(SQ070_NOTE, SQ070_CURRENT, SQ070_QUERY, budget=budget, min_saving=40)
         assert estimate_tokens(out) <= estimate_tokens(SQ070_CURRENT)

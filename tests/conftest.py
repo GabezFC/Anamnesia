@@ -2,14 +2,89 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
+# ANA-130: with `pip install -e .` the package layout is real, so the sys.path hack is not needed. It is kept
+# as a fallback for a bare checkout; CI sets ANAMNESIA_TEST_NO_PATH_HACK=1 to prove the suite runs without it.
+if not os.environ.get("ANAMNESIA_TEST_NO_PATH_HACK") and str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+import ci_support  # noqa: E402  (tests/ci_support.py; tests/ is on sys.path in rootdir/prepend mode)
+
+# ANA-084: nothing the suite WRITES may land in the repo (benchmark.db, .env, logs/, data/). Many modules
+# resolve their paths at import time, so the isolated home must exist BEFORE any `app`/`config` import.
+_SESSION_HOME = tempfile.mkdtemp(prefix="anamnesia-tests-home-")
+os.environ["ANAMNESIA_HOME"] = _SESSION_HOME
+_TREE_BEFORE = ci_support.fingerprint(ROOT)
+
+
+def pytest_addoption(parser):
+    g = parser.getgroup("anamnesia")
+    g.addoption("--shuffle-seed", default=os.environ.get("ANAMNESIA_SHUFFLE_SEED"),
+                help="ANA-129: shuffle test order with this seed ('random' picks one and prints it)")
+    g.addoption("--block-network", action="store_true", default=os.environ.get("ANAMNESIA_BLOCK_NETWORK") == "1",
+                help="ANA-105: raise on any non-loopback socket connect/DNS lookup (exempt: @pytest.mark.network)")
+    g.addoption("--tree-guard", choices=("off", "warn", "strict"), default="warn",
+                help="ANA-084: report (warn) or fail (strict) if the suite changed benchmark.db/.env/data/logs of the repo")
+
+
+def pytest_configure(config):
+    seed = ci_support.resolve_seed(config.getoption("--shuffle-seed"))
+    config._anamnesia_seed = seed
+
+
+def pytest_report_header(config):
+    lines = [f"anamnesia: isolated ANAMNESIA_HOME={_SESSION_HOME}"]
+    if config._anamnesia_seed is not None:
+        lines.append(f"anamnesia: shuffle seed={config._anamnesia_seed} (repro: --shuffle-seed={config._anamnesia_seed})")
+    if config.getoption("--block-network"):
+        lines.append("anamnesia: external network BLOCKED (ANA-105)")
+    return lines
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config, items):
+    """ANA-127: markers must exist BEFORE pytest's own -m deselection runs, hence tryfirst."""
+    for item in items:
+        rel = str(item.path.relative_to(ROOT)) if item.path.is_relative_to(ROOT) else item.nodeid
+        for name in ci_support.auto_markers_for(rel):
+            item.add_marker(getattr(pytest.mark, name))
+    seed = config._anamnesia_seed
+    if seed is not None:  # ANA-129 (deselection by -m/-k keeps relative order, so shuffling first is fine)
+        items[:] = ci_support.shuffled(items, seed)
+
+
+@pytest.fixture(autouse=True)
+def _network_block(request):
+    """ANA-105: opt-in (--block-network). Tests marked `network` are exempt."""
+    if not request.config.getoption("--block-network") or request.node.get_closest_marker("network"):
+        yield
+        return
+    with ci_support.block_network():
+        yield
+
+
+def pytest_sessionfinish(session, exitstatus):
+    shutil.rmtree(_SESSION_HOME, ignore_errors=True)
+    mode = session.config.getoption("--tree-guard")
+    if mode == "off":
+        return
+    changes = ci_support.diff_fingerprints(_TREE_BEFORE, ci_support.fingerprint(ROOT))
+    if not changes:
+        return
+    msg = "ANA-084 tree guard: the test run changed the repo working tree:\n  " + "\n  ".join(changes[:30])
+    session.config._anamnesia_tree_changes = changes
+    if mode == "strict":
+        print("\n" + msg, file=sys.stderr)
+        session.exitstatus = 1
+    else:
+        print("\nWARNING " + msg, file=sys.stderr)
 
 NOTES = {
     "20-Dev-IA/decisao-stack.md": """---

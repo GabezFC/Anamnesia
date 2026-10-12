@@ -20,8 +20,8 @@ L1 and L2 cannot change the meaning of a query; L3 can ("licença do Redis" vs "
 software"), so L3 is served only when `promote_l3` is on, and otherwise recorded as a *suggestion*
 so its false-positive rate can be measured against the real judgement before anyone trusts it (§12).
 
-Two more layers avoid recomputation rather than judgement:
-  L4 ranking      query-representation -> ordered candidate ids (skips BM25 + graph + hybrid rank)
+One more layer avoids recomputation rather than judgement (ANA-142: the old L4 ranking layer was
+never wired into a pipeline and was removed; the numbering L5 is kept so stored keys stay valid):
   L5 snippet      (content_hash, policy_version, budget) -> extracted snippet
 
 VERSIONING (§16, §23)
@@ -52,7 +52,7 @@ from app.services.query_fp import QUERY_NORMALIZER_VERSION, canonical, fingerpri
 CACHE_SCHEMA_VERSION = "cache-v2"
 RANKING_VERSION = "rank-v1"
 
-L1, L2, L3, L4, L5 = "l1_exact", "l2_normalized", "l3_fingerprint", "l4_ranking", "l5_snippet"
+L1, L2, L3, L5 = "l1_exact", "l2_normalized", "l3_fingerprint", "l5_snippet"
 
 
 @dataclass(frozen=True)
@@ -75,8 +75,14 @@ class CacheIdentity:
     cache_schema_version: str = CACHE_SCHEMA_VERSION
     namespace: str = ""
 
+    # ANA-099: the cache stores the judge's RAW relevance/injection scores; thresholds only decide what
+    # to do with them afterwards. Keeping them out of the key means moving a threshold re-uses every
+    # paid judgement instead of orphaning the whole cache (hit-rate kept after a threshold change).
+    KEY_EXCLUDED = ("relevance_threshold", "review_threshold")
+
     def digest(self) -> str:
-        return hashlib.sha256(json.dumps(asdict(self), sort_keys=True).encode()).hexdigest()[:16]
+        d = {k: v for k, v in asdict(self).items() if k not in self.KEY_EXCLUDED}
+        return hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()[:16]
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -94,7 +100,6 @@ class CacheStats:
     hits_l1: int = 0
     hits_l2: int = 0
     hits_l3: int = 0
-    hits_l4: int = 0
     hits_l5: int = 0
     misses: int = 0
     writes: int = 0
@@ -207,22 +212,6 @@ class LayeredCache:
         r = v.get("relevance")
         if r is not None and r < self.ident.review_threshold:
             self.stats.negative_hits += 1
-
-    # -- L4: ranking ---------------------------------------------------------
-    def get_ranking(self, query: str, corpus_version: str) -> list[str] | None:
-        if self._get is None:
-            return None
-        v = self._get(_key(L4, list(term_key(query)), corpus_version, self.ident))
-        if v and isinstance(v.get("order"), list):
-            self.stats.hits_l4 += 1
-            return v["order"]
-        return None
-
-    def put_ranking(self, query: str, corpus_version: str, order: list[str]) -> None:
-        if self._put is None:
-            return
-        self._put(_key(L4, list(term_key(query)), corpus_version, self.ident),
-                  {"order": order, "cached_at": time.time()})
 
     # -- L5: snippets --------------------------------------------------------
     def get_snippet(self, content_hash: str, policy: str, budget: int, qkey: Any) -> str | None:

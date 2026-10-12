@@ -4,15 +4,25 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import os
+import queue
 import sqlite3
 import threading
 import time
 import zlib
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
+from app.database.migrations import BENCHMARK_MIGRATIONS, run_migrations
 from app.schemas.models import DEFAULT_EXPLICIT_PIPELINE
+
+log = logging.getLogger("anamnesia.db")
+
+
+def _env_on(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -25,8 +35,8 @@ CREATE TABLE IF NOT EXISTS runs (
   cache_enabled INTEGER, config_json TEXT, metrics_json TEXT, sources_json TEXT,
   context TEXT, answer TEXT, error TEXT
 );
-CREATE INDEX IF NOT EXISTS runs_session ON runs(session_id);
-CREATE INDEX IF NOT EXISTS runs_created ON runs(created_at);
+-- ANA-134: runs_session (prefix of runs_session_created) and runs_created (== runs_created_at) are
+-- gone: migration 2 drops them from existing files and they are no longer created here.
 CREATE INDEX IF NOT EXISTS runs_session_created ON runs(session_id, created_at);
 CREATE INDEX IF NOT EXISTS runs_pipeline_warmup ON runs(pipeline, warmup);
 CREATE TABLE IF NOT EXISTS candidates (
@@ -84,8 +94,54 @@ LIST_COLUMNS = ("run_id, session_id, created_at, question_id, query, pipeline, a
 FULL_EXTRA_COLUMNS = ", config_json, config_hash, sources_json, context, context_encoding, answer"
 
 
+def _chunks(seq: list, n: int) -> Iterator[list]:
+    for i in range(0, len(seq), n):
+        yield seq[i:i + n]
+
+
+class _AsyncWriter:
+    """ANA-103 (EXPERIMENT, flag ANAMNESIA_DB_ASYNC_WRITES): one thread serialises `save_run` calls so
+    request threads never wait on the SQLite write lock. `flush()` gives read-your-writes."""
+
+    def __init__(self, db: "Database"):
+        self._db = db
+        self._q: queue.Queue = queue.Queue()
+        self.errors: list[str] = []
+        self._t = threading.Thread(target=self._loop, name="anamnesia-db-writer", daemon=True)
+        self._t.start()
+
+    def submit(self, row: dict, candidates: list[dict] | None) -> None:
+        self._q.put((row, candidates))
+
+    def _loop(self) -> None:
+        while True:
+            item = self._q.get()
+            try:
+                if item is None:
+                    return
+                self._db._save_run_sync(*item)
+            except Exception as e:  # noqa: BLE001 - a failed telemetry write must not kill the writer
+                self.errors.append(f"{type(e).__name__}: {e}")
+                log.warning("escrita assíncrona falhou: %s", e)
+            finally:
+                self._q.task_done()
+
+    def flush(self, timeout: float = 30.0) -> bool:
+        if threading.current_thread() is self._t:
+            return True
+        end = time.monotonic() + timeout
+        while self._q.unfinished_tasks and time.monotonic() < end:
+            time.sleep(0.001)
+        return not self._q.unfinished_tasks
+
+    def stop(self) -> None:
+        self._q.put(None)
+        self._t.join(timeout=5)
+
+
 class Database:
-    def __init__(self, path: str | Path, compress_context: bool = False):
+    def __init__(self, path: str | Path, compress_context: bool = False, *,
+                 async_writes: bool | None = None, read_connection: bool | None = None):
         self.path = str(path)
         # Whether NEW rows get their `context` column zlib-compressed (base64-encoded text, so the
         # column stays TEXT). Reading never depends on this flag: `context_encoding` on each row
@@ -96,21 +152,73 @@ class Database:
         # Wakes SSE streams the instant a run is inserted (no polling latency); see wait_new_run().
         self._run_cv = threading.Condition()
         self._run_seq = 0
-        self.conn = sqlite3.connect(self.path, check_same_thread=False)
+        self.conn = sqlite3.connect(self.path, uri=True, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA busy_timeout=5000")           # ANA-060
+        try:
+            # ANA-061/096: the ONE migration runner (user_version, backup-before-migrate, refuse newer).
+            self.migration_report = run_migrations(self.conn, BENCHMARK_MIGRATIONS, path=self.path,
+                                                   label="benchmark.db")
+        except BaseException:
+            self.conn.close()
+            raise
         self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.executescript(SCHEMA)
-        self._migrate_columns()
+        # ANA-060: WAL + synchronous=NORMAL cannot corrupt the file; at worst the last commits are lost on
+        # an OS crash/power cut (benchmark telemetry, not a source of truth). Saves an fsync per commit.
+        self.conn.execute("PRAGMA synchronous=NORMAL")
+        self.conn.execute("PRAGMA wal_autocheckpoint=1000")
+        # ANA-103 / ANA-104 EXPERIMENTS: both OFF by default (flags); see scripts/measure_db_experiments.py
+        self._writer: _AsyncWriter | None = None
+        if async_writes if async_writes is not None else _env_on("ANAMNESIA_DB_ASYNC_WRITES"):
+            self._writer = _AsyncWriter(self)
+        self._reader: sqlite3.Connection | None = None
+        self._rlock = threading.Lock()
+        if (read_connection if read_connection is not None else _env_on("ANAMNESIA_DB_READER")) \
+                and self.path != ":memory:":
+            self._reader = self._open_reader()
+        self._auto_retention()
 
-    def _migrate_columns(self) -> None:
-        existing = {r["name"] for r in self.query("PRAGMA table_info(runs)")}
-        for col, decl in RUNS_MIGRATED_COLUMNS:
-            if col not in existing:
-                self._exec(f"ALTER TABLE runs ADD COLUMN {col} {decl}")
-        # indexes on migrated columns can only be created after the ALTER above
-        self._exec("CREATE INDEX IF NOT EXISTS runs_project_created ON runs(project, created_at)")
-        self._exec("CREATE INDEX IF NOT EXISTS runs_created_at ON runs(created_at)")
-        self._exec("CREATE INDEX IF NOT EXISTS runs_routing_strategy ON runs(routing_strategy)")
+    def _open_reader(self) -> sqlite3.Connection:
+        """ANA-104: second, read-only connection (WAL lets it read while the writer commits)."""
+        uri = Path(self.path).resolve().as_uri() + "?mode=ro"
+        c = sqlite3.connect(uri, uri=True, check_same_thread=False)
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA busy_timeout=5000")
+        return c
+
+    def _auto_retention(self) -> None:
+        """ANA-095: opt-in startup maintenance (env ANAMNESIA_DB_RETENTION_DAYS > 0); never raises."""
+        try:
+            from app.database.retention import startup_maintenance
+            startup_maintenance(self)
+        except Exception as e:  # noqa: BLE001 - maintenance must never block startup
+            log.warning("retenção no startup falhou: %s", e)
+
+    def close(self) -> None:
+        self.flush()
+        if self._writer is not None:
+            self._writer.stop()
+        for c in (self._reader, self.conn):
+            if c is not None:
+                try:
+                    c.close()
+                except sqlite3.Error:
+                    pass
+
+    def flush(self, timeout: float = 30.0) -> bool:
+        """ANA-103: wait for queued async writes (no-op when the experiment is off)."""
+        return self._writer.flush(timeout) if self._writer is not None else True
+
+    @contextmanager
+    def _tx(self) -> Iterator[sqlite3.Connection]:
+        """ANA-060: several statements, ONE commit (atomic: all-or-nothing). Holds the write lock."""
+        with self._lock:
+            try:
+                yield self.conn
+                self.conn.commit()
+            except BaseException:
+                self.conn.rollback()
+                raise
 
     def _exec(self, sql: str, args: tuple = ()) -> sqlite3.Cursor:
         with self._lock:
@@ -119,6 +227,11 @@ class Database:
             return cur
 
     def query(self, sql: str, args: tuple = ()) -> list[dict]:
+        if self._writer is not None:
+            self._writer.flush()              # read-your-writes while async writes are on
+        if self._reader is not None and sql.lstrip().upper().startswith(("SELECT", "WITH")):
+            with self._rlock:                 # ANA-104: reads never wait for the writer lock
+                return [dict(r) for r in self._reader.execute(sql, args).fetchall()]
         with self._lock:
             return [dict(r) for r in self.conn.execute(sql, args).fetchall()]
 
@@ -127,17 +240,18 @@ class Database:
         self._exec("INSERT OR IGNORE INTO sessions VALUES (?,?,?,?,?)",
                    (session_id, time.time(), kind, json.dumps(config, default=str), notes))
 
-    def _dedup_config(self, row: dict[str, Any]) -> None:
-        """Replace `config_json` (near-identical across runs) with a hash into `configs` (§5.3)."""
+    def _dedup_config(self, row: dict[str, Any]) -> tuple[str, str] | None:
+        """Replace `config_json` (near-identical across runs) with a hash into `configs` (§5.3).
+        Returns (hash, json) still to be inserted into `configs` (done inside save_run's transaction)."""
         cfg = row.get("config_json")
         if cfg is None:
             row["config_hash"] = None
-            return
+            return None
         cfg_str = cfg if isinstance(cfg, str) else json.dumps(cfg, default=str, ensure_ascii=False)
         digest = hashlib.sha256(cfg_str.encode("utf-8")).hexdigest()
-        self._exec("INSERT OR IGNORE INTO configs (hash, json) VALUES (?,?)", (digest, cfg_str))
         row["config_hash"] = digest
         row["config_json"] = None
+        return digest, cfg_str
 
     def _maybe_compress_context(self, row: dict[str, Any]) -> None:
         ctx = row.get("context")
@@ -168,9 +282,26 @@ class Database:
             row["cost_origin"] = cost_origin_for(m, row.get("pipeline"))
 
     def save_run(self, row: dict[str, Any], candidates: list[dict] | None = None) -> None:
+        if self._writer is not None:                       # ANA-103 (experiment, flag off by default)
+            self._writer.submit(dict(row), list(candidates or []))
+            return
+        self._save_run_sync(row, candidates)
+
+    def _save_run_sync(self, row: dict[str, Any], candidates: list[dict] | None = None) -> None:
+        """ANA-060: config + run + all candidates in ONE transaction (one commit/fsync, atomic)."""
         row = dict(row)
         self._fill_ledger_fields(row)
-        self._dedup_config(row)
+        cfg_pending = self._dedup_config(row)
+        if _env_on("ANAMNESIA_METRICS_TRIM"):          # ANA-133 (opt-in): drop duplicated nested blocks
+            from app.database.retention import trim_metrics
+            mj = row.get("metrics_json")
+            if isinstance(mj, str):
+                try:
+                    mj = json.loads(mj)
+                except ValueError:
+                    mj = None
+            if isinstance(mj, dict):
+                row["metrics_json"] = trim_metrics(mj)
         if os.environ.get("ANAMNESIA_METRICS_ONLY", "").strip().lower() in {"1", "true", "yes", "on"}:
             # ANA-041 / P-01: keep hash + sources, never the delivered context text.
             if row.get("context"):
@@ -189,11 +320,16 @@ class Database:
             if c.endswith("_json") and v is not None and not isinstance(v, str):
                 v = json.dumps(v, default=str, ensure_ascii=False)
             vals.append(v)
-        self._exec(f"INSERT OR REPLACE INTO runs ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", tuple(vals))
-        for cd in candidates or []:
-            self._exec("INSERT INTO candidates VALUES (?,?,?,?,?,?,?,?,?)",
-                       (row["run_id"], cd["candidate_id"], cd["source_file"], cd["section"], cd["score"],
-                        cd.get("relevance"), cd.get("injection"), cd.get("decision"), cd.get("token_estimate")))
+        cand_rows = [(row["run_id"], cd["candidate_id"], cd["source_file"], cd["section"], cd["score"],
+                      cd.get("relevance"), cd.get("injection"), cd.get("decision"), cd.get("token_estimate"))
+                     for cd in candidates or []]
+        with self._tx() as cx:
+            if cfg_pending:
+                cx.execute("INSERT OR IGNORE INTO configs (hash, json) VALUES (?,?)", cfg_pending)
+            cx.execute(f"INSERT OR REPLACE INTO runs ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
+                       tuple(vals))
+            if cand_rows:
+                cx.executemany("INSERT INTO candidates VALUES (?,?,?,?,?,?,?,?,?)", cand_rows)
         self._publish_run()
 
     def _publish_run(self) -> None:
@@ -225,6 +361,22 @@ class Database:
     def set_kv(self, key: str, value: Any) -> None:
         self._exec("INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES (?,?,?)",
                    (key, json.dumps(value, ensure_ascii=False, default=str), time.time()))
+
+    def run_evidence(self, run_id: str) -> list[dict]:
+        """ANA-153: the notes a run delivered and why -- ONE SQL query (json_each over sources_json)."""
+        return self.query(
+            "SELECT json_extract(j.value,'$.file') AS file, json_extract(j.value,'$.section') AS section,"
+            " json_extract(j.value,'$.score') AS score, json_extract(j.value,'$.decision') AS decision,"
+            " json_extract(j.value,'$.tokens') AS tokens, json_extract(j.value,'$.why') AS why,"
+            " r.query AS query, r.pipeline AS pipeline, r.created_at AS created_at"
+            " FROM runs r, json_each(r.sources_json) j WHERE r.run_id=? ORDER BY j.key", (run_id,))
+
+    def runs_for_note(self, file: str, limit: int = 20) -> list[dict]:
+        """ANA-153 (reverse chain): which runs/queries retrieved this note."""
+        return self.query(
+            "SELECT r.run_id AS run_id, r.query AS query, r.pipeline AS pipeline, r.created_at AS created_at,"
+            " json_extract(j.value,'$.why') AS why FROM runs r, json_each(r.sources_json) j"
+            " WHERE json_extract(j.value,'$.file')=? ORDER BY r.created_at DESC LIMIT ?", (file, max(1, min(int(limit), 200))))
 
     def last_search_run(self) -> dict | None:
         """Newest ad-hoc (interactive/MCP/REST) search run, with decoded sources and candidates."""
@@ -289,6 +441,9 @@ class Database:
         for k in ("metrics_json", "sources_json"):
             if r.get(k):
                 r[k[:-5]] = json.loads(r.pop(k))
+                if k == "metrics_json" and isinstance(r["metrics"], dict) and "_trimmed" in r["metrics"]:
+                    from app.database.retention import expand_metrics     # ANA-133
+                    expand_metrics(r["metrics"])
             else:
                 r.pop(k, None)
         return r
@@ -579,6 +734,44 @@ class Database:
 
     def cache_put(self, key: str, value: dict) -> None:
         self._exec("INSERT OR REPLACE INTO jev_cache VALUES (?,?,?)", (key, json.dumps(value), time.time()))
+
+    def purge_stale(self, current_identity: str | None = None, ttl_days: float | None = None,
+                    max_rows: int | None = None, apply: bool = True) -> dict:
+        """ANA-099: jev_cache governance. Removes (a) rows whose stored `identity` digest differs from the
+        CURRENT one (unreachable under the current version vector), (b) rows older than `ttl_days`
+        (by the row's created_at), (c) the oldest rows beyond `max_rows`. Rows without an identity
+        (legacy single-layer keys) are only subject to TTL / cap. apply=False only counts."""
+        ids: set[str] = set()
+        for label, sql, args in (
+            ("stale_identity", "SELECT key FROM jev_cache WHERE json_extract(value,'$.identity') IS NOT NULL"
+                               " AND json_extract(value,'$.identity') <> ?", (current_identity,)),
+            ("expired", "SELECT key FROM jev_cache WHERE created_at < ?",
+             (time.time() - (ttl_days or 0) * 86400,)),
+        ):
+            if label == "stale_identity" and not current_identity:
+                continue
+            if label == "expired" and not ttl_days:
+                continue
+            ids |= {r["key"] for r in self.query(sql, args)}
+        over = 0
+        if max_rows is not None and max_rows >= 0:
+            total = self.query("SELECT COUNT(*) n FROM jev_cache")[0]["n"] - len(ids)
+            over = max(0, total - max_rows)
+            if over:
+                ids |= {r["key"] for r in self.query(
+                    "SELECT key FROM jev_cache ORDER BY created_at ASC LIMIT ?", (len(ids) + over,))}
+        deleted = 0
+        if apply and ids:
+            with self._tx() as cx:
+                for chunk in _chunks(sorted(ids), 500):
+                    cx.execute(f"DELETE FROM jev_cache WHERE key IN ({','.join('?' * len(chunk))})", chunk)
+                    deleted += len(chunk)
+        return {"candidates": len(ids), "deleted": deleted, "over_cap": over, "dry_run": not apply}
+
+    def cache_stats(self) -> dict:
+        r = self.query("SELECT COUNT(*) n, COALESCE(SUM(LENGTH(key)+LENGTH(value)),0) b,"
+                       " MIN(created_at) oldest FROM jev_cache")[0]
+        return {"rows": r["n"], "bytes": r["b"], "oldest": r["oldest"]}
 
     # costs ledger read helpers (additive) ---------------------------------------
     COST_COLUMNS = ("rowid AS _rowid, run_id, created_at, project, terminal_session_id, cost_origin, agent, "

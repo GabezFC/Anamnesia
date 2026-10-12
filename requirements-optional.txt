@@ -7,8 +7,8 @@
 #     uv venv --python 3.11 %LOCALAPPDATA%/Temp/mg-stages-venv
 #     uv pip install --python <that venv> -r requirements.txt -r requirements-optional.txt \
 #         --extra-index-url https://download.pytorch.org/whl/cu124
-#   The project itself requires Python >= 3.14; the optional stack was benchmarked on 3.11 because
-#   torch/llmlingua wheels are published for it. Not validated on 3.14.
+#   The project itself requires Python >= 3.12; the optional stack was benchmarked on 3.11 because
+#   torch/llmlingua wheels are published for it. Not validated on 3.12+ (3.14 is the dev venv).
 
 torch==2.6.0+cu124          # CUDA 12.4 build (index https://download.pytorch.org/whl/cu124)
 

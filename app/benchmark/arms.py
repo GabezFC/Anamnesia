@@ -14,7 +14,7 @@ import time
 from typing import Any, Callable
 
 from app.benchmark.statistics import mcnemar_exact, paired_diff_ci
-from app.gateway.token_budget import estimate_tokens
+from app.core.tokens import estimate_tokens
 from app.retrieval.pipelines import (_apply_scope, _graphify_candidates, full_note_text,
                                      run_baseline, run_graphify)
 from app.services.dedup import deduplicate, preprocess

@@ -133,6 +133,10 @@ class OptimizerConfig:
     # while the provenance lines alone cost ~19.5k tokens (+23.6% context). Token economy (§48) wins
     # until a benefit is measured. Set MG_OPT_PROVENANCE=true to add the lines.
     provenance: bool = field(default_factory=lambda: env_bool("MG_OPT_PROVENANCE", False))
+    # ANA-161: "full" = `[fonte: arquivo · tipo · status · atualizado · projeto]`; "compact" = `[n·tipo·data]`
+    # (about one token per source). Only matters when `provenance` is on; the default does not change.
+    provenance_mode: str = field(default_factory=lambda: (
+        "compact" if env_str("MG_OPT_PROVENANCE_MODE", "full").strip().lower() == "compact" else "full"))
 
     # -- TEMPORALITY: archived / superseded notes are history, not current truth ------------------
     # Default is DEMOTE, not exclude. The strict reading ("historical notes only when the query asks

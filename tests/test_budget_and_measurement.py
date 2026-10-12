@@ -14,7 +14,7 @@ from app.database.db import Database
 from app.gateway import budget_guard as bg
 from app.gateway.budget_guard import BudgetGuard
 from app.gateway.optimizer import Plan
-from app.gateway import token_budget as tb
+from app.core import tokens as tb
 from app.services import token_estimate as te
 from config.benchmark import BenchmarkConfig
 from config.retrieval import RetrievalConfig

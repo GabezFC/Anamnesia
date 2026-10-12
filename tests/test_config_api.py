@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.core.state import STATE
 from app.services.security import MODEL_KEY_ENV_VARS
 from config.optional_stages_catalog import CATALOG, REJECTED
 from tests.test_api_mcp import client  # noqa: F401 -- reused as a pytest fixture
@@ -44,7 +45,6 @@ def test_set_model_key_rejects_unknown_name(client):
 
 
 def test_set_model_key_requires_write_guard(client):
-    from app.services import security
 
     r = client.post("/config/model-key", json={"key_name": "ANTHROPIC_API_KEY", "value": "x"},
                     headers={"X-MG-Token": "wrong"})
@@ -122,7 +122,6 @@ def test_vault_path_endpoint_rejects_db_inside_vault(client, tmp_path):
 
 
 def test_vault_path_endpoint_switches_gateway_at_runtime(client, tmp_path):
-    from app.api import routes
 
     new_vault = tmp_path / "other_vault"
     (new_vault / "20-Dev-IA").mkdir(parents=True)
@@ -133,7 +132,7 @@ def test_vault_path_endpoint_switches_gateway_at_runtime(client, tmp_path):
     r = client.post("/config/vault-path", json={"path": str(new_vault)})
     assert r.status_code == 200, r.text
     assert r.json()["markdown_files"] == 1
-    assert routes._state["gateway"].vault.root == new_vault.resolve()
+    assert STATE.gateway.vault.root == new_vault.resolve()
 
     info = client.get("/system/info").json()
     assert info["settings"]["vault_path"] == str(new_vault.resolve())

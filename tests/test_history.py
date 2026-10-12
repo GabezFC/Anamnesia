@@ -8,6 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.core.state import STATE
 from app.benchmark.timeseries import METRICS, build_series, build_timeseries, day_key, lttb, normalize_ts
 from app.database.db import Database
 
@@ -237,12 +238,12 @@ def api(history_db):
 
     app = FastAPI()
     app.include_router(routes.router)
-    old = routes._state["gateway"]
-    routes._state["gateway"] = _GW()
+    old = STATE.gateway
+    STATE.gateway = _GW()
     try:
         yield TestClient(app)
     finally:
-        routes._state["gateway"] = old
+        STATE.gateway = old
 
 
 def test_rest_sessions_order_and_total(api):

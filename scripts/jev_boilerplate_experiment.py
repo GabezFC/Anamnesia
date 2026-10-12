@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.gateway.memory_gateway import MemoryGateway  # noqa: E402
-from app.gateway.token_budget import estimate_tokens  # noqa: E402
+from app.core.tokens import estimate_tokens  # noqa: E402
 from app.services.jev import (  # noqa: E402
     INJECTION_CRITERIA,
     RELEVANCE_CRITERIA,

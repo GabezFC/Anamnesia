@@ -24,11 +24,50 @@ Apenas o último commit da branch `main` (projeto em versão `0.x`, sem releases
 - O serviço é pensado para uso **local**: escuta em `127.0.0.1` por padrão.
 - Endpoints de escrita recusam qualquer cliente que não seja loopback; há um token local
   (`MG_LOCAL_TOKEN`, criado no primeiro `start`).
-- Há proteção de `Host` (anti DNS-rebinding) e cabeçalhos CSP (ver [docs/SECURITY.md](docs/SECURITY.md)).
+- Há proteção de `Host` (anti DNS-rebinding) e cabeçalhos CSP (ver [docs/guides/SECURITY.md](docs/guides/SECURITY.md)).
 - Terminais embutidos ficam desligados quando o serviço escuta fora de loopback, a menos que
-  `ANAMNESIA_ALLOW_REMOTE_TERMINALS=1` (não recomendado) — ver [docs/TERMINALS.md](docs/TERMINALS.md).
+  `ANAMNESIA_ALLOW_REMOTE_TERMINALS=1` (não recomendado) — ver [docs/guides/TERMINALS.md](docs/guides/TERMINALS.md).
 - O serviço **lê** um vault Obsidian seu. O vault e os arquivos derivados dele (bancos, logs, espelhos)
   são privados e não devem ser publicados.
+
+### Leituras abertas (o que NÃO é protegido)
+
+Com o bind padrão (`127.0.0.1`), **qualquer processo local** pode chamar as rotas de **leitura** da API
+(`/memory/search`, `/benchmark/*`, `/api/costs/*`, `/system/*` …) sem token: o token (`X-MG-Token`) protege
+**escrita**. Isso inclui ler trechos do vault via busca. Se `MG_HOST` abrir o serviço para a rede, as leituras
+de clientes não-loopback passam a exigir o token (exceto `/health` e o shell estático) — mas o transporte é
+HTTP simples, sem TLS. Outros usuários da mesma máquina e qualquer software que rode como você estão
+**fora** do modelo de ameaça.
+
+### Tabela de isolamento: hard / soft / best-effort
+
+- **hard** — o código recusa a operação e há teste automatizado; contornar exige mudar o código.
+- **soft** — heurística ou modo configurável (`enforce|warn|off`); reduz risco, tem falso negativo/positivo.
+- **best-effort** — redução de dano sem garantia; pode falhar sem aviso.
+
+| Controle | Nível | Onde / como | Limite conhecido |
+| --- | --- | --- | --- |
+| Vault somente leitura | **hard** | `app/services/obsidian.py` (`READ_ONLY_OPERATIONS`; não existe função de escrita); `vault-check` prova por hash | Só vale para o caminho de código do Gateway; um agente com shell pode escrever no vault por conta própria |
+| Escrita na API só de loopback + token | **hard** | `require_local_write`: IP loopback + Origin/Referer coerentes + `X-MG-Token` | Qualquer processo local que consiga ler o `.env` obtém o token |
+| Anti DNS-rebinding (`Host`) | **hard** | `TrustedHostMiddleware` (`MG_ALLOWED_HOSTS` amplia a lista) | — |
+| Leitura exige token fora de loopback | **hard** | `read_auth_required` quando o bind é exposto | Sem TLS |
+| Limites de corpo/upload e taxa | **hard** | `request_guards` (413 / 429; `MG_MAX_BODY_BYTES`, `MG_RATE_LIMIT_PER_MIN`) | Taxa por cliente, em memória |
+| Terminais desligados fora de loopback | **hard** | `app/api/workspace.py` (`ANAMNESIA_ALLOW_REMOTE_TERMINALS=1` desfaz) | — |
+| Guarda de URL de provider (SSRF) | **hard** (modo `enforce`) | `MG_PROVIDER_URL_GUARD`; bloqueia metadata/link-local e hosts não-loopback sem `MG_ALLOW_REMOTE_PROVIDERS=1` | `warn`/`off` desligam |
+| Caminhos dos runs de orquestração | **hard** | `safe_join` rejeita `..`, absolutos e symlinks que escapam | — |
+| Segredos nunca devolvidos pela API | **hard** | chaves só aparecem mascaradas (`mask_secret`) | O `.env` fica em texto claro (opt-in `MG_SECRETS_BACKEND=keyring`) |
+| CSP do dashboard | **hard** no navegador | `app/main.py::_security_headers` | `style-src 'unsafe-inline'`; ver [docs/guides/SECURITY.md](docs/guides/SECURITY.md) |
+| Injection screen / `QUARANTINE` | **soft** | JEV strict + `injection_screen`; trecho suspeito é descartado | Heurística/modelo: pode errar nos dois sentidos |
+| Recusa de segredo em `memory_save` | **soft** | `scan_secrets` (padrões de token/chave) | Não pega segredo sem padrão conhecido |
+| Exec guard (allowlist de executáveis) | **soft** | `ANAMNESIA_EXEC_GUARD`: `enforce` para verifiers, `warn` (padrão) para launchers de terminal | Allowlist por nome de executável; um interpretador permitido executa qualquer coisa |
+| Guarda de projetos | **soft** | `ANAMNESIA_PROJECT_GUARD=enforce` (padrão) recusa diretórios sensíveis; `MG_PROJECT_ROOTS` restringe | Lista de diretórios sensíveis é heurística |
+| Fundamentação do `mode=answer` | **soft** | `check_grounding` lexical | Prova reuso de termos, não implicação lógica |
+| Redação de logs e caminhos | **best-effort** | `MG_LOG_REDACT`, `MG_REDACT_PATHS` (`lan` por padrão) | Regex; formatos novos de segredo escapam |
+| Limites do PTY (Job Object / rlimits) | **best-effort** | `MG_PTY_LIMITS`, `MG_PTY_AGENT_IDLE_SECONDS` | Contém fork-bomb/ociosidade, **não é sandbox** |
+| Ambiente do PTY | **best-effort** | remove tokens conhecidos (`ENV_NEVER`); `MG_PTY_NO_HOME` | Lista fixa; o agente roda com seus privilégios |
+
+Regra de documentação: não descreva um controle **soft** ou **best-effort** como garantia. Ao mudar o nível de
+um controle, atualize esta tabela, `CLAUDE.md`/`AGENTS.md` e o teste correspondente.
 
 ## O que já considerar fora de escopo
 

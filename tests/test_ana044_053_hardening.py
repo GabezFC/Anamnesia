@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.state import STATE
 from app.services import hardening
 from app.memory_store.store import scan_secrets
 
@@ -33,7 +34,6 @@ def test_info_logs_scrub_absolute_paths(caplog):
 
 # -- ANA-045 --------------------------------------------------------------------------------------
 def test_system_info_redacted_for_lan(monkeypatch, tiny_vault, tmp_path):
-    from app.api import routes
     from app.gateway.memory_gateway import MemoryGateway
     from app.main import app
     from config.benchmark import BenchmarkConfig
@@ -41,7 +41,7 @@ def test_system_info_redacted_for_lan(monkeypatch, tiny_vault, tmp_path):
     rc = RetrievalConfig(vault_path=tiny_vault, data_dir=tmp_path / "data")
     bc = BenchmarkConfig(db_path=str(tmp_path / "b.db"), profile="benchmark", benchmark_mode=False)
     gw = MemoryGateway(retrieval_cfg=rc, bench_cfg=bc)
-    monkeypatch.setitem(routes._state, "gateway", gw)
+    monkeypatch.setattr(STATE, "gateway", gw)
     monkeypatch.setenv("MG_REDACT_PATHS", "always")
     c = TestClient(app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000))
     r = c.get("/system/info")

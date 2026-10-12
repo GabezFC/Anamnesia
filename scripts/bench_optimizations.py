@@ -345,7 +345,7 @@ def shadow_report(results: list[QuestionResult]) -> dict:
     l3_agree = l3_dis = l3_sug = 0
     l3_err: list[float] = []
     neg_hits = 0
-    layers = {"hits_l1": 0, "hits_l2": 0, "hits_l3": 0, "hits_l4": 0, "hits_l5": 0,
+    layers = {"hits_l1": 0, "hits_l2": 0, "hits_l3": 0, "hits_l5": 0,
               "lookups": 0, "misses": 0}
     early_stops: dict[str, int] = {}
     inj_reasons: dict[str, int] = {}

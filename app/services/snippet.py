@@ -53,7 +53,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.gateway.token_budget import estimate_tokens, truncate_to_tokens
+from app.core.tokens import estimate_tokens, truncate_to_tokens
 from app.services.query_fp import stem, tokens
 
 SNIPPET_POLICY_VERSION = "snip-v2"

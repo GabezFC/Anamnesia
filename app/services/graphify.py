@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
 import os
 import re
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -35,13 +37,75 @@ class GraphifyError(RuntimeError):
 
 class GraphifyService:
     def __init__(self, vault: ObsidianVault, mirror_dir: Path, graphify_bin: str = "graphify",
-                 query_budget: int = 6000, timeout_s: int = 60):
+                 query_budget: int = 6000, timeout_s: int = 60,
+                 stale_fallback_s: float = 0.0):
         self.vault = vault
         self.mirror = Path(mirror_dir)
         self.bin = shutil.which(graphify_bin) or graphify_bin
         self.query_budget = query_budget
         self.timeout_s = timeout_s
         self._section_cache: dict[str, list] = {}
+        # ANA-080: graph staleness. stale_fallback_s > 0 => graph candidates are dropped (BM25-only)
+        # once the graph has been stale for longer than that many seconds. 0 = never fall back.
+        self.stale_fallback_s = float(stale_fallback_s)
+        self._refresh_lock = threading.Lock()
+        self._refresh_thread: threading.Thread | None = None
+        self._stale_since: float | None = None
+
+    @property
+    def fp_path(self) -> Path:
+        return self.mirror / "graphify-out" / "vault_fp.json"
+
+    def _vault_fp(self) -> list | None:
+        try:
+            return json.loads(json.dumps(self.vault.fingerprint()))   # tuple -> list, JSON-comparable
+        except Exception:  # noqa: BLE001 — advisory
+            return None
+
+    def _save_fp(self) -> None:
+        fp = self._vault_fp()
+        if fp is not None and self.graph_path.parent.exists():
+            self.fp_path.write_text(json.dumps(fp), encoding="utf-8")
+
+    def staleness(self) -> dict:
+        """ANA-080: compare the vault fingerprint recorded at the last graph build with the current one.
+
+        Stat-only (no content read). `graph_stale` is True when they differ, or when a graph exists
+        without a recorded fingerprint (unknown provenance -> treat as stale).
+        """
+        if not self.graph_path.exists():
+            return {"graph_stale": False, "graph_exists": False}
+        try:
+            built = json.loads(self.fp_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            built = None
+        stale = built is None or built != self._vault_fp()
+        if not stale:
+            self._stale_since = None
+        elif self._stale_since is None:
+            self._stale_since = time.time()
+        age = round(time.time() - self._stale_since, 1) if self._stale_since else 0.0
+        return {"graph_stale": stale, "graph_exists": True, "graph_stale_age_s": age}
+
+    def refresh_async(self) -> bool:
+        """ANA-080: rebuild the graph (AST-only `graphify update`, no LLM) in a background thread.
+
+        Single-flight: returns False when a refresh is already running.
+        """
+        if not self._refresh_lock.acquire(blocking=False):
+            return False
+
+        def _run() -> None:
+            try:
+                self.build()
+            except Exception:  # noqa: BLE001 — a failed refresh keeps the old graph; stays stale
+                pass
+            finally:
+                self._refresh_lock.release()
+
+        self._refresh_thread = threading.Thread(target=_run, name="graphify-refresh", daemon=True)
+        self._refresh_thread.start()
+        return True
 
     @property
     def graph_path(self) -> Path:
@@ -98,6 +162,8 @@ class GraphifyService:
             stats["build_ms"] = round((time.perf_counter() - t0) * 1000, 1)
             if r.returncode != 0 or not self.graph_path.exists():
                 raise GraphifyError(r.stderr.decode("utf-8", "replace")[-800:])
+        self._save_fp()   # ANA-080: remember which vault state this graph was built from
+        self._stale_since = None
         stats["graph"] = str(self.graph_path)
         return stats
 
@@ -158,9 +224,17 @@ class GraphifyService:
 
     def search(self, query: str, limit: int = 100) -> tuple[list[Candidate], dict]:
         t0 = time.perf_counter()
+        st = self.staleness()   # ANA-080
+        if st["graph_stale"]:
+            self.refresh_async()
+        if st["graph_stale"] and self.stale_fallback_s > 0 and st["graph_stale_age_s"] >= self.stale_fallback_s:
+            return [], {"graphify_latency_ms": 0.0, "graphify_nodes_returned": 0, "graphify_seeds": 0,
+                        "graphify_truncated": False, "graph_stale": True, "graph_fallback": "bm25_only",
+                        "graph_stale_age_s": st["graph_stale_age_s"]}
         out = self.raw_query(query)
         nodes, seeds = self.parse(out)
         cands: list[Candidate] = []
+        dangling = 0   # ANA-080: graph nodes whose file/section no longer exists
         n = max(len(nodes), 1)
         for i, node in enumerate(nodes[:limit]):
             rel = node["src"].replace("\\", "/")
@@ -169,8 +243,10 @@ class GraphifyService:
             try:
                 sec, body = self._section_for(rel, node["line"])
             except (OSError, PermissionError):
+                dangling += 1
                 continue
             if sec is None:
+                dangling += 1
                 continue
             score = 1.0 if node["label"] in seeds else round(0.9 - 0.6 * (i / n), 4)
             cands.append(Candidate(
@@ -181,5 +257,7 @@ class GraphifyService:
             ))
         info = {"graphify_latency_ms": round((time.perf_counter() - t0) * 1000, 1),
                 "graphify_nodes_returned": len(nodes), "graphify_seeds": len(seeds),
-                "graphify_truncated": "TRUNCATED" in out}
+                "graphify_truncated": "TRUNCATED" in out,
+                "graph_stale": st["graph_stale"], "graph_dangling_candidates": dangling,
+                "graph_dangling_rate": round(dangling / n, 4) if nodes else 0.0}
         return cands, info

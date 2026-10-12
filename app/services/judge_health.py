@@ -36,7 +36,7 @@ def _week(ts: float | None) -> str:
 
 
 def fallback_report(runs: Iterable[dict], threshold: float = ALARM_THRESHOLD, min_runs: int = MIN_RUNS) -> dict:
-    from app.benchmark.statistics import wilson_ci
+    from app.core.stats import wilson_ci
     cells: dict[tuple[str, str], list[int]] = {}
     for r in runs:
         if r.get("warmup"):

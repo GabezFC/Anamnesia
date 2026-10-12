@@ -32,7 +32,7 @@ def test_arm_runs(gw, name):
     try:
         c, full, m = arms.run_arm(name, gw, "arquitetura decisao banco de dados", 5)
     except Exception as e:  # graphify CLI absent in CI: only the CLI arm may be unavailable
-        if name in {"graphify_cli", "graph_only"}:
+        if name in {"graphify_cli", "graph_only", "baseline_graph_no_jev"} and isinstance(e, (FileNotFoundError, OSError)) or name in {"graphify_cli", "graph_only"}:
             pytest.skip(f"graphify indisponivel: {type(e).__name__}")
         raise
     assert isinstance(c, list) and m["arm"] == name

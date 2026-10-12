@@ -99,6 +99,17 @@ _WH_MULTI = ("quais", "which", "todos", "todas", "all", "compare", "comparar", "
              "consequencia", "consequencias", "por que", "porque", "why", "como", "how")
 _WH_SIMPLE = ("qual", "what", "quando", "when", "onde", "where", "quem", "who", "quanto", "quantos")
 
+# ANA-098: interrogatives are matched as WHOLE WORDS (or whole word sequences), never as substrings:
+# "all" used to fire inside "install", "how" inside "show", "como" inside "comodidade", " vs " needed
+# manual padding, and startswith("qual") accepted "qualquer".
+_WORD = re.compile(r"[a-z0-9]+")
+
+
+def _has_phrase(words: list[str], phrase: str) -> bool:
+    ph = phrase.split()
+    n = len(ph)
+    return any(words[i:i + n] == ph for i in range(len(words) - n + 1))
+
 # Portuguese plural normalization applied BEFORE suffix stripping. Without it the stemmer is
 # inconsistent across number: "migracoes" would strip -acoes -> "migr" while "migracao" strips -cao
 # -> "migra", so the singular and plural of the same word would land on different stems and fork the
@@ -243,9 +254,10 @@ def classify(query: str) -> QueryProfile:
     ts = tokens(query)
     n = len(ts)
     rare = sum(1 for t in ts if _is_rare(t))
-    multi = any(w in folded for w in _WH_MULTI)
+    words = _WORD.findall(folded)
+    multi = any(_has_phrase(words, w.strip()) for w in _WH_MULTI)
     # "e"/"and" joining two clauses, or an explicit enumeration, suggests more than one target note.
-    conj = len(re.findall(r"\b(e|and)\b", folded)) >= 1 and n >= 6
+    conj = ("e" in words or "and" in words) and n >= 6
     multi_hop = bool(multi and (conj or n >= 8))
 
     if n == 0:
@@ -256,7 +268,7 @@ def classify(query: str) -> QueryProfile:
     elif rare >= 1 and n <= 6 and not multi:
         # An identifier plus a little context: the lexical ranker is usually decisive here.
         complexity = "SIMPLE"
-    elif n <= 5 and any(folded.startswith(w) for w in _WH_SIMPLE) and not multi:
+    elif n <= 5 and bool(words) and words[0] in _WH_SIMPLE and not multi:
         complexity = "SIMPLE"
     elif multi_hop or n >= 12:
         complexity = "COMPLEX"

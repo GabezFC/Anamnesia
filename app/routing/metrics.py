@@ -231,6 +231,20 @@ def by_difficulty(records: Sequence[dict]) -> dict:
     return out
 
 
+ANSWERABLE_CLASSES = ("answerable", "unanswerable")
+
+
+def by_answerable(records: Sequence[dict]) -> dict:
+    """ANA-093: success per answerability class, independent of difficulty. `unanswerable` (abstention)
+    used to be folded into `hard`, so 10 abstentions looked like 1 hard task in a small sample."""
+    out = {}
+    for c in ANSWERABLE_CLASSES:
+        sub = [r for r in records if r.get("answerable_class") == c]
+        out[c] = {"n": len(sub), "solved": solved_count(sub), "success_rate": success_rate(sub) if sub else lv(None),
+                  "cost_per_solved_task": cost_per_solved_task(sub), "escalation_rate": escalation_rate(sub)}
+    return out
+
+
 def tier_matrix(records: Sequence[dict]) -> dict:
     """difficulty x initial tier -> number of tasks (counts, measured)."""
     m: dict = {d: defaultdict(int) for d in DIFFICULTIES}
@@ -253,7 +267,7 @@ def summarize_strategy(records: Sequence[dict]) -> dict:
             "cost_per_solved_task": cost_per_solved_task(records), "tokens_per_solved_task": tokens_per_solved_task(records),
             "escalation_rate": escalation_rate(records), "retry_rate": retry_rate(records),
             "routing": routing_classification(records), "regret": regret(records),
-            "by_difficulty": by_difficulty(records)}
+            "by_difficulty": by_difficulty(records), "by_answerable": by_answerable(records)}
 
 
 def build_summary(records: Sequence[dict]) -> dict:
@@ -262,7 +276,8 @@ def build_summary(records: Sequence[dict]) -> dict:
     real = [r for r in records if not r.get("simulated")]
     out = {"has_data": bool(real), "simulated_records": len(sim), "simulated_only": bool(sim) and not real,
            "n_records": len(real), "strategies": {}, "break_even": None, "verdict": None,
-           "difficulty_tier_matrix": None, "escalation_rate": lv(None), "by_difficulty_compare": {}, "by_kind_compare": {}}
+           "difficulty_tier_matrix": None, "escalation_rate": lv(None), "by_difficulty_compare": {}, "by_kind_compare": {},
+           "by_answerable_compare": {}}
     if not real:
         out["verdict"] = verdict({}, simulated_only=bool(sim)) if sim else {"value": "sem dados", "reason": "nenhuma execução registrada"}
         return out
@@ -279,6 +294,7 @@ def build_summary(records: Sequence[dict]) -> dict:
         out["break_even"] = break_even(dyn, base)
         out["by_difficulty_compare"] = group_compare(dyn, base, "difficulty")
         out["by_kind_compare"] = group_compare(dyn, base, "kind")
+        out["by_answerable_compare"] = group_compare(dyn, base, "answerable_class")  # ANA-093
     out["verdict"] = verdict(out["break_even"] or {}) if out["break_even"] else {
         "value": "sem dados", "reason": "falta DYNAMIC_ROUTER ou STATIC_DEFAULT para comparar"}
     return out

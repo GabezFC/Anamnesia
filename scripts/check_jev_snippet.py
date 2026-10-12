@@ -40,7 +40,7 @@ from config.benchmark import BenchmarkConfig  # noqa: E402
 from config.optimizer import OptimizerConfig  # noqa: E402
 from config.retrieval import RetrievalConfig  # noqa: E402
 from app.gateway.memory_gateway import MemoryGateway  # noqa: E402
-from app.gateway.token_budget import estimate_tokens  # noqa: E402
+from app.core.tokens import estimate_tokens  # noqa: E402
 from app.retrieval.graphify_hybrid import GraphIndex  # noqa: E402
 from app.services.obsidian import split_sections  # noqa: E402
 from app.services.prefilter import prefilter, terms  # noqa: E402

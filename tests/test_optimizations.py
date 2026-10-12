@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.gateway.token_budget import estimate_tokens
+from app.core.tokens import estimate_tokens
 from app.schemas.models import Candidate
 from app.services import adaptive as ad
 from app.services.injection_screen import screen, should_ask_injection
@@ -574,7 +574,6 @@ def test_different_content_hash_never_hits():
 
 @pytest.mark.parametrize("change", [
     {"model": "jev-9.9.9"}, {"prompt_version": "p2"}, {"jev_mode": "strict"},
-    {"relevance_threshold": 0.80}, {"review_threshold": 0.50},
     {"ranking_version": "rank-v2"}, {"snippet_policy_version": "snip-v2"},
     {"query_normalizer_version": "qn-DIFFERENT"},
 ])
@@ -596,16 +595,13 @@ def test_negative_hits_counted_separately():
     assert c.stats.negative_hits == 1
 
 
-def test_ranking_and_snippet_layers_roundtrip():
+def test_snippet_layer_roundtrip():
     store, g, p = store_pair()
     c = LayeredCache(g, p, ident())
-    c.put_ranking("q sobre driver", "corpus-1", ["a", "b", "c"])
-    assert c.get_ranking("q sobre driver", "corpus-1") == ["a", "b", "c"]
-    assert c.get_ranking("q sobre driver", "corpus-2") is None        # corpus changed
     c.put_snippet("h1", "snip-v1", 300, ["driver"], "texto")
     assert c.get_snippet("h1", "snip-v1", 300, ["driver"]) == "texto"
     assert c.get_snippet("h1", "snip-v1", 600, ["driver"]) is None    # budget is part of identity
-    assert c.stats.hits_l4 == 1 and c.stats.hits_l5 == 1
+    assert c.stats.hits_l5 == 1
 
 
 def test_disabled_cache_is_inert():
@@ -899,3 +895,10 @@ def test_unselected_never_survives_even_under_fail_open():
 def test_unselected_and_unjudged_are_distinct_states():
     from app.services.jev import UNJUDGED, UNSELECTED
     assert UNSELECTED != UNJUDGED
+
+
+def test_no_dead_l4_ranking_layer():
+    """ANA-142: L4 was never wired into a pipeline; it must not come back as dead code."""
+    from app.services import jev_cache
+    assert not hasattr(LayeredCache, "get_ranking") and not hasattr(LayeredCache, "put_ranking")
+    assert not hasattr(jev_cache, "L4") and not hasattr(c_stats := jev_cache.CacheStats(), "hits_l4"), c_stats

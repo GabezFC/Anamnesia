@@ -1,4 +1,4 @@
-from app.gateway.token_budget import estimate_tokens
+from app.core.tokens import estimate_tokens
 from app.schemas.models import Candidate
 from app.services.dedup import clean_snippet, content_hash, deduplicate, preprocess
 

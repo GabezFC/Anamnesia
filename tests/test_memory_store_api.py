@@ -122,7 +122,7 @@ def test_mcp_default_toolset_has_no_save(monkeypatch, _restore_mcp):
 def test_mcp_save_tool_only_with_flag(monkeypatch, tmp_path, _restore_mcp):
     monkeypatch.setenv("ANAMNESIA_HOME", str(tmp_path / "home"))
     mod, names = _tools(monkeypatch, save="1")
-    assert names == {"memory_search", "memory_save"}
+    assert names == {"memory_search", "memory_save", "memory_feedback"}
     out = mod.memory_save("Fato MCP", "conteúdo via MCP", ["x"], "gw")
     assert "id" in out
     from app.memory_store.store import get_store

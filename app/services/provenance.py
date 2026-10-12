@@ -23,13 +23,14 @@ no network, no write.
 """
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from app.gateway.token_budget import estimate_tokens
+from app.core.tokens import estimate_tokens
 from app.schemas.models import Candidate
 from app.services.near_dup import jaccard, shingles
 from app.services.obsidian import ObsidianVault, frontmatter_fields
@@ -43,8 +44,13 @@ HISTORY_TERMS: tuple[str, ...] = (
     "por que mudou", "porque mudou", "o que mudou", "mudou", "evolucao", "evoluiu", "descontinuad",
 )
 
-HISTORICAL_STATUSES = frozenset({"arquivado", "arquivada", "archived", "obsoleto", "obsoleta"})
-SUPERSEDED_KEYS = ("superseded_by", "supersedes", "substituida_por", "substitui", "supersededby")
+HISTORICAL_STATUSES = frozenset({"arquivado", "arquivada", "archived", "obsoleto", "obsoleta",
+                                 "superseded", "supersedida"})
+# ANA-145: `supersedes:` / `substitui:` say which OLDER note THIS note replaces -- the note that declares
+# them is the CURRENT one, so they must not mark it historical. Only the pointer to the NEWER note does.
+SUPERSEDED_KEYS = ("superseded_by", "substituida_por", "supersededby")
+#: ANA-158: a saved note judged `wrong` this many times leaves the default top-k (still reachable via history).
+WRONG_EXCLUDE_AT = 2
 _UNKNOWN = "?"
 _DATE_FORMATS = ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d")
 _WS = re.compile(r"\s+")
@@ -79,6 +85,33 @@ def parse_date(value: Any) -> date | None:
         return None
 
 
+def parse_moment(value: Any) -> datetime | None:
+    """Timezone-aware UTC datetime from an ISO-ish string (naive == local time); None when unparseable."""
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str) and value.strip():
+        raw = value.strip().strip("'\"")
+        try:
+            dt = datetime.fromisoformat(raw)
+        except ValueError:
+            try:
+                dt = datetime.fromisoformat(raw[:10])
+            except ValueError:
+                return None
+    else:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.astimezone()
+    return dt.astimezone(timezone.utc)
+
+
+def _count(value: Any) -> int:
+    try:
+        return max(0, int(str(value).strip()))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _text(value: Any) -> str | None:
     if isinstance(value, str):
         v = _WS.sub(" ", value).strip()
@@ -100,6 +133,11 @@ class NoteFacts:
     updated: date | None = None
     superseded_by: str | None = None
     has_frontmatter: bool = False
+    # ANA-145/157/158 (saved-context schema v2; all None/0 for a plain vault note)
+    kind: str | None = None
+    expires_at: datetime | None = None
+    feedback_wrong: int = 0
+    source: str | None = None
 
     @property
     def is_archived(self) -> bool:
@@ -109,6 +147,14 @@ class NoteFacts:
     def is_historical(self) -> bool:
         """Historical = superseded by another note, or archived. Both mean "this was true once"."""
         return bool(self.superseded_by) or self.is_archived
+
+    def is_expired(self, now: datetime | None = None) -> bool:
+        return self.expires_at is not None and self.expires_at <= (now or datetime.now(timezone.utc))
+
+    @property
+    def is_disqualified(self) -> bool:
+        """Judged wrong by the user/agent often enough to leave the default ranking (ANA-158)."""
+        return self.feedback_wrong >= WRONG_EXCLUDE_AT
 
     @property
     def touched(self) -> date | None:
@@ -140,6 +186,10 @@ class NoteFacts:
             updated=parse_date(fm.get("updated")),
             superseded_by=superseded,
             has_frontmatter=bool(fm),
+            kind=_text(fm.get("kind")),
+            expires_at=parse_moment(fm.get("expires_at")),
+            feedback_wrong=_count(fm.get("feedback_wrong")),
+            source=_text(fm.get("source")),
         )
 
 
@@ -181,14 +231,24 @@ class ProvenanceIndex:
         return line
 
     def marker(self, rel_path: str) -> str:
-        """`[histórico]` when the note is archived or superseded, else an empty string."""
-        return HISTORICAL_MARKER if self.facts(rel_path).is_historical else ""
+        """`[histórico]` when the note is archived or superseded, `[expirada]` when its TTL passed, else ''."""
+        f = self.facts(rel_path)
+        if f.is_historical:
+            return HISTORICAL_MARKER
+        return EXPIRED_MARKER if f.is_expired() else ""
+
+    def compact_line(self, rel_path: str, n: int) -> str:
+        """ANA-161: `[n·tipo·data]` -- index + kind/type + last-touched date, about one token per source."""
+        f = self.facts(rel_path)
+        touched = f.touched.isoformat() if f.touched else _UNKNOWN
+        return f"[{n}·{f.kind or f.type_ or _UNKNOWN}·{touched}]"
 
     def stats(self) -> dict:
         return {"notes_inspected": len(self._facts), "lines_cached": len(self._lines)}
 
 
 HISTORICAL_MARKER = "[histórico]"
+EXPIRED_MARKER = "[expirada]"
 
 
 def render_provenance(f: NoteFacts) -> str:
@@ -226,9 +286,22 @@ def apply_temporal(cands: list[Candidate], index: ProvenanceIndex | None, histor
     if index is None or not cands:
         return cands, metrics
     kept: list[Candidate] = []
+    drop_expired = os.environ.get("MG_MEMORY_EXPIRED_EXCLUDE", "1").strip().lower() not in ("0", "false", "off", "no")
     for c in cands:
         f = index.facts(c.source_file)
         if not f.is_historical:
+            expired, disq = f.is_expired(), f.is_disqualified
+            if (expired or disq) and drop_expired:
+                # ANA-157/158: an expired note, or one judged wrong twice, is not part of the default
+                # top-k. A query that asks for history still gets it, visibly marked. Never deleted.
+                if history_wanted:
+                    c.meta = {**(c.meta or {}), "expired": expired, "feedback_disqualified": disq}
+                    kept.append(c)
+                else:
+                    metrics["memory_expired_excluded"] = metrics.get("memory_expired_excluded", 0) + int(expired)
+                    metrics["memory_feedback_excluded"] = metrics.get("memory_feedback_excluded", 0) + int(
+                        disq and not expired)
+                continue
             kept.append(c)
             continue
         metrics["memory_historical_total"] += 1

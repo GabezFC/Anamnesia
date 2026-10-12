@@ -48,7 +48,9 @@ def test_indices_created_idempotently(tmp_path):
     d1.conn.close()
     d2 = Database(path)  # re-opening must not fail on CREATE INDEX IF NOT EXISTS / ALTER TABLE
     names = {r["name"] for r in d2.query("SELECT name FROM sqlite_master WHERE type='index'")}
-    assert {"runs_created", "runs_pipeline_warmup", "cand_run", "runs_session"} <= names
+    # ANA-134: runs_created / runs_session were redundant and are gone (superseded by runs_created_at / runs_session_created)
+    assert {"runs_created_at", "runs_pipeline_warmup", "cand_run", "runs_session_created"} <= names
+    assert not ({"runs_created", "runs_session"} & names)
     d2.conn.close()
 
 

@@ -170,7 +170,7 @@ def test_mcp_search_passes_pinned_scope_to_gateway(monkeypatch):
         run_id, context, metrics, query, pipeline, sources = "r", "", {}, "q", "auto", []
 
     class G:
-        def search(self, query, pipeline, max_results, scope=None, run_meta=None):
+        def search(self, query, pipeline, max_results, scope=None, run_meta=None, **_kw):
             seen["scope"] = scope
             return R()
 

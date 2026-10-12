@@ -7,9 +7,13 @@ name = "anamnesia"
 version = "0.1.0"
 description = "Anamnésia: persistent memory gateway (MCP + REST) over an Obsidian vault"
 readme = "README.md"
+# ANA-075: single minimum Python. Mirrored (and checked by tests/test_ci_consistency.py) in
+# anamnesia/cli.py MIN_PYTHON, the CI matrix (lowest entry), requirements*.txt headers, Dockerfile (>=).
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
+# ANA-121: THIS table is the source of truth. requirements.txt / requirements-dev.txt mirror it and
+# tests/test_ci_consistency.py fails on any divergence (`make deps-check`).
 dependencies = [
     "typesafe-sdk==0.7.1",
     "fastapi==0.141.1",
@@ -20,10 +24,24 @@ dependencies = [
     "pydantic==2.13.5",
     "anthropic==1.8.0",
     "openai==3.19.2",
+    # app/* imports yaml directly; until now it only arrived transitively via uvicorn[standard].
+    "PyYAML==6.0.3",
 ]
 
 [project.optional-dependencies]
 terminal = ["pywinpty>=3.0; sys_platform == 'win32'"]
+# Dev/test/CI tooling (ANA-086/087/121/143). Optional retrieval stages stay in requirements-optional.txt
+# (separate venv, torch CUDA build: not installable from PyPI as an extra).
+dev = [
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "pytest-repeat==0.9.4",
+    "ruff==0.17.0",
+    "mypy==2.4.0",
+    "build==1.6.1",
+    "pip-audit==2.10.1",
+    "actionlint-py==1.7.12.25",
+]
 
 [project.scripts]
 anamnesia = "anamnesia.cli:main"
@@ -34,3 +52,56 @@ packages = ["app", "config", "memory_gateway", "anamnesia"]
 [tool.hatch.build.targets.wheel.force-include]
 "frontend" = "frontend"
 "data/synthetic_vault" = "data/synthetic_vault"
+
+# ---------------------------------------------------------------------------------------------
+# pytest (ANA-083/127)
+# ---------------------------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["spikes", "scripts", "graphify-out", "frontend", "data", "node_modules", ".git", ".venv", "build", "dist"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "e2e: end-to-end tests that drive a real server/browser-like flow (tests/e2e); applied automatically",
+    "slow: takes more than ~5 s (deselect with -m 'not slow')",
+    "integration: spawns real subprocesses/stdio servers (MCP smoke, wheel install); still offline",
+    "packaging: needs a built wheel (ANAMNESIA_WHEEL) or `build` + network to fetch the build backend",
+    "windows_only: only meaningful on Windows (ConPTY/JobObject); applied automatically",
+    "posix_only: only meaningful on Linux/macOS (stdlib pty); applied automatically",
+    "network: legitimately needs a non-loopback socket (exempt from --block-network, ANA-105)",
+]
+
+# ---------------------------------------------------------------------------------------------
+# ruff (ANA-086). Blocking set = real bugs only (syntax errors, undefined names): 0 violations today.
+# The wider E4/E7/E9/F set is REPORTED by CI/`make lint` (count, non-blocking) until the 89 pre-existing
+# findings in other owners' files are cleaned; then widen `select` here and drop --exit-zero.
+# ---------------------------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["spikes", "graphify-out", "frontend", "data", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]
+
+# ---------------------------------------------------------------------------------------------
+# coverage (ANA-087). fail_under is the ratchet: raise it, never lower it. See scripts/coverage_report.py.
+# ---------------------------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["app", "config", "anamnesia", "memory_gateway"]
+omit = ["*/__pycache__/*", "*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 0
+show_missing = false
+skip_empty = true
+exclude_also = ["if TYPE_CHECKING:", "if __name__ == .__main__.:", "raise NotImplementedError"]
+
+# ---------------------------------------------------------------------------------------------
+# mypy (ANA-143): gradual. config/ + app/services first; CI job is NON-blocking, error count is tracked.
+# ---------------------------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+files = ["config", "app/services"]
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = false

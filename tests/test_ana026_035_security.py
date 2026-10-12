@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.state import STATE
 from app.services import security, session_tokens
 
 
@@ -166,14 +166,13 @@ def test_ana031_benchmark_caps(monkeypatch):
 
 # -- ANA-032 (slice) ---------------------------------------------------------------------------
 def test_ana032_session_token_overrides_client_scope(monkeypatch):
-    from app.api import routes
     seen = {}
 
     class FakeGw:
         def search(self, q, pipeline, n, **kw):
             seen["scope"] = kw.get("scope")
             raise RuntimeError("stop")
-    monkeypatch.setitem(routes._state, "gateway", FakeGw())
+    monkeypatch.setattr(STATE, "gateway", FakeGw())
     c = _client(monkeypatch)
     tok = session_tokens.mint("projeto:alpha")
     c.post("/memory/search", json={"query": "x", "scope": "projeto:beta"}, headers={"X-MG-Session": tok})

@@ -34,7 +34,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.gateway.token_budget import estimate_tokens  # noqa: E402
+from app.core.tokens import estimate_tokens  # noqa: E402
 
 # -- function-word lists (PT + EN): articles, prepositions, conjunctions, pronouns, auxiliary verbs.
 # Deliberately NOT exhaustive (this is a spike) -- see docs/SPIKE_CAVEMAN.md for the verdict.

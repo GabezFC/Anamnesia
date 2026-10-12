@@ -31,8 +31,9 @@ from __future__ import annotations
 
 import time
 
-from app.gateway.token_budget import estimate_tokens
-from app.retrieval.pipelines import _graphify_candidates, full_note_text
+from app.core.tokens import estimate_tokens
+from app.retrieval.common import _graphify_candidates, full_note_text
+from app.retrieval.registry import get_pipeline, register_pipeline
 from app.schemas.models import Candidate
 from app.services import adaptive as ad
 from app.services.injection_screen import should_ask_injection
@@ -224,11 +225,10 @@ def run_graphify_jev_optimized(gw, query: str, max_results: int, jev=None, opt=N
     """Cascade pipeline. `opt` is an OptimizationConfig; with `opt.enabled=False` this delegates to
     the frozen baseline so a benchmark can use one code path for both arms."""
     from config.optimization import OptimizationConfig
-    from app.retrieval.pipelines import run_graphify_jev
 
     opt = opt or getattr(gw, "opt_cfg", None) or OptimizationConfig()
     if not opt.enabled:
-        return run_graphify_jev(gw, query, max_results, jev=jev)
+        return get_pipeline("graphify_jev")(gw, query, max_results, jev=jev)
 
     fs = select_pool(gw, query, max_results, opt=opt)
     pool, withheld, waves, metrics = fs.pool, fs.withheld, fs.waves, fs.metrics
@@ -364,3 +364,6 @@ def run_graphify_jev_optimized(gw, query: str, max_results: int, jev=None, opt=N
         "_all_candidates": pool + withheld + [m_ for cl in clusters for m_ in cl.members],
     })
     return survivors, full, metrics
+
+
+register_pipeline("graphify_jev_opt", run_graphify_jev_optimized)

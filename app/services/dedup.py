@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import re
 
-from app.gateway.token_budget import estimate_tokens, truncate_to_tokens
+from app.core.tokens import estimate_tokens, truncate_to_tokens
 from app.schemas.models import Candidate
 
 _MULTI_BLANK = re.compile(r"\n{3,}")

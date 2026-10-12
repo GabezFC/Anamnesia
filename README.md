@@ -6,8 +6,10 @@
 
 > **Project status: in transition.** Anamnésia (the opposite of *amnesia*) is the new name and
 > product direction. **What is implemented and tested today is the Memory Gateway** described in
-> the rest of this README. The workspace, connections and orchestration below are **planned, not
-> built**; each item is marked with its status.
+> the rest of this README. The workspace, connections, cost ledger and orchestration areas below
+> exist in code and are tested, but are **young and mostly opt-in**; each row says what is on by
+> default. Status verified 2026-10-12 against commit `5940b2e` (re-check with
+> [`docs/INTERFACES.md`](docs/INTERFACES.md), generated from the code).
 
 ## What Anamnésia is
 
@@ -15,15 +17,17 @@ A local-first app (loopback only, your keys never leave your machine) with four 
 
 | Area | What it does | Status |
 | --- | --- | --- |
-| **Workspace** (home screen) | Real terminals (PTY) grouped by local project, split panels and tabs, run several agents (Hermes, Claude Code, Codex, OpenCode) in parallel | Planned |
-| **Connections** | Connect API keys for agents, models and MCP servers from a small catalog (`config/connections.yaml`) that grows over time | Planned |
-| **Config** | Pick a sub-agent orchestration preset (Economic / Balanced / Max) that routes work to cheaper models | Planned |
-| **Costs** (Memory Gateway) | See what every memory call cost: project, agent, pipeline, tokens, price, latency | Partly built (benchmark dashboard) |
+| **Workspace** (home screen) | Real terminals (PTY) grouped by local project, split panels and tabs, run several agents (Hermes, Claude Code, Codex, OpenCode) in parallel | Built — terminals are default-deny ([`TERMINALS.md`](docs/guides/TERMINALS.md)) |
+| **Connections** | Connect API keys for agents, models and MCP servers from a small catalog (`config/connections.yaml`) that grows over time | Built — keys go to the local `.env`, connection tests are offline unless `ANAMNESIA_ALLOW_NETWORK_TEST=1` ([`CONNECTIONS.md`](docs/guides/CONNECTIONS.md)) |
+| **Config** | Pick a sub-agent orchestration preset (Economic / Balanced / Max) that routes work to cheaper models | Built, **off by default** (`ANAMNESIA_ROUTING=1`, `ANAMNESIA_DELEGATE=1`; [`ORCHESTRATION.md`](docs/guides/ORCHESTRATION.md)) |
+| **Costs** (Memory Gateway) | See what every memory call cost: project, agent, pipeline, tokens, price, latency | Built (ledger + dashboard; [`COSTS_LEDGER.md`](docs/guides/COSTS_LEDGER.md)) |
 
-Planned model routing: `memory_search` keeps its name and gains a `mode` parameter:
-`context` (today's behaviour), `answer` (a router picks a cheap sub-agent that returns a short
-answer with sources) and `delegate` (full orchestrator). `answer` is only promoted to default if the
+Model routing: `memory_search` keeps its name and has a `mode` parameter (MCP and REST):
+`context` (default, today's behaviour), `answer` (a router picks a cheap model that returns a short
+answer with sources; falls back to `context` when routing is off) and `delegate` (full orchestrator,
+needs `ANAMNESIA_DELEGATE=1` and a resolvable project). `answer` is only promoted to default if the
 benchmark shows it does not lose recall or facts. No saving is claimed before it is measured.
+Details: [`MEMORY_SEARCH_MODES.md`](docs/guides/MEMORY_SEARCH_MODES.md).
 
 Supported systems (target): Windows, Linux, macOS. Distribution (target): `git clone` + script,
 Docker (without terminals by default) and `pipx` / `uv tool`. "Supported" means green CI on that
@@ -155,7 +159,7 @@ To run the test suite, install dev tooling on top: `pip install -r requirements-
 `pytest`; `requirements.txt` alone is the minimal runtime install). Optional retrieval stages
 (compression/reranking, §1.4 — off by default, see `app/retrieval/optional_stages.py`) have their
 own heavier dependencies in `requirements-optional.txt`; none are required for the default pipelines. The measured, approved subset is selectable with `OPT_STAGES_PRESET=off|free|approved`
-(default `free` = sentence dedup only; see `docs/OPTIMIZED_PIPELINE.md`).
+(default `free` = sentence dedup only; see `docs/reports/OPTIMIZED_PIPELINE.md`).
 
 ---
 
@@ -482,19 +486,24 @@ Two pipelines live side by side permanently: `pipelines.py` is the **frozen base
 Every interface defaults to `pipeline="auto"`: the **Memory Optimization Layer** runs on every
 search (routing, result cache, index freshness, adaptive cut, near-duplicate collapse, injection
 flag, compact headers — all zero-token). Measured: context **-39.7%** (synthetic, 520 notes) and
-**-24.2%** (real vault) with recall unchanged. See [`docs/OPTIMIZATION_LAYER.md`](docs/OPTIMIZATION_LAYER.md).
+**-24.2%** (real vault) with recall unchanged. See [`docs/guides/OPTIMIZATION_LAYER.md`](docs/guides/OPTIMIZATION_LAYER.md).
 
 **MCP (preferred for agents)** — `python -m app.mcp.server`, stdio. Default toolset is **one tool**,
-`memory_search(query, pipeline="auto", max_results, scope)` with a compact response (schemas cost
-183 instead of 775 tokens per turn). `MG_MCP_TOOLSET=full` restores the read-only legacy set:
-`memory_search_baseline`, `memory_search_graphify`, `memory_search_graphify_jev`,
-`memory_benchmark`, `memory_get_run`, `memory_stats`.
+`memory_search(query, pipeline="auto", max_results, scope, client, mode)` with a compact response
+(schemas cost 183 instead of 775 tokens per turn). `MG_MCP_TOOLSET=full` adds the read-only legacy
+set (6 more tools) and `MG_MCP_SAVE=1` adds the opt-in `memory_save`.
 
-**REST** — `GET /health` · `POST /memory/search[/{baseline,graphify,graphify-jev}]` ·
-`POST /benchmark/{run,run-all,estimate,threshold-sweep}` · `GET /benchmark/{runs,sessions,stats}` ·
-`POST /feedback/*` · `GET /system/{info,integrations,projects}`. Interactive docs at `/docs`.
+**REST** — interactive docs at `/docs` (`/openapi.json`); the persistent-memory routes live under
+`/api/memory/*`.
 
-**CLI** — `python -m memory_gateway {search,benchmark,sweep,stats,info,index,vault-check,vault-lint}`.
+**CLI** — `python -m memory_gateway` (11 subcommands) and the `anamnesia` command.
+
+The exact lists of tools, routes and CLI arguments are **generated from the code** in
+[`docs/INTERFACES.md`](docs/INTERFACES.md) (`python scripts/gen_interface_docs.py`; a test fails if it
+goes stale) — this README only links to it. Environment variables:
+[`docs/ENVIRONMENT_REFERENCE.md`](docs/ENVIRONMENT_REFERENCE.md); precedence of settings:
+[`docs/guides/CONFIGURATION.md`](docs/guides/CONFIGURATION.md). Documentation index:
+[`docs/README.md`](docs/README.md).
 
 Retrieved note content is **data, not instruction**. Consumers must never follow commands found
 inside retrieved notes; the injection screen and `QUARANTINE` routing exist for exactly this.
