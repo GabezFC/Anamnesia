@@ -115,6 +115,8 @@ class RetrievalConfig:
     graphify_graph_expand: int = field(default_factory=lambda: env_int("GRAPHIFY_GRAPH_EXPAND", 15))
     graphify_query_budget: int = field(default_factory=lambda: env_int("GRAPHIFY_QUERY_BUDGET", 6000))
     graphify_timeout_s: int = field(default_factory=lambda: env_int("GRAPHIFY_TIMEOUT_S", 60))
+    # ANA-080: seconds a stale graph is tolerated before searches fall back to BM25-only (0 = off).
+    graphify_stale_fallback_s: float = field(default_factory=lambda: env_float("GRAPHIFY_STALE_FALLBACK_S", 0.0))
     # Personalized PageRank graph expansion (§5.5, HippoRAG-style), opt-in. See app/retrieval/ppr.py.
     # Off by default: flag off reproduces the exact BFS behaviour byte-for-byte (tests/test_ppr.py).
     # Never used by graphify_jev (frozen pipeline) regardless of this flag.

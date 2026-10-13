@@ -123,6 +123,15 @@ def edges_between(graph: dict[str, set[str]], src_prefix: str, dst_prefix: str) 
     return sorted((a, b) for a, bs in graph.items() if under(a, src_prefix) for b in bs if under(b, dst_prefix))
 
 
+def _allowed_cycles() -> list[list[str]]:
+    import tomllib
+    p = ROOT / "scripts" / "layers.toml"
+    if not p.exists():
+        return []
+    data = tomllib.loads(p.read_text(encoding="utf-8"))
+    return [sorted(c["modules"]) for c in data.get("allowed_cycles", [])]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--package", default="app")
@@ -130,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     g = build_graph(package=a.package, top_level_only=a.top_level_only)
-    sccs = tarjan_sccs(g)
+    sccs = [c for c in tarjan_sccs(g) if c not in _allowed_cycles()]  # layers.toml allowed_cycles
     if a.json:
         print(json.dumps({"modules": len(g), "sccs": sccs}, indent=2))
     else:

@@ -26,7 +26,7 @@ from app.database.db import Database
 from app.gateway.budget_guard import BudgetGuard
 from app.gateway.context_builder import ModelContextBuilder
 from app.gateway.optimizer import MemoryOptimizer
-from app.retrieval.baseline import BaselineIndex
+from app.retrieval.incremental_index import make_baseline_index
 from app.retrieval.graphify_hybrid import GraphIndex
 from app.retrieval.optional_stages import apply_optional_stages
 from app.retrieval.pipelines import PIPELINE_FUNCS
@@ -89,10 +89,13 @@ class MemoryGateway:
         db_path = Path(self.db.path).resolve()
         if self.vault.root in db_path.parents:
             raise PermissionError("benchmark.db não pode ficar dentro do vault (§58)")
-        self.baseline = BaselineIndex(self.vault)
+        # ANA-102: incremental FTS5 index only with MG_INCREMENTAL_INDEX=1 (default OFF); the index file
+        # lives next to the benchmark db, never inside the (read-only) vault.
+        self.baseline = make_baseline_index(self.vault, db_path.parent / "baseline_fts.db")
         self.graphify = graphify_service or GraphifyService(
             self.vault, self.retrieval_cfg.mirror_dir, self.retrieval_cfg.graphify_bin,
-            self.retrieval_cfg.graphify_query_budget, self.retrieval_cfg.graphify_timeout_s)
+            self.retrieval_cfg.graphify_query_budget, self.retrieval_cfg.graphify_timeout_s,
+            stale_fallback_s=self.retrieval_cfg.graphify_stale_fallback_s)
         self._jev_backend = jev_backend
         self.jev = self.make_jev(self.jev_cfg)
         # Lazy in-memory view of graph.json used by the hybrid retriever (reloads on mtime change).

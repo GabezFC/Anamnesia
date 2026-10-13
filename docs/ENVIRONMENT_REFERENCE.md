@@ -3,7 +3,7 @@
 
 # Referência de variáveis de ambiente (gerada)
 
-198 variáveis lidas pelo código (`app/`, `config/`, `anamnesia/`, `memory_gateway/`).
+200 variáveis lidas pelo código (`app/`, `config/`, `anamnesia/`, `memory_gateway/`).
 Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo comentado para copiar: [`.env.example`](../.env.example).
 
 **Tipo**: `user` = você define; `interna` = escrita/derivada pelo próprio Gateway; `sistema` = do SO/git.
@@ -66,6 +66,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `MG_ALLOW_REMOTE_PROVIDERS` | user | `''` | — | `app/services/hardening.py` |
 | `MG_CONTEXT_NONCE` | user | `'0'` | [user] Nonce por contexto (delimitadores não adivinháveis) nos pipelines não congelados (1 liga). | `app/gateway/memory_gateway.py` |
 | `MG_HOST` | user | `'0.0.0.0'` | Interface the API server binds to. Loopback by default (§5.4 da proposta 2026-09-28): endpoints | `app/api/workspace.py`, `config/benchmark.py` |
+| `MG_INCREMENTAL_INDEX` | user | `''` | — | `app/retrieval/incremental_index.py` |
 | `MG_LOCAL_TOKEN` | interna | — | gerada no primeiro start e gravada no .env; não defina à mão | `anamnesia/cli.py`, `app/services/security.py` |
 | `MG_LOG_REDACT` | user | `'1'` | [user] Filtros de redação no log de acesso e caminhos nos logs (1 = ligado; 0/off desliga). | `app/services/hardening.py` |
 | `MG_MAX_BODY_BYTES` | user | — | [user] Limite do corpo de requisição / de uploads, em bytes (default no código: 262144 e 1048576). | `app/services/request_guards.py` |
@@ -144,6 +145,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `GRAPHIFY_GRAPH_EXPAND` | user | `15` | Number of extra nodes reached by expanding graph edges from the seeds. | `config/retrieval.py` |
 | `GRAPHIFY_HYBRID` | user | `True` | Hybrid Graphify retrieval: BM25 body text + graph edges. false = old CLI traversal. | `config/retrieval.py` |
 | `GRAPHIFY_QUERY_BUDGET` | user | `6000` | Token budget passed to `graphify query --budget`. | `config/retrieval.py` |
+| `GRAPHIFY_STALE_FALLBACK_S` | user | `0.0` | — | `config/retrieval.py` |
 | `GRAPHIFY_TEXT_SEEDS` | user | `10` | Number of BM25 text hits used as graph traversal seeds. | `config/retrieval.py` |
 | `GRAPHIFY_TIMEOUT_S` | user | `60` | — | `config/retrieval.py` |
 | `HERMES_BIN` | user | `'hermes'` | — | `config/agents.py` |

@@ -42,7 +42,7 @@ def timed(fn):
 
 
 def measure(n: int, changed_pct: float, repeat: int) -> dict:
-    with tempfile.TemporaryDirectory(prefix="ana102_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="ana102_", ignore_cleanup_errors=True) as tmp:
         tmp = Path(tmp)
         root = tmp / "vault"
         make_vault(root, n)
