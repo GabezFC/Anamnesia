@@ -65,7 +65,8 @@ def plan(p):
     return Plan("graphify_jev", p, None, "explicit")
 
 
-def test_enforcement_off_by_default_is_identity_and_never_reads_db():
+def test_enforcement_off_and_warn_off_is_identity_and_never_reads_db(monkeypatch):
+    monkeypatch.setenv(bg.WARN_FLAG, "0")      # ANA-180: warn mode is now default ON; =0 restores the inert path
     class Boom:
         def __getattr__(self, k):
             raise AssertionError("db must not be touched when enforcement is off")
@@ -141,8 +142,19 @@ def test_gateway_default_unchanged_when_exceeded(tiny_vault, tmp_path):
     be = CountingBackend()
     gw = make_gw(tiny_vault, tmp_path, be)
     r = gw.search("Qual o banco escolhido?", "graphify_jev", 5, persist=False)
+    # ANA-180: default = warn mode -> the state is RECORDED but nothing is degraded or blocked
     assert r.pipeline == "graphify_jev" and be.calls >= 1
-    assert "budget_degraded" not in r.metrics and "budget_status" not in r.metrics
+    assert "budget_degraded" not in r.metrics
+    assert r.metrics["budget_status"] == "exceeded" and r.metrics["budget_mode"] == "warn"
+    assert r.metrics["budget_warning"]
+
+
+def test_gateway_warn_off_restores_legacy_metrics(tiny_vault, tmp_path, monkeypatch):
+    monkeypatch.setenv(bg.WARN_FLAG, "0")
+    be = CountingBackend()
+    gw = make_gw(tiny_vault, tmp_path, be)
+    r = gw.search("Qual o banco escolhido?", "graphify_jev", 5, persist=False)
+    assert r.pipeline == "graphify_jev" and "budget_status" not in r.metrics
 
 
 def test_gateway_degrades_when_enforced(tiny_vault, tmp_path, monkeypatch):

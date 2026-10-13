@@ -88,6 +88,75 @@ def tokens_per_solved_task(records: Sequence[dict]) -> dict:
     return lv(_r(tt["value"] / n), tt["origin"])
 
 
+# ------------------------------------------------------------------ cost coverage (ANA-166)
+def cost_coverage(records: Sequence[dict], key: str = "cost") -> dict:
+    """How much of the cost is actually KNOWN. coverage = records_with_known_total / records.
+
+    `lower_bound` is the sum of the KNOWN totals only; it is labelled 'lower_bound' when coverage < 1 (the
+    true spend is >= it, never == it) and 'exact_sum' when every record is priced. total_cost() keeps its
+    contract (None as soon as one cost is missing); nothing here turns a missing cost into 0."""
+    n = len(records)
+    known = [r[key] for r in records if r.get(key) is not None]
+    complete = n > 0 and len(known) == n
+    return {"n": n, "known": len(known), "unknown": n - len(known), "coverage": _r(len(known) / n, 4) if n else None,
+            "complete": complete,
+            "lower_bound": ({"value": _r(float(sum(known))), "origin": "exact_sum" if complete else "lower_bound"}
+                            if known else {"value": None, "origin": "unavailable"})}
+
+
+# ------------------------------------------------------------------ local GPU assumption (ANA-191)
+def local_cost_assumption(records: Sequence[dict], usd_per_gpu_hour: float | None) -> dict:
+    """OPTIONAL, labelled 'estimated': money for LOCAL models = usd_per_gpu_hour x measured local latency.
+
+    Off unless a rate is given (None/<=0 => unavailable, the historical behaviour). cost_per_solved is
+    reported WITHOUT (API money only, as before) and WITH the assumption; with is None if any record's
+    API cost or local latency is unknown. The rate is the caller's assumption, not a measured fact."""
+    base = cost_per_solved_task(records)
+    out = {"assumption": {"usd_per_gpu_hour": usd_per_gpu_hour, "origin": "estimated"},
+           "cost_per_solved_without": base, "cost_per_solved_with": lv(None), "local_gpu_cost": lv(None)}
+    if usd_per_gpu_hour is None or usd_per_gpu_hour <= 0 or not records:
+        return out
+    ms = [r.get("local_latency_ms") for r in records]
+    tc = total_cost(records)
+    n = solved_count(records)
+    if any(m is None for m in ms):          # field absent (old records) or unmeasured latency: unknown, not 0
+        return out
+    gpu = float(sum(ms)) / 3_600_000.0 * float(usd_per_gpu_hour)
+    out["local_gpu_cost"] = lv(_r(gpu), "estimated")
+    if tc["value"] is not None and n > 0:
+        out["cost_per_solved_with"] = lv(_r((tc["value"] + gpu) / n), "estimated")
+    return out
+
+
+# ------------------------------------------------------------------ overhead as data (ANA-164)
+OVERHEAD_FIELDS = ("router_tokens", "verify_tokens", "retry_tokens", "router_cost", "verify_cost")
+OVERHEAD_ORIGIN_FIELDS = ("router_tokens_origin", "verify_tokens_origin")
+
+
+def overhead_summary(records: Sequence[dict], strict: bool = False) -> dict:
+    """Measured router/verifier overhead of `records`. `measured` is False when any record lacks the fields
+    (old data): the figures are then None/'unavailable', never 0. strict=True raises ValueError instead."""
+    missing = [r.get("task_id") for r in records
+               if any(r.get(k) is None for k in OVERHEAD_FIELDS + OVERHEAD_ORIGIN_FIELDS) or "verify_calls" not in r]
+    if strict and missing:
+        raise ValueError(f"overhead fields absent in {len(missing)} record(s): {missing[:10]}")
+    if not records or missing:
+        return {"measured": False, "records_missing": len(missing), "router_latency_ms": lv(None),
+                "verify_latency_ms": lv(None), "router_tokens": lv(None), "verify_tokens": lv(None),
+                "retry_tokens": lv(None)}
+    rl = _sum([r.get("router_latency_ms") for r in records if str(r.get("strategy", "")).startswith(DYNAMIC)])
+    vl = _sum([r.get("verify_latency_ms") for r in records if r.get("verify_calls")])
+    return {"measured": True, "records_missing": 0,
+            "router_latency_ms": lv(_r(rl, 3) if rl is not None else None, "measured"),
+            "verify_latency_ms": lv(_r(vl, 3) if vl is not None else None, "measured"),
+            "router_tokens": lv(int(sum(r["router_tokens"] for r in records)),
+                                combine_origin([r.get("router_tokens_origin") if r.get("router_tokens_origin") != "not_applicable"
+                                                else "measured" for r in records])),
+            "verify_tokens": lv(int(sum(r["verify_tokens"] for r in records)), "measured"),
+            "retry_tokens": lv(None if _sum([r["retry_tokens"] for r in records]) is None
+                               else int(sum(r["retry_tokens"] for r in records)), "measured")}
+
+
 # ------------------------------------------------------------------ escalation / retry
 def escalation_rate(records: Sequence[dict]) -> dict:
     """Share of tasks that needed >= 1 escalation (switch to a higher-tier model)."""
@@ -180,7 +249,8 @@ def break_even(dynamic: Sequence[dict], baseline: Sequence[dict]) -> dict:
     ids = {r["task_id"] for r in dynamic} & {r["task_id"] for r in baseline}
     d = sorted((r for r in dynamic if r["task_id"] in ids), key=lambda r: r["task_id"])
     b = sorted((r for r in baseline if r["task_id"] in ids), key=lambda r: r["task_id"])
-    empty = {"n_tasks": len(ids), "baseline_total": lv(None), "model_savings": lv(None), "routing_overhead": lv(None),
+    empty = {"overhead": overhead_summary(d), "cost_coverage": cost_coverage(d + b),
+             "n_tasks": len(ids), "baseline_total": lv(None), "model_savings": lv(None), "routing_overhead": lv(None),
              "verification_overhead": lv(None), "retry_overhead": lv(None), "net_savings": lv(None),
              "net_savings_percent": lv(None), "quality_delta": lv(None), "pays_for_itself": None}
     if not ids:
@@ -264,6 +334,7 @@ def group_compare(dynamic: Sequence[dict], baseline: Sequence[dict], key: str) -
 def summarize_strategy(records: Sequence[dict]) -> dict:
     return {"n": len(records), "solved": solved_count(records), "success_rate": success_rate(records),
             "total_cost": total_cost(records), "total_tokens": total_tokens(records),
+            "cost_coverage": cost_coverage(records),
             "cost_per_solved_task": cost_per_solved_task(records), "tokens_per_solved_task": tokens_per_solved_task(records),
             "escalation_rate": escalation_rate(records), "retry_rate": retry_rate(records),
             "routing": routing_classification(records), "regret": regret(records),

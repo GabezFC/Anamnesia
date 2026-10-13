@@ -48,6 +48,9 @@ class RunOutcome:
     error: str | None = None
     simulated: bool = False
     retrieved_ids: list[str] | None = None   # ANA-111: notes retrieved for this answer (None = no retrieval)
+    # ANA-183: our own estimate of the prompt tokens next to the provider's `input_tokens` (None = not recorded)
+    estimated_input_tokens: int | None = None
+    prompt_lang: str | None = None
 
 
 ModelRunner = Callable[[Task, ModelEntry], RunOutcome]
@@ -168,13 +171,16 @@ class RealRunner:
         return self._adapters[entry.id]
 
     def __call__(self, task: Task, entry: ModelEntry) -> RunOutcome:
-        r = self._adapter(entry).generate(self.prompt_for(task), temperature=0.0, max_tokens=self.max_tokens)
+        prompt = self.prompt_for(task)
+        r = self._adapter(entry).generate(prompt, temperature=0.0, max_tokens=self.max_tokens)
+        from app.services.token_estimate import detect_lang, estimate_tokens   # ANA-183 (estimate only, no I/O)
+        est_in, lang = estimate_tokens(prompt), detect_lang(prompt)
         retrieved = None
         sources_of = getattr(self.context_fn, "sources_of", None)
         if sources_of is not None and task.kind == "memory_qa":
             retrieved = sources_of(task)
         return RunOutcome(r.answer, r.input_tokens, r.output_tokens, r.latency_ms, r.error, simulated=False,
-                          retrieved_ids=retrieved)
+                          retrieved_ids=retrieved, estimated_input_tokens=est_in, prompt_lang=lang)
 
 
 # ------------------------------------------------------------------ cache
@@ -335,6 +341,63 @@ def _sum_or_none(vals):
     return None if any(v is None for v in vals) else float(sum(vals))
 
 
+def overhead_origin(tokens: int | None) -> str:
+    """ANA-164: origin of a router/verifier token figure. 0 is only ever the outcome of a measured
+    'no LLM call' (deterministic code); a missing figure is 'unavailable', never 0."""
+    if tokens is None:
+        return "unavailable"
+    return "no_llm" if tokens == 0 else "measured"
+
+
+def _usage_pair(out: RunOutcome) -> dict:
+    """ANA-183: provider-reported prompt tokens next to our own estimate (None when either is unknown)."""
+    return {"provider_input_tokens": out.input_tokens, "estimated_input_tokens": out.estimated_input_tokens,
+            "prompt_lang": out.prompt_lang}
+
+
+def _retry_tokens(toks: Sequence[int | None]) -> int | None:
+    """Tokens of the attempts before the last one: 0 with a single attempt, None if any is unmeasured."""
+    earlier = list(toks[:-1])
+    return None if any(t is None for t in earlier) else int(sum(earlier))
+
+
+def _local_ms(entries: Sequence[ModelEntry], outs: Sequence[RunOutcome]) -> float | None:
+    """ANA-191: summed measured latency of the LOCAL attempts (0.0 if none ran locally; None if one is unmeasured)."""
+    vals = [o.latency_ms for e, o in zip(entries, outs) if e.local]
+    return None if any(v is None for v in vals) else round(float(sum(vals)), 3)
+
+
+class OverheadFieldMissing(ValueError):
+    """ANA-164: a record lacks a router/verifier overhead field (the harness would have reported a fake 0)."""
+
+
+_OVERHEAD_VALUES = ("router_tokens", "router_cost", "verify_tokens", "verify_cost", "retry_tokens")
+_OVERHEAD_ORIGINS = ("router_tokens_origin", "verify_tokens_origin")
+
+
+def require_overhead_fields(records: Sequence[dict]) -> int:
+    """FAIL (OverheadFieldMissing) if any STATIC_*/DYNAMIC_* record lacks a measured overhead field.
+    ORACLE and controls are hypothetical/no-call records and are skipped. Returns the number checked."""
+    bad, n = [], 0
+    for r in records:
+        st = str(r.get("strategy", ""))
+        if st == ORACLE or st in CONTROL_STRATEGIES:
+            continue
+        n += 1
+        miss = [k for k in _OVERHEAD_VALUES + _OVERHEAD_ORIGINS if r.get(k) is None]
+        if "verify_calls" not in r:
+            miss.append("verify_calls")
+        elif r["verify_calls"] > 0 and r.get("verify_latency_ms") is None:
+            miss.append("verify_latency_ms")
+        if st.startswith(DYNAMIC_ROUTER) and r.get("router_latency_ms") is None:
+            miss.append("router_latency_ms")
+        if miss:
+            bad.append(f"{r.get('task_id')}/{st}: {','.join(miss)}")
+    if bad:
+        raise OverheadFieldMissing(f"{len(bad)} record(s) without overhead fields: " + "; ".join(bad[:20]))
+    return n
+
+
 # ------------------------------------------------------------------ model selection
 def cheapest(models: Sequence[ModelEntry]) -> ModelEntry:
     return min(models, key=lambda m: (m.tier, m._sort_cost(), m.id))
@@ -432,7 +495,11 @@ class BenchResult:
 def _base_record(task: Task, strategy: str, simulated: bool) -> dict:
     return {"task_id": task.id, "kind": task.kind, "difficulty": task.difficulty_label, "strategy": strategy,
             "risk": task.risk, "simulated": simulated, "retry_count": 0, "retry_cost": 0.0,
-            "router_cost": 0.0, "router_tokens": 0, "verify_cost": 0.0, "verify_tokens": 0,
+            # ANA-164: router/verifier overhead is MEASURED, never a silent constant. Both are deterministic
+            # code (no LLM call): tokens/cost 0 carry an explicit origin; latency is filled by perf_counter.
+            "router_cost": 0.0, "router_tokens": 0, "router_tokens_origin": "not_applicable",
+            "verify_cost": 0.0, "verify_tokens": 0, "verify_tokens_origin": "no_llm",
+            "verify_calls": 0, "verify_latency_ms": None, "retry_tokens": 0, "local_latency_ms": 0.0,
             "router_latency_ms": None, "t_star": None, "oracle_cost": None, "penalty_cost": None,
             "answerable_class": "answerable" if task.ground_truth.get("answerable", True) else "unanswerable",  # ANA-093
             "citation_task": "citation" in str(task.verifier.get("type"))}
@@ -441,10 +508,14 @@ def _base_record(task: Task, strategy: str, simulated: bool) -> dict:
 def run_static(task: Task, entry: ModelEntry, strategy: str, cache: ResultCache, runner: ModelRunner,
                rep: int = 0) -> dict:
     out = cache.get_or_run(task, entry, runner, rep)
+    tv = time.perf_counter()
     res = verify_task(task, out.answer, out.retrieved_ids)
+    verify_ms = round((time.perf_counter() - tv) * 1000, 3)
     cost, origin = call_cost(entry, out)
     r = _base_record(task, strategy, out.simulated)
     r["rep"] = rep
+    r.update(verify_calls=1, verify_latency_ms=verify_ms, local_latency_ms=_local_ms([entry], [out]),
+             **_usage_pair(out))
     r.update(citation_checked=bool(res.details.get("citation_checked")), citation_ok=res.details.get("citation_ok"))
     r.update(solved=bool(res.passed), cost=cost, final_cost=cost, cost_origin=origin, tokens=_tok(out),
              tokens_origin="estimated" if out.simulated else "measured", initial_model=entry.id, final_model=entry.id,
@@ -463,19 +534,24 @@ def run_dynamic(task: Task, registry: Registry, policy, cache: ResultCache, runn
     r["rep"] = rep
     r.update(router_latency_ms=router_ms, router_tokens=dec.router_tokens, complexity=dec.difficulty,
              verify_level=dec.verify, reason_codes=list(dec.reason_codes), policy_version=dec.policy_version,
-             registry_version=dec.registry_version, effort=dec.effort, _decision=dec)
+             registry_version=dec.registry_version, effort=dec.effort, _decision=dec,
+             router_tokens_origin=overhead_origin(dec.router_tokens))
     if dec.model_id is None:
         r.update(solved=False, cost=0.0, final_cost=0.0, cost_origin="measured", tokens=0, tokens_origin="measured",
                  initial_model=None, final_model=None, initial_tier=None, final_tier=None, escalation_count=0,
                  failure_code="routing_miss", latency_ms=None, _attempts=[])
         return r
-    attempts, costs, origins, toks, sims = [], [], [], [], []
+    attempts, costs, origins, toks, sims, outs, ents = [], [], [], [], [], [], []
+    verify_ms = 0.0
     model_id, failed, res, last_out = dec.model_id, 0, None, None
     while True:
         entry = registry.get(model_id)
         out = cache.get_or_run(task, entry, runner, rep)
+        tv = time.perf_counter()
         res = verify_task(task, out.answer, out.retrieved_ids)
+        verify_ms += (time.perf_counter() - tv) * 1000
         c, o = call_cost(entry, out)
+        outs.append(out), ents.append(entry)
         costs.append(c), origins.append(o), toks.append(_tok(out)), sims.append(out.simulated)
         attempts.append((entry.id, bool(res.passed), res.failure_code))
         last_out, last_entry = out, entry
@@ -494,7 +570,9 @@ def run_dynamic(task: Task, registry: Registry, policy, cache: ResultCache, runn
              cost_origin=M.combine_origin(origins), tokens=_sum_or_none(toks), tokens_origin="estimated" if any(sims) else "measured",
              initial_model=dec.model_id, final_model=last_entry.id, initial_tier=dec.tier, final_tier=last_entry.tier,
              escalation_count=len(attempts) - 1, failure_code=res.failure_code, latency_ms=last_out.latency_ms,
-             simulated=any(sims), _attempts=attempts)
+             simulated=any(sims), _attempts=attempts, verify_calls=len(attempts), verify_latency_ms=round(verify_ms, 3),
+             retry_tokens=_retry_tokens(toks), local_latency_ms=_local_ms(ents, outs),
+             **(_usage_pair(outs[-1]) if outs else {}))
     if r["tokens"] is not None:
         r["tokens"] = int(r["tokens"])
     return r

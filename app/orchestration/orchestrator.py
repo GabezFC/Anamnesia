@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from app.orchestration.config import OrchestrationConfig, load_config
+from app.orchestration.enforcement import enforcement_level
 from app.orchestration.launchers import SessionLauncher
 from app.orchestration.roles import contract, role_prompt
 from app.orchestration.runs import TERMINAL, InvalidTransition, Run, RunError, list_runs, project_root
@@ -176,7 +177,8 @@ class Orchestrator:
                          totals={"input_tokens": None, "output_tokens": None, "cost_usd": None,
                                  "cost_status": "unavailable"})
         run.summary["steps"] = [{"step_id": s.step_id, "role": s.role, "depends_on": s.depends_on,
-                                 "state": "pending"} for s in steps]
+                                 "state": "pending",
+                                 "enforcement": enforcement_level(self.launcher, s.role)} for s in steps]
         run.write_summary()
         with self._lock:
             self._runs[run.run_id] = run

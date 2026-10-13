@@ -5,6 +5,8 @@
 # - `verified: false` => the id/model name was NOT confirmed against the provider's model list.
 #   Confirm each id before relying on it. context_window null = unknown (never guessed).
 # - tier: integer rank (higher = more capable). The number of tiers is whatever this file uses.
+# - `planned: true` = provider has no adapter yet (ANA-181); allowed only for such entries.
+# - `verified: true` REQUIRES context_window (ANA-179); scripts/verify_registry.py sets verified.
 # - Cursor is not a model provider (consumer agent profile), so it is not listed.
 # - Subset YAML only (maps, lists, [a, b], # comments); no PyYAML dependency.
 version: 1
@@ -111,6 +113,7 @@ models:
     verified: false
   - id: hf-inference
     provider: huggingface
+    planned: true   # ANA-181: sem adapter; nunca roteável
     model: Qwen/Qwen2.5-72B-Instruct
     tier: 2
     context_window: null
@@ -121,6 +124,7 @@ models:
     verified: false
   - id: nvidia-hosted
     provider: nvidia
+    planned: true   # ANA-181: sem adapter; nunca roteável
     model: meta/llama-3.1-70b-instruct
     tier: 2
     context_window: null

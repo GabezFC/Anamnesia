@@ -48,7 +48,21 @@ def _check_env_key(c: Connection, payload: dict) -> str:
 
 @router.get("")
 def list_connections() -> dict:
-    return {"connections": [_view(c) for c in _catalog()]}
+    out: dict = {"connections": [_view(c) for c in _catalog()]}
+    try:                                    # ANA-187/190: additive, only when a resilience flag is on
+        from app.routing import circuit_breaker as _cb, health as _hl
+        if _cb.breaker_enabled() or _hl.health_enabled():
+            out["resilience"] = _hl.health_report()
+    except Exception:  # noqa: BLE001 -- never break the listing
+        pass
+    return out
+
+
+@router.get("/resilience/state")
+def resilience_state() -> dict:
+    """Read-only: circuit-breaker state + real-call health per model (no secrets, no prompts)."""
+    from app.routing import health as _hl
+    return _hl.health_report()
 
 
 @router.put("/{cid}/secret", dependencies=[Depends(require_local_write)])

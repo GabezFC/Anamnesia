@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.adapters.models.errors import classify_exception, ensure_paid_allowed
+
 
 @dataclass
 class GenerationResult:
@@ -26,9 +28,21 @@ class GenerationResult:
     agent_tokens: int | None = None
     agent_cost: float | None = None
     raw_meta: dict | None = None
+    # ANA-171: machine-readable failure cause (None on success); see app/adapters/models/errors.py
+    error_kind: str | None = None
+    status_code: int | None = None
+    retry_after: float | None = None
 
     def to_dict(self):
         return dict(self.__dict__)
+
+
+def failure(exc: BaseException, t0: float, provider: str, model: str) -> GenerationResult:
+    """GenerationResult for a raised exception, with the ANA-171 taxonomy filled in."""
+    kind, status, retry = classify_exception(exc)
+    return GenerationResult(None, None, None, round((time.perf_counter() - t0) * 1000, 1), provider, model,
+                            f"{type(exc).__name__}: {str(exc)[:300]}", error_kind=kind, status_code=status,
+                            retry_after=retry)
 
 
 class OpenAICompatibleAdapter:
@@ -59,6 +73,7 @@ class OpenAICompatibleAdapter:
                 "temperature": temperature, "max_tokens": max_tokens, **self.extra_body}
         t0 = time.perf_counter()
         try:
+            ensure_paid_allowed(self.provider)          # ANA-168 kill-switch (local providers exempt)
             r = httpx.post(f"{self.base_url}/chat/completions", json=body, headers=self._headers(),
                            timeout=self.timeout_s)
             r.raise_for_status()
@@ -68,8 +83,7 @@ class OpenAICompatibleAdapter:
             return GenerationResult(answer, usage.get("prompt_tokens"), usage.get("completion_tokens"),
                                     round((time.perf_counter() - t0) * 1000, 1), self.provider, self.model)
         except Exception as exc:  # noqa: BLE001
-            return GenerationResult(None, None, None, round((time.perf_counter() - t0) * 1000, 1),
-                                    self.provider, self.model, f"{type(exc).__name__}: {str(exc)[:300]}")
+            return failure(exc, t0, self.provider, self.model)
 
 
 class OllamaAdapter(OpenAICompatibleAdapter):
@@ -117,6 +131,7 @@ class AnthropicAdapter:
     def generate(self, prompt: str, temperature: float = 0.0, max_tokens: int = 800) -> GenerationResult:
         t0 = time.perf_counter()
         try:
+            ensure_paid_allowed("anthropic")             # ANA-168 kill-switch
             import anthropic
             client = anthropic.Anthropic(timeout=self.timeout_s)
             msg = client.messages.create(model=self.model, max_tokens=max_tokens, temperature=temperature,
@@ -125,5 +140,4 @@ class AnthropicAdapter:
             return GenerationResult(text, msg.usage.input_tokens, msg.usage.output_tokens,
                                     round((time.perf_counter() - t0) * 1000, 1), "anthropic", self.model)
         except Exception as exc:  # noqa: BLE001
-            return GenerationResult(None, None, None, round((time.perf_counter() - t0) * 1000, 1),
-                                    "anthropic", self.model, f"{type(exc).__name__}: {str(exc)[:300]}")
+            return failure(exc, t0, "anthropic", self.model)

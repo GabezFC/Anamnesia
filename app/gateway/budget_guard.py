@@ -1,7 +1,8 @@
 """Budget guard (T6.4): optionally degrade paid pipelines to the free baseline once the ceiling is hit.
 
-OFF by default. With `ANAMNESIA_BUDGET_ENFORCE` unset/0, `apply()` returns immediately: no DB read,
-no metric, no change of plan -- the search path is byte-identical to before this module existed.
+ENFORCEMENT is OFF by default. ANA-180: WARN mode is ON by default -- for paid plans the budget state is only
+recorded in the metrics (never blocks, never changes the plan); `ANAMNESIA_BUDGET_WARN=0` restores the old inert path.
+Free plans never read the DB.
 
 With `ANAMNESIA_BUDGET_ENFORCE=1`, and only for a plan whose pipeline spends paid tokens (the JEV
 pipelines: graphify_jev, graphify_jev_opt):
@@ -27,6 +28,7 @@ from app.schemas.models import JEV_PIPELINES
 from app.services import costs as svc
 
 ENV_FLAG = "ANAMNESIA_BUDGET_ENFORCE"
+WARN_FLAG = "ANAMNESIA_BUDGET_WARN"   # ANA-180: warn mode is ON by default; =0/off silences it (rollback)
 FALLBACK_PIPELINE = "baseline"
 _ORDER = {"ok": 0, "warn": 1, "exceeded": 2}
 _CACHE_TTL_S = 5.0   # spend is re-read at most every few seconds per guard (a search is ~ms)
@@ -40,6 +42,11 @@ def enforcement_enabled() -> bool:
     if raw:
         return raw in ("1", "true", "yes", "on")
     return bool(os.environ.get("TYPESAFE_API_KEY", "").strip())
+
+
+def warn_enabled() -> bool:
+    """ANA-180: default ON. Warn mode only *records* the budget state of paid searches; it never blocks."""
+    return os.environ.get(WARN_FLAG, "").strip().lower() not in ("0", "false", "no", "off")
 
 
 def spends_paid_tokens(pipeline: str | None) -> bool:
@@ -73,19 +80,30 @@ class BudgetGuard:
         return st
 
     def apply(self, plan, db) -> tuple[Any, dict]:
-        """Returns (plan, extra_metrics). Identity + {} unless enforcement is on and the plan is paid."""
-        if not enforcement_enabled() or not spends_paid_tokens(plan.pipeline):
+        """Returns (plan, extra_metrics).
+
+        Paid plan + enforcement on  -> may degrade to baseline (as before).
+        Paid plan + enforcement off -> ANA-180 warn mode (default): the budget state is recorded
+        (`budget_status`, `budget_mode: "warn"`, `budget_warning`) and the plan is NEVER changed.
+        Free plans, or warn mode switched off (ANAMNESIA_BUDGET_WARN=0) -> identity + {}.
+        """
+        if not spends_paid_tokens(plan.pipeline):
+            return plan, {}
+        enforce = enforcement_enabled()
+        if not enforce and not warn_enabled():
             return plan, {}
         try:
             st = self.state(db)
         except Exception as exc:  # noqa: BLE001 -- the guard must never block a search
             return plan, {"budget_status": "unknown", "budget_guard_error": type(exc).__name__}
         extra: dict[str, Any] = {"budget_status": st["status"]}
-        if st["status"] == "warn":
+        if not enforce:
+            extra["budget_mode"] = "warn"
+        if st["status"] == "warn" or (st["status"] == "exceeded" and not enforce):
             p = st["worst_period"]
             extra["budget_warning"] = (f"gasto {st[p]['ratio']:.0%} do teto {p} "
                                        f"(US$ {st[p]['spent_usd']} de {st[p]['ceiling_usd']})")
-        elif st["status"] == "exceeded":
+        if st["status"] == "exceeded" and enforce:
             p = st["worst_period"]
             reason = (f"teto {p} excedido (US$ {st[p]['spent_usd']} >= {st[p]['ceiling_usd']}); "
                       f"{plan.pipeline} -> {FALLBACK_PIPELINE}")

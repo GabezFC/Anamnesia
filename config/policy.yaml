@@ -1,0 +1,61 @@
+# Policy declarativa (ANA-176). So tem efeito com ANAMNESIA_POLICY=audit|enforce (padrao: off).
+# Subset YAML (maps, listas, # comentarios), lido por app/routing/registry._parse_yaml.
+# Avaliacao: um `deny` que casa vence qualquer `allow`; sem regra casando vale `defaults`.
+# Campos de regra: id, effect (allow|deny), action (read|write|escalate|pay|exec), actor (glob, papel/ator),
+# target (glob), within_cwd (true = alvo precisa estar dentro de ctx.cwd).
+version: 1
+defaults:
+  read: allow
+  write: deny
+  exec: deny
+  pay: deny
+  escalate: deny
+rules:
+  # Papeis que escrevem: so o implementer, so dentro do cwd do projeto.
+  - id: implementer-writes-inside-cwd
+    effect: allow
+    action: write
+    actor: implementer
+    within_cwd: true
+  # Efeito colateral do proprio orquestrador: abrir sessao/subprocesso de launcher e worktree git.
+  - id: orchestrator-launches-sessions
+    effect: allow
+    action: exec
+    actor: orchestrator
+    target: "launcher:*"
+  - id: orchestrator-headless-agent
+    effect: allow
+    action: exec
+    actor: orchestrator
+    target: "agent:*"
+  - id: orchestrator-worktree
+    effect: allow
+    action: exec
+    actor: orchestrator
+    target: "git:worktree"
+  # Testes: implementer e reviewer podem rodar testes; researcher nao.
+  - id: tests-implementer
+    effect: allow
+    action: exec
+    actor: implementer
+    target: "tests:*"
+  - id: tests-reviewer
+    effect: allow
+    action: exec
+    actor: reviewer
+    target: "tests:*"
+  # Chamada paga a modelo: permitida para o orquestrador (o teto de custo continua no BudgetGuard/kill-switch).
+  - id: orchestrator-model-call
+    effect: allow
+    action: pay
+    actor: orchestrator
+    target: "model:*"
+  # Nunca: escrever em segredos / .git, qualquer papel.
+  - id: never-write-secrets
+    effect: deny
+    action: write
+    target: "*.env"
+  - id: never-write-git-dir
+    effect: deny
+    action: write
+    target: "*/.git/*"

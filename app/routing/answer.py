@@ -17,9 +17,11 @@ import re
 from dataclasses import dataclass, field
 
 from app.routing.escalation import next_model
+from app.routing.resilience import guarded_generate, next_after_failure
 from app.routing.policy import RoutingPolicy, preset
 from app.routing.registry import ModelEntry, Registry, load_registry
 from app.routing.router import route
+from app.routing.shadow import maybe_shadow, pop_pending
 from app.services.query_fp import fold
 
 MODES = ("context", "answer", "delegate")
@@ -137,7 +139,9 @@ def make_adapter(entry: ModelEntry, avail: dict | None = None):
     """Concrete adapter for a registry entry (returns an object with .generate(prompt, ...))."""
     from app.adapters.models.providers import (AnthropicAdapter, OllamaAdapter, OpenAIAdapter,
                                                OpenRouterAdapter, VLLMAdapter)
+    from app.adapters.models.errors import ensure_paid_allowed
     from config.agents import AgentsConfig
+    ensure_paid_allowed(entry.provider)            # ANA-168: ANAMNESIA_PAID_CALLS=0 -> only ollama/vllm
     cfg = AgentsConfig()
     if entry.provider == "ollama":
         return OllamaAdapter(cfg.ollama_base_url, _ollama_name(entry, avail or {}) or entry.model)
@@ -224,6 +228,9 @@ def _persist(gateway, result, extras: dict) -> None:
                         "fallback_reason": extras.get("fallback_reason"), "routing": extras.get("routing"),
                         "attempts": extras.get("attempts"),
                         "grounding_passed": (extras.get("grounding") or {}).get("passed")})
+        shadow = pop_pending()                                       # ANA-186: only set when the flag is on
+        if shadow is not None:
+            metrics["shadow_decision"] = shadow
         gateway.db.update_run_answer(result.run_id, extras.get("answer"), metrics, metrics.get("error"))
     except Exception:  # noqa: BLE001 — logging must never break the response
         pass
@@ -281,6 +288,7 @@ def plan_route(query: str, context_tokens: int, task_kind: str, risk: str):
     policy = get_policy()
     avail = get_availability() if policy.enabled else {}
     reg = usable_registry(get_registry(), avail) if policy.enabled else get_registry()
+    maybe_shadow(query, context_tokens, task_kind, risk, get_registry(), policy)   # ANA-186: no-op unless flag
     return route(query, context_tokens, task_kind, risk, reg, policy), reg, policy, avail
 
 
@@ -323,18 +331,28 @@ def _answer(gateway, result, risk, task_kind, extras):
     while model_id:
         entry = reg.get(model_id)
         att = {"model_id": model_id, "tokens_in": None, "tokens_out": None, "cost_usd": None,
-               "cost_status": "unavailable", "grounded": None, "error": None}
+               "cost_status": "unavailable", "grounded": None, "error": None,
+               "error_kind": None, "status_code": None, "retry_after": None}
         extras["attempts"].append(att)
+        info: dict = {}
         try:
-            gen = make_adapter(entry, avail).generate(prompt, temperature=0.0, max_tokens=ANSWER_MAX_TOKENS)
+            # ANA-177/178/187/190: straight call unless a resilience flag is on (see app/routing/resilience.py)
+            gen = guarded_generate(entry, make_adapter, avail, prompt, info,
+                                   temperature=0.0, max_tokens=ANSWER_MAX_TOKENS)
         except Exception as exc:  # noqa: BLE001
+            from app.adapters.models.errors import classify_exception
             att["error"] = _redact(f"{type(exc).__name__}: {exc}")
+            att["error_kind"], att["status_code"], att["retry_after"] = classify_exception(exc)   # ANA-171
             gen = None
         if gen is not None:
             att["tokens_in"], att["tokens_out"] = gen.input_tokens, gen.output_tokens
             att["cost_usd"], att["cost_status"] = _cost(entry, gen.input_tokens, gen.output_tokens)
             if gen.error:
                 att["error"] = _redact(gen.error)
+                # ANA-171: stubs/legacy adapters without the field still get a (non-null) kind
+                att["error_kind"] = getattr(gen, "error_kind", None) or "other"
+                att["status_code"] = getattr(gen, "status_code", None)
+                att["retry_after"] = getattr(gen, "retry_after", None)
         text = (gen.answer or "").strip() if gen is not None and not att["error"] else ""
         if text:
             produced = True
@@ -347,8 +365,12 @@ def _answer(gateway, result, risk, task_kind, extras):
                                               for i, c in enumerate(cands)])
                 extras.pop("fallback_reason", None)
                 return extras
+        if info.get("retries"):
+            att["retries"] = info["retries"]
+        if info.get("circuit_open"):
+            att["circuit_open"] = True
         failed += 1
-        model_id = next_model(decision, failed)
+        model_id = next_after_failure(decision, reg, entry, extras["attempts"], info, failed)   # ANA-177
     if produced:
         _grounding_signal(cands, result)
     return fallback("grounding_failed" if produced else "generation_failed")

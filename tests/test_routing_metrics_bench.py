@@ -133,7 +133,7 @@ def test_cache_runs_each_task_model_once(tasks):
 def test_stub_benchmark_deterministic(tasks):
     a = rb.run_benchmark(tasks, priced_models(), rb.StubRunner(3))
     b = rb.run_benchmark(tasks, priced_models(), rb.StubRunner(3))
-    strip = lambda rs: json.dumps([{k: v for k, v in r.items() if k != "router_latency_ms"} for r in rs],  # noqa: E731
+    strip = lambda rs: json.dumps([{k: v for k, v in r.items() if k not in ("router_latency_ms", "verify_latency_ms")} for r in rs],  # noqa: E731
                                   sort_keys=True, default=str)   # wall-clock router latency is real, not simulated
     assert strip(a.records) == strip(b.records)
     assert all(r["simulated"] for r in a.records)

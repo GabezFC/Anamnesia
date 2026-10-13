@@ -17,6 +17,10 @@ from config.pricing import LOCAL_PROVIDERS, price_for
 
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / "config" / "models.yaml"
 PROVIDERS = {"ollama", "vllm", "openai", "anthropic", "openrouter", "huggingface", "nvidia"}
+# Providers that have a real adapter (ANA-181). Mirrors app.routing.answer.SUPPORTED_PROVIDERS (answer.py
+# imports this module, so the constant cannot be imported from there; tests/test_onda4_router_registry.py
+# asserts both stay equal). An entry of any other provider must be explicitly `planned: true`.
+SUPPORTED_PROVIDERS = ("ollama", "openai", "anthropic", "openrouter", "vllm")
 _KEY = r"[A-Za-z0-9_.\-]+"
 
 
@@ -155,6 +159,7 @@ class ModelEntry:
     price: Price | None = None
     local: bool = False
     verified: bool = False
+    planned: bool = False      # ANA-181: provider has no adapter yet; listed but never routable
 
     @property
     def price_status(self) -> str:
@@ -206,6 +211,8 @@ class Registry:
         for m in self.models:
             if min_tier is not None and m.tier < min_tier:
                 continue
+            if m.planned:
+                continue
             if not caps <= set(m.capabilities):
                 continue
             if min_context is not None and (m.context_window is None or m.context_window < min_context):
@@ -214,6 +221,28 @@ class Registry:
                 continue
             out.append(m)
         return sorted(out, key=lambda m: (m.tier, m._sort_cost(), m.id))
+
+
+# ---------------------------------------------------------------- report (ANA-172/179/181)
+def coverage_report(registry: "Registry") -> dict:
+    """Honest counts: how much of the registry is actually confirmed. No network, no inference."""
+    ms = registry.models
+    real = [m for m in ms if not m.planned]
+    n = len(real)
+
+    def pct(k):
+        return round(100.0 * k / n, 1) if n else 0.0
+    return {
+        "models_total": len(ms), "planned": [m.id for m in ms if m.planned], "considered": n,
+        "verified": sum(m.verified for m in real), "verified_pct": pct(sum(m.verified for m in real)),
+        "with_price": sum(m.price is not None for m in real),
+        "with_price_pct": pct(sum(m.price is not None for m in real)),
+        "context_window_null": [m.id for m in real if m.context_window is None],
+        "context_window_null_count": sum(m.context_window is None for m in real),
+        # these cannot be proven to fit a context: answer.py falls back to
+        # `context_window_unknown_assumed_fit` for them (the hack stays while this list is non-empty)
+        "assumed_fit_candidates": [m.id for m in real if m.context_window is None],
+    }
 
 
 # ---------------------------------------------------------------- loader
@@ -247,9 +276,18 @@ def _entry(raw, idx) -> ModelEntry:
     caps = raw.get("capabilities") or []
     if not isinstance(caps, list) or not all(isinstance(c, str) for c in caps):
         raise RegistryError(f"{w}: capabilities must be a list of strings")
-    for key in ("effort_supported", "local", "verified"):
+    for key in ("effort_supported", "local", "verified", "planned"):
         if key in raw and not isinstance(raw[key], bool):
             raise RegistryError(f"{w}: {key} must be true/false")
+    planned = bool(raw.get("planned", False))
+    if provider not in SUPPORTED_PROVIDERS and not planned:
+        raise RegistryError(f"{w}: provider {provider!r} has no adapter; mark the entry `planned: true` "
+                            f"(supported: {list(SUPPORTED_PROVIDERS)})")
+    if raw.get("verified") is True and cw is None:
+        # ANA-179: "verified" means id AND window were confirmed against the provider; never a guessed window.
+        raise RegistryError(f"{w}: verified: true requires a context_window (confirm it, e.g. `ollama show`)")
+    if raw.get("verified") is True and planned:
+        raise RegistryError(f"{w}: a planned entry cannot be verified: true")
     local = raw.get("local", provider == "ollama")
     if provider == "ollama" and not local:
         raise RegistryError(f"{w}: ollama models must have local: true")
@@ -268,7 +306,7 @@ def _entry(raw, idx) -> ModelEntry:
         price = Price(_num(p.get("input"), w, "input"), _num(p.get("output"), w, "output"), str(src), str(chk))
     return ModelEntry(mid, provider, model, tier, cw, tuple(caps),
                       bool(raw.get("effort_supported", False)), price, bool(local),
-                      bool(raw.get("verified", False)))
+                      bool(raw.get("verified", False)), planned)
 
 
 def load_registry(path=None) -> Registry:

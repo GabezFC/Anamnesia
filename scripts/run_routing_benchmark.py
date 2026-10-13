@@ -50,6 +50,12 @@ def main(argv=None) -> int:
                     help="ANA-110: run each (task, model) K times (key task,model,rep) and report the std between reps")
     ap.add_argument("--strata", choices=("cell", "difficulty"), default="cell",
                     help="ANA-112: sample stratification (default kind x difficulty x answerable)")
+    ap.add_argument("--max-usd", type=float, default=None,
+                    help="ANA-165: --real spending ceiling in US$. Estimate > ceiling, or a paid model with unknown price "
+                         "and no ceiling, is REFUSED (exit 2, no call); the run aborts (exit 3) if the real spend exceeds it")
+    ap.add_argument("--local-gpu-usd-per-hour", type=float, default=None,
+                    help="ANA-191: optional ASSUMPTION (estimated) of US$/GPU-hour for local models; adds a cost/solved "
+                         "'with local cost' line to the report. Off by default")
     a = ap.parse_args(argv)
 
     strategies = (a.strategies.split(",") if a.strategies
@@ -105,9 +111,43 @@ def main(argv=None) -> int:
             return 2
         if len(sample) < need:
             notes.append(f"**SUBDIMENSIONADO**: N={len(sample)} < {need}; diferenças pequenas não são detectáveis")
+    guard = pf = None
+    if a.real:   # ANA-165: bound the spend BEFORE the first paid call
+        from app.benchmark.preflight import BudgetedRunner, preflight
+        pf = preflight(sample, models, strategies, repeats=a.repeats, max_usd=a.max_usd, default_id=a.default_model,
+                       max_tokens=getattr(runner, "max_tokens", 400))
+        est = pf.estimate_usd
+        print(f"preflight: {pf.n_calls} chamadas, estimativa US$ {est if est is not None else 'indisponível'}"
+              f"{'' if pf.complete else ' (limite inferior: preço desconhecido)'}, teto {a.max_usd}")
+        notes.append(f"preflight: estimativa US$ {est} ({'completa' if pf.complete else 'limite inferior'}), teto {a.max_usd}")
+        if not pf.ok:
+            print(f"REFUSED: {pf.reason}. Nenhuma chamada foi feita.", file=sys.stderr)
+            return 2
+        guard = BudgetedRunner(runner, a.max_usd)
+        runner = guard
     cache = rb.ResultCache(a.cache)
-    result = rb.run_benchmark(sample, models, runner, strategies, a.policies.split(","), a.default_model, cache,
-                              repeats=a.repeats)
+    from app.benchmark.preflight import BudgetExceeded
+    try:
+        result = rb.run_benchmark(sample, models, runner, strategies, a.policies.split(","), a.default_model, cache,
+                                  repeats=a.repeats)
+    except BudgetExceeded as e:
+        rep_ = guard.report(pf.estimate_usd, pf.complete) if guard and pf else {}
+        print(f"ABORTED: {e}. relatório parcial: {rep_}", file=sys.stderr)
+        return 3
+    if guard and pf:
+        rep_ = guard.report(pf.estimate_usd, pf.complete)
+        result.meta["preflight"] = {**pf.as_dict(), "actual": rep_}
+        print(f"gasto real US$ {rep_['spent_usd']} ({rep_['spent_origin']}); razão real/estimado = {rep_['ratio_real_over_estimate']}")
+        notes.append(f"gasto real US$ {rep_['spent_usd']}; razão real/estimado {rep_['ratio_real_over_estimate']}")
+        if rep_["aborted"]:
+            print("ABORTED: o teto foi ultrapassado na última chamada; relatório gravado com o que foi medido.", file=sys.stderr)
+    if a.local_gpu_usd_per_hour is not None:   # ANA-191
+        from app.routing import metrics as M
+        recs = [r for r in result.records if r.get("strategy") == rb.STATIC_DEFAULT or r.get("strategy") == rb.DYNAMIC_ROUTER]
+        for st in sorted({r["strategy"] for r in recs}):
+            lc = M.local_cost_assumption([r for r in recs if r["strategy"] == st], a.local_gpu_usd_per_hour)
+            notes.append(f"ANA-191 {st}: custo/resolvida sem GPU local = {lc['cost_per_solved_without']['value']}; "
+                         f"com GPU local (ESTIMADO a US$ {a.local_gpu_usd_per_hour}/h) = {lc['cost_per_solved_with']['value']}")
     result.meta["sample_coverage"] = coverage
 
     if a.db:

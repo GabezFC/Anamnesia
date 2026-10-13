@@ -20,6 +20,17 @@ def add_costs(*values: float | None) -> float | None:
     return round(sum(values), 8)
 
 
+def add_costs_partial(*values: float | None) -> dict:
+    """ANA-166: like add_costs but never discards what IS known. Returns
+    {"total": add_costs(...), "lower_bound": sum(known) or None, "known": k, "n": n, "coverage": k/n,
+     "label": "exact"|"lower_bound"|"unavailable"}. `add_costs` itself is unchanged (total None if any missing)."""
+    known = [v for v in values if v is not None]
+    n = len(values)
+    label = "unavailable" if not known else ("exact" if len(known) == n else "lower_bound")
+    return {"total": add_costs(*values), "lower_bound": round(sum(known), 8) if known else None, "known": len(known),
+            "n": n, "coverage": (len(known) / n) if n else None, "label": label}
+
+
 def break_even(graphify: dict, graphify_jev: dict) -> dict:
     """Compare Graphify vs Graphify+JEV for the same question/consumer (§64, §89, §90).
 

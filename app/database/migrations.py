@@ -146,9 +146,16 @@ def _m2_drop_redundant_indexes(conn: sqlite3.Connection) -> None:
     conn.execute("DROP INDEX IF EXISTS runs_session")
 
 
+def _m3_backfill_cost_origin(conn: sqlite3.Connection) -> None:
+    """ANA-188: fill NULL cost_origin/project of old runs (batched, logged for rollback, idempotent)."""
+    from app.services.cost_ledger import migration_apply
+    migration_apply(conn)
+
+
 BENCHMARK_MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline_schema", _m1_baseline),
     Migration(2, "drop_redundant_indexes", _m2_drop_redundant_indexes),
+    Migration(3, "backfill_cost_origin", _m3_backfill_cost_origin),
 )
 
 
