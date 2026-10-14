@@ -7,6 +7,7 @@
 
 import { COSTS_I18N } from './i18n-costs.js';
 import { WS_I18N } from './i18n-workspace.js';
+import { O7_I18N } from './i18n-onda7.js';
 
 import { CONFIG_PT, CONFIG_EN } from './i18n-config.js';
 
@@ -375,6 +376,8 @@ function mergeDeep(base, extra) {
 }
 mergeDeep(PT, WS_I18N.pt);
 mergeDeep(EN, WS_I18N.en);
+mergeDeep(PT, O7_I18N.pt);
+mergeDeep(EN, O7_I18N.en);
 
 // chaves novas da tela de Configurações (js/i18n-config.js)
 Object.assign(PT.config, CONFIG_PT);

@@ -25,6 +25,7 @@ def _default_weights() -> dict[str, float]:
         "code": 1.0,            # code cues
         "reasoning": 1.5,       # reasoning cues
         "classifier": 1.0,      # query_fp.classify() class (reused heuristic)
+        "ungrounded": 0.0,      # out-of-corpus identifiers (only when a vocab is supplied)
     }
 
 
@@ -39,6 +40,7 @@ class RoutingPolicy:
     multi_hop_saturation: int = 2              # cue hits that give feature 1.0
     code_saturation: int = 2
     reasoning_saturation: int = 2
+    ungrounded_saturation: int = 1             # out-of-corpus identifiers that give feature 1.0
     context_reference_tokens: int = 32000      # context feature reaches 1.0 here
     classifier_scores: dict = field(default_factory=lambda: {
         "SIMPLE": 0.0, "MEDIUM": 0.5, "COMPLEX": 1.0, "AMBIGUOUS": 0.5})
@@ -49,6 +51,8 @@ class RoutingPolicy:
         "before and after", "both", "ambos", "alem disso", "furthermore", "por outro lado",
         "on the other hand", "relacao entre", "relationship between", "impacto", "consequencia",
         "consequences", "e tambem", "as well as", "cada um", "each of",
+        # R2-rev (ANA-190): generic cross-reference wording (a question that asks to link two notes)
+        "outra nota", "notas relacionadas", "nota relacionada", "se conectam", "related note", "how they connect",
     )
     code_cues: tuple = (
         "```", "def ", "class ", "function", "funcao", "traceback", "stacktrace", "exception",

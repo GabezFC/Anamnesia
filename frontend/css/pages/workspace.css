@@ -489,3 +489,14 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
 .launcher-opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-secondary); }
 .launcher-opt .select-control { font-size: 11px; padding: 2px 18px 2px 6px; max-width: 150px; }
 .profile-menu { min-width: 280px; }
+
+/* ANA-211 — responsividade: painéis empilháveis (breakpoints 900/640 px) */
+@media (max-width: 900px) {
+  .workspace-left-col { width: 210px; min-width: 180px; }
+  .workspace-right-col { display: none; }
+}
+@media (max-width: 640px) {
+  .workspace-layout { flex-direction: column; overflow-y: auto; }
+  .workspace-left-col { width: 100%; max-width: none; min-width: 0; height: auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--border-default); }
+  .workspace-center-col { min-height: 60%; width: 100%; }
+}

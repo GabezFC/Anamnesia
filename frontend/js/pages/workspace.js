@@ -10,7 +10,7 @@ import { I18N } from '../i18n.js';
 import { mockProjects, mockProfiles, mockSessions, mockFiles } from '../mock-data.js';
 import { renderTerminalFrame } from '../components/terminal-view.js';
 import { launchSession, closeSession, loadFiles } from '../live.js';
-import { esc } from '../format.js';
+import { esc, fmtNumber, fmtDate } from '../format.js';
 import { getSettings, putSettings, lastSearch, isUnavailable } from '../anamnesia-api.js';
 import { skeletonLines, loadingBlock } from '../components/skeleton.js';
 import { emptyState } from '../components/empty-state.js';
@@ -133,11 +133,11 @@ function ctxBody() {
   if (ctx.status === 'empty') return emptyState({ title: t.ctxEmptyTitle, description: t.ctxEmptyDesc, variant: 'search', compact: true });
   const d = ctx.data;
   const tk = d.tokens || {};
-  const num = (v) => (typeof v === 'number' ? v.toLocaleString() : '—');
-  const when = d.created_at ? new Date(d.created_at * 1000).toLocaleString() : '—';
+  const num = (v) => fmtNumber(v);
+  const when = d.created_at ? fmtDate(d.created_at) : '—';
   return `
     <div class="memory-context-card">
-      <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); line-height: 1.4;">${esc(t.ctxQuery)}: ${esc(d.query || '—')}</div>
+      <div class="u-e38bd9">${esc(t.ctxQuery)}: ${esc(d.query || '—')}</div>
       <div class="memory-context-meta">
         <span>${esc(when)}</span>
         <span>${esc(d.pipeline || '')}${d.cache_hit ? ` · ${esc(t.ctxCache)}` : ''}</span>
@@ -149,8 +149,8 @@ function ctxBody() {
     </div>
     ${(d.sources || []).map((s) => `
       <div class="memory-context-card">
-        <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); line-height: 1.4;">${esc(s.section || s.file || '—')}</div>
-        <div style="font-size: 10px; font-family: var(--font-mono); color: var(--text-tertiary);">${esc(s.file || '')}</div>
+        <div class="u-e38bd9">${esc(s.section || s.file || '—')}</div>
+        <div class="u-575e4a">${esc(s.file || '')}</div>
         <div class="memory-context-meta">
           <span class="badge-origin badge-origin-measured">${esc(num(s.tokens))} tok</span>
           <span>Score: ${esc(typeof s.score === 'number' ? s.score.toFixed(3) : '—')}${s.decision ? ` · ${esc(s.decision)}` : ''}</span>
@@ -184,15 +184,15 @@ export function render() {
   if (currentState === 'loading') {
     return `
       <div class="workspace-layout">
-        <div class="workspace-left-col" style="padding: 16px;">
-          <div class="skeleton" style="height: 28px; margin-bottom: 16px;"></div>
-          <div class="skeleton" style="height: 60px; margin-bottom: 8px;"></div>
-          <div class="skeleton" style="height: 60px; margin-bottom: 8px;"></div>
-          <div class="skeleton" style="height: 60px;"></div>
+        <div class="workspace-left-col u-bcd0d8">
+          <div class="skeleton u-402c12"></div>
+          <div class="skeleton u-afea74"></div>
+          <div class="skeleton u-afea74"></div>
+          <div class="skeleton u-114891"></div>
         </div>
-        <div class="workspace-center-col" style="padding: 24px;">
-          <div class="skeleton" style="height: 38px; margin-bottom: 16px;"></div>
-          <div class="skeleton" style="height: calc(100% - 60px);"></div>
+        <div class="workspace-center-col u-7174bc">
+          <div class="skeleton u-d53754"></div>
+          <div class="skeleton u-0be86d"></div>
         </div>
       </div>
     `;
@@ -201,8 +201,8 @@ export function render() {
   // Render Error state
   if (currentState === 'error') {
     return `
-      <div class="state-container" style="height: 100%;">
-        <div class="state-icon-wrap" style="color: var(--danger);">${icon('alertTriangle', '', 24)}</div>
+      <div class="state-container u-2d3094">
+        <div class="state-icon-wrap u-52b1c0">${icon('alertTriangle', '', 24)}</div>
         <h2 class="state-title">${I18N.app.errorTitle}</h2>
         <p class="state-description">Falha ao inicializar sessões do subsistema local de terminais.</p>
         <button class="btn btn-secondary" data-action="retry-state">${I18N.app.errorRetry}</button>
@@ -219,16 +219,16 @@ export function render() {
             <span class="pane-title">${t.projectsTitle}</span>
             <button class="btn btn-secondary btn-sm" data-action="open-add-project">${icon('plus', '', 12)} ${t.addProject}</button>
           </div>
-          <div class="state-container" style="padding: 32px 16px;">
+          <div class="state-container u-97d464">
             <p class="state-description">Nenhum projeto cadastrado.</p>
           </div>
         </div>
         <div class="workspace-center-col">
-          <div class="state-container" style="height: 100%;">
+          <div class="state-container u-2d3094">
             <div class="state-icon-wrap">${icon('terminal', '', 28)}</div>
             <h2 class="state-title">${t.emptyTerminalTitle}</h2>
             <p class="state-description">${t.emptyTerminalDesc}</p>
-            <div style="display: flex; gap: 8px; margin-top: 12px;">
+            <div class="u-387c0c">
               <button class="btn btn-primary" data-action="new-terminal">${icon('plus', '', 14)} Novo Terminal</button>
             </div>
           </div>
@@ -239,7 +239,7 @@ export function render() {
 
   // Render Backend Unavailable callout overlay
   const backendNotice = currentState === 'backend-unavailable' ? `
-    <div style="position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 600; width: 90%; max-width: 680px;">
+    <div class="u-315653">
       <div class="callout-notice">
         <div class="callout-notice-icon">${icon('info', '', 18)}</div>
         <div class="callout-notice-body">
@@ -259,7 +259,7 @@ export function render() {
   const px = (n) => (typeof n === 'number' && Number.isFinite(n) ? `width:${Math.round(n)}px;min-width:${Math.round(n)}px;max-width:${Math.round(n)}px;` : '');
   const splitSess = (splitSessionId && sessions.find((x) => x.id === splitSessionId && x.id !== activeSessionId))
     || sessions.find((x) => x.id !== activeSessionId) || null;
-  const slot = (ratio, inner) => `<div class="ws-split-slot" style="flex: ${ratio.toFixed(4)} 1 0;">${inner}</div>`;
+  const slot = (ratio, inner) => `<div class="ws-split-slot" data-css="flex:${ratio.toFixed(4)} 1 0">${inner}</div>`;
 
   // Active Project & Sessions
   const activeProject = mockProjects.find(p => p.id === activeProjectId) || mockProjects[0];
@@ -270,7 +270,7 @@ export function render() {
       ${backendNotice}
 
       <!-- COLUNA ESQUERDA: Projetos & Sessões Ativas (~260px) -->
-      <aside class="workspace-left-col" aria-label="Projetos registrados" style="${px(colWidths.left)}">
+      <aside class="workspace-left-col" aria-label="Projetos registrados" data-css="${px(colWidths.left)}">
         <div class="pane-header">
           <span class="pane-title">${t.projectsTitle}</span>
           <button class="btn btn-ghost btn-sm" data-action="open-add-project" title="${t.addProject}" aria-label="${t.addProject}">
@@ -299,17 +299,17 @@ export function render() {
 
         <!-- Sessões ativas agrupadas -->
         <div class="active-sessions-section">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div class="u-20d708">
             <span class="pane-title">${t.activeSessions}</span>
             <span class="section-count tabular">${mockSessions.length}</span>
           </div>
           ${sessions.map(sess => `
-            <div class="session-mini-item" data-action="focus-session" data-session-id="${esc(sess.id)}" style="cursor: pointer;">
-              <div style="display: flex; align-items: center; gap: 6px; overflow: hidden;">
+            <div class="session-mini-item u-265908" data-action="focus-session" data-session-id="${esc(sess.id)}">
+              <div class="u-2d1dcb">
                 <span class="dot dot-success"></span>
-                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary);">${esc(sess.title)}</span>
+                <span class="u-bcfbd4">${esc(sess.title)}</span>
               </div>
-              <span class="time-stamp tabular" style="font-size: 10px;">${sess.startTime}</span>
+              <span class="time-stamp tabular u-1ab1cd">${sess.startTime}</span>
             </div>
           `).join('')}
         </div>
@@ -342,7 +342,7 @@ export function render() {
           }).join('')}
 
           <!-- Botão + para novo terminal -->
-          <button class="btn btn-ghost btn-sm" data-action="toggle-profile-menu" title="${t.newTerminal}" aria-label="${t.newTerminal}" style="padding: 4px 6px;">
+          <button class="btn btn-ghost btn-sm u-3e9b1b" data-action="toggle-profile-menu" title="${t.newTerminal}" aria-label="${t.newTerminal}">
             ${icon('plus', '', 14)}
           </button>
 
@@ -365,7 +365,7 @@ export function render() {
 
         <!-- Menu dropdown de perfis (Shell, PowerShell, Hermes, Claude Code, Codex, OpenCode) -->
         <div class="profile-menu ${isProfileMenuOpen ? 'is-open' : ''}" data-bind="profile-menu">
-          <div style="padding: 4px 8px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase;">
+          <div class="u-0424af">
             ${esc(t.launcherTitle)}
           </div>
           ${launcherOptions()}
@@ -374,8 +374,8 @@ export function render() {
               <div class="profile-info">
                 ${icon(prof.icon, '', 14)}
                 <div>
-                  <div style="font-size: 12px; font-weight: 500; color: var(--text-primary);">${prof.name}</div>
-                  <div style="font-size: 10px; color: var(--text-tertiary);">${prof.description}</div>
+                  <div class="u-02921b">${prof.name}</div>
+                  <div class="u-f8775b">${prof.description}</div>
                 </div>
               </div>
               ${!prof.available ? `<span class="profile-badge-unavailable">${t.profileUnavailable}</span>` : ''}
@@ -389,7 +389,7 @@ export function render() {
             <div class="state-container" data-bind="terminal-empty">
               <div class="state-icon-wrap">${icon('terminal', '', 28)}</div>
               <h2 class="state-title">${t.emptyTerminalTitle}</h2>
-              <p class="state-description">${mockProjects.length ? 'Use o botão + e escolha um perfil (Shell, PowerShell, Hermes, Claude Code…). O terminal roda localmente dentro do Anamnésia.' : 'Adicione um projeto na coluna da esquerda e depois abra um terminal.'}</p>
+              <p class="state-description">${esc(mockProjects.length ? t.emptyTerminalHint : t.emptyTerminalNoProject)}</p>
             </div>`}
           ${isSplitMode && activeSession && splitSess ? `
             <div class="terminal-split-divider ${splitDirection === 'horizontal' ? 'is-horizontal' : ''}" data-resize="split" role="separator" aria-label="${esc(t.resizeSplit)}"></div>
@@ -400,16 +400,16 @@ export function render() {
 
       <!-- COLUNA DIREITA: Arquivos do Projeto Ativo (~280px, recolhível) -->
       <div class="ws-resizer ${!isFilesOpen ? 'is-hidden' : ''}" data-resize="right" role="separator" aria-orientation="vertical" aria-label="${esc(t.resizeRight)}" tabindex="0"></div>
-      <aside class="workspace-right-col ${!isFilesOpen ? 'is-collapsed' : ''}" aria-label="Arquivos do projeto" style="${isFilesOpen ? px(colWidths.right) : ''}">
+      <aside class="workspace-right-col ${!isFilesOpen ? 'is-collapsed' : ''}" aria-label="Arquivos do projeto" data-css="${isFilesOpen ? px(colWidths.right) : ''}">
         <div class="pane-header">
           <span class="pane-title">${t.filesTitle}</span>
           <span class="section-count">${filteredFiles.length}</span>
         </div>
 
         <div class="files-search-wrap">
-          <div class="input-control" style="padding: 3px 8px; font-size: 11px;">
+          <div class="input-control u-20984e">
             ${icon('search', '', 12)}
-            <input type="text" placeholder="${t.searchFiles}" data-action="filter-files" value="${searchFilter}" style="margin-left: 6px;" />
+            <input type="text" placeholder="${t.searchFiles}" data-action="filter-files" value="${searchFilter}" class="u-e3ec32" />
           </div>
         </div>
 
@@ -420,8 +420,8 @@ export function render() {
             return `
               <div class="file-tree-item ${indentClass}" title="${file.name}">
                 ${icon(isDir ? 'folder' : 'file', '', 13)}
-                <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</span>
-                ${file.size ? `<span style="font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono);">${file.size}</span>` : ''}
+                <span class="u-e488bc">${file.name}</span>
+                ${file.size ? `<span class="u-038f65">${file.size}</span>` : ''}
               </div>
             `;
           }).join('')}
@@ -436,7 +436,7 @@ export function render() {
             <div class="card-title">${t.agentContextTitle}</div>
             <div class="card-subtitle">${t.agentContextSubtitle}</div>
           </div>
-          <div style="display: flex; gap: 4px;">
+          <div class="u-245375">
             <button class="btn btn-ghost btn-icon" data-action="refresh-context" title="${esc(t.ctxRefresh)}" aria-label="${esc(t.ctxRefresh)}">${icon('refresh', '', 14)}</button>
             <a class="btn btn-ghost btn-icon" href="#/memory" title="${esc(t.ctxOpenMemory)}" aria-label="${esc(t.ctxOpenMemory)}">${icon('search', '', 14)}</a>
             <button class="btn btn-ghost btn-icon" data-action="close-context-drawer" aria-label="Fechar">${icon('x', '', 16)}</button>
@@ -582,8 +582,8 @@ export function mount(root) {
           return `
             <div class="file-tree-item ${indentClass}" title="${file.name}">
               ${icon(isDir ? 'folder' : 'file', '', 13)}
-              <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</span>
-              ${file.size ? `<span style="font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono);">${file.size}</span>` : ''}
+              <span class="u-e488bc">${file.name}</span>
+              ${file.size ? `<span class="u-038f65">${file.size}</span>` : ''}
             </div>
           `;
         }).join('');

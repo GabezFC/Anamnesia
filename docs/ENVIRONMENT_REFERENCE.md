@@ -3,7 +3,7 @@
 
 # Referência de variáveis de ambiente (gerada)
 
-200 variáveis lidas pelo código (`app/`, `config/`, `anamnesia/`, `memory_gateway/`).
+240 variáveis lidas pelo código (`app/`, `config/`, `anamnesia/`, `memory_gateway/`).
 Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo comentado para copiar: [`.env.example`](../.env.example).
 
 **Tipo**: `user` = você define; `interna` = escrita/derivada pelo próprio Gateway; `sistema` = do SO/git.
@@ -16,35 +16,55 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `ANAMNESIA_ALLOW_REMOTE_TERMINALS` | user | `''` | — | `app/api/workspace.py` |
 | `ANAMNESIA_ANSWER_REQUIRE_JEV_STRICT` | user | `''` | [user] mode=answer exige JEV strict na recuperação (1). | `app/routing/answer.py` |
 | `ANAMNESIA_BUDGET_ENFORCE` | user | `''` | — | `app/gateway/budget_guard.py` |
+| `ANAMNESIA_BUDGET_WARN` | user | `''` | — | `app/gateway/budget_guard.py` |
+| `ANAMNESIA_CIRCUIT_BREAKER` | user | `''` | — | `app/routing/circuit_breaker.py` |
 | `ANAMNESIA_CONTEXT_TTL_DAYS` | user | `'0'` | [user] Purga no start o texto de contexto dos runs mais velhos que N dias (0 = desligado). | `app/main.py` |
 | `ANAMNESIA_DELEGATE` | user | `''` | [user] mode=delegate: liga (1), launcher, preset e perfil do orquestrador. | `app/orchestration/delegate.py` |
 | `ANAMNESIA_DELEGATE_LAUNCHER` | user | `''` | — | `app/orchestration/delegate.py` |
 | `ANAMNESIA_DELEGATE_PRESET` | user | `''` | — | `app/orchestration/delegate.py` |
 | `ANAMNESIA_DELEGATE_PROFILE` | user | `''` | — | `app/orchestration/delegate.py` |
+| `ANAMNESIA_DIFF_GATE` | user | `''` | — | `app/orchestration/diff_gate.py` |
+| `ANAMNESIA_DIFF_GATE_SCOPE` | user | `''` | — | `app/orchestration/orchestrator.py` |
+| `ANAMNESIA_ENFORCE_ROLES` | user | `''` | — | `app/orchestration/enforcement.py` |
 | `ANAMNESIA_EXEC_ALLOWLIST` | user | `''` | — | `app/services/exec_guard.py` |
 | `ANAMNESIA_EXEC_GUARD` | user | — | — | `app/services/exec_guard.py` |
+| `ANAMNESIA_FALLBACK_BY_CAUSE` | user | `''` | — | `app/routing/resilience.py` |
+| `ANAMNESIA_HANDOFF` | user | `''` | — | `app/orchestration/handoff.py` |
 | `ANAMNESIA_HOME` | user | `''` | [user] Raiz dos dados (.env, benchmark.db, logs/, data/, local_settings.json). Vence qualquer outro critério. | `config/paths.py` |
 | `ANAMNESIA_MAX_SESSIONS` | user | — | [user] Máximo de sessões PTY simultâneas (default 8). | `app/terminals/manager.py` |
 | `ANAMNESIA_METRICS_ONLY` | user | `''` | [user] Grava só hash + fontes, nunca o texto do contexto entregue (1 liga). MG_METRICS_ONLY faz o mesmo nas rotas de custo/contexto. | `app/database/db.py` |
-| `ANAMNESIA_MODEL_ID` | interna | — | id do modelo do passo, exportado pelo orquestrador | `app/orchestration/launchers.py` |
+| `ANAMNESIA_MODEL_ID` | interna | `''` | id do modelo do passo, exportado pelo orquestrador | `app/orchestration/launchers.py` |
+| `ANAMNESIA_OFFLINE` | user | — | — | `anamnesia/cli.py` |
+| `ANAMNESIA_PAID_CALLS` | user | `''` | — | `app/adapters/models/errors.py`, `app/services/local_first.py` |
+| `ANAMNESIA_POLICY` | user | `''` | — | `app/policy/engine.py` |
+| `ANAMNESIA_POLICY_AUDIT` | user | — | — | `app/policy/engine.py` |
+| `ANAMNESIA_POLICY_FILE` | user | — | — | `app/policy/engine.py` |
 | `ANAMNESIA_PROJECT_GUARD` | user | `'enforce'` | [user] Guarda de projetos e de execução: enforce (padrão) \| warn \| off. Allowlist extra de executáveis (vírgula). | `app/services/project_guard.py` |
+| `ANAMNESIA_RETRY` | user | `''` | — | `app/routing/retry.py` |
 | `ANAMNESIA_ROLE` | interna | — | papel do passo, exportado pelo orquestrador ao subagente | `app/orchestration/launchers.py` |
 | `ANAMNESIA_ROUTING` | user | `''` | [user] Liga o router de modelos (1) e escolhe o preset (balanced padrão). | `app/routing/answer.py` |
+| `ANAMNESIA_ROUTING_AB` | user | `''` | — | `app/routing/ab.py` |
 | `ANAMNESIA_ROUTING_PRESET` | user | `'balanced'` | — | `app/routing/answer.py` |
+| `ANAMNESIA_ROUTING_SHADOW` | user | `''` | — | `app/routing/shadow.py` |
+| `ANAMNESIA_ROUTING_SHADOW_PRESET` | user | `''` | — | `app/routing/shadow.py` |
 | `ANAMNESIA_RUN_CONTEXT_BUDGET` | user | — | — | `app/services/context_plan.py` |
 | `ANAMNESIA_SAVE_GATE` | user | `'enforce'` | [user] Gate do memory_save quando MG_SCOPE fixa o projeto: enforce (padrão) \| off. | `app/mcp/server.py` |
 | `ANAMNESIA_STEP` | interna | — | id do passo, exportado pelo orquestrador | `app/orchestration/launchers.py` |
 | `ANAMNESIA_STEP_DIR` | interna | — | diretório do passo, exportado pelo orquestrador | `app/orchestration/launchers.py` |
-| `ANAMNESIA_TOKEN_CALIBRATION` | user | `''` | — | `app/services/token_estimate.py` |
+| `ANAMNESIA_TOKEN_CALIBRATION` | user | `''` | — | `app/services/token_calibration.py`, `app/services/token_estimate.py` |
+| `ANAMNESIA_TOOL_PROFILE` | user | `''`, `'default'` | — | `app/mcp/server.py`, `app/policy/tools_manifest.py` |
 
 ## JEV / TypeSafe
 
 | Variável | Tipo | Default no código | Descrição | Lida em |
 | --- | --- | --- | --- | --- |
+| `JEV_BACKEND` | user | `'typesafe'` | — | `config/jev.py` |
 | `JEV_CONTEXT_BUDGET` | user | `48000` | Max tokens of retrieved context sent to the judge per request. | `config/jev.py` |
 | `JEV_CONTRADICTION_CHECK` | user | `False` | Ask the judge to check candidates for mutual contradictions. | `config/jev.py` |
 | `JEV_FAILURE_MODE` | user | `'fail_open'` | Behaviour when the judge is unreachable: fail_open \| fail_closed. | `config/jev.py` |
 | `JEV_INJECTION_THRESHOLD` | user | `0.8` | Injection probability above which a candidate is quarantined. | `config/jev.py` |
+| `JEV_LOCAL_HOST` | user | `'http://127.0.0.1:11434'` | — | `config/jev.py` |
+| `JEV_LOCAL_MODEL` | user | `'qwen3:8b'` | — | `config/jev.py` |
 | `JEV_MAX_CONCURRENT_REQUESTS` | user | `2` | Max concurrent in-flight requests to the JEV API. | `config/jev.py` |
 | `JEV_MAX_RETRIES` | user | `2` | Retries per JEV request before giving up. | `config/jev.py` |
 | `JEV_MIN_SURVIVORS` | user | `3` | Safety net: if the judge eliminates every candidate, return this many top retrieval | `config/retrieval.py` |
@@ -65,14 +85,33 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `MG_ALLOWED_HOSTS` | user | `''` | [user] Hosts extras aceitos no cabeçalho Host (proteção contra DNS rebinding), separados por vírgula. | `app/main.py` |
 | `MG_ALLOW_REMOTE_PROVIDERS` | user | `''` | — | `app/services/hardening.py` |
 | `MG_CONTEXT_NONCE` | user | `'0'` | [user] Nonce por contexto (delimitadores não adivinháveis) nos pipelines não congelados (1 liga). | `app/gateway/memory_gateway.py` |
+| `MG_EXP_BM25_SECTION_WEIGHT` | user | — | — | `app/retrieval/experiments.py` |
+| `MG_EXP_BUDGET_FIT` | user | `False` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_COMPLEX_DEDUP_MAX` | user | `0` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_HYBRID_SCORE` | user | `'rank'` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_LEX_RERANK_ALPHA` | user | `0.5` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_LEX_RERANK_TOP` | user | `0` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_PREFIX_MIN_LEN` | user | `0` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_QUERY_REWRITE` | user | `False` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_REL_CUTOFF` | user | `0.0` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_RRF_GRAPH_WEIGHT` | user | `0.5` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_RRF_K` | user | `60` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_SCOPE_BEFORE_TOPN` | user | `False` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_SEMANTIC_MODEL` | user | `'nomic-embed-text'` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_SEMANTIC_RRF` | user | `False` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_STEM_PREFIX` | user | `False` | — | `app/retrieval/experiments.py` |
+| `MG_EXP_UNIFIED_TOKENS` | user | `False` | — | `app/retrieval/experiments.py` |
 | `MG_HOST` | user | `'0.0.0.0'` | Interface the API server binds to. Loopback by default (§5.4 da proposta 2026-09-28): endpoints | `app/api/workspace.py`, `config/benchmark.py` |
 | `MG_INCREMENTAL_INDEX` | user | `''` | — | `app/retrieval/incremental_index.py` |
 | `MG_LOCAL_TOKEN` | interna | — | gerada no primeiro start e gravada no .env; não defina à mão | `anamnesia/cli.py`, `app/services/security.py` |
 | `MG_LOG_REDACT` | user | `'1'` | [user] Filtros de redação no log de acesso e caminhos nos logs (1 = ligado; 0/off desliga). | `app/services/hardening.py` |
 | `MG_MAX_BODY_BYTES` | user | — | [user] Limite do corpo de requisição / de uploads, em bytes (default no código: 262144 e 1048576). | `app/services/request_guards.py` |
 | `MG_MAX_UPLOAD_BYTES` | user | — | — | `app/services/request_guards.py` |
+| `MG_MCP_BRIDGE_URL` | user | `''` | — | `app/mcp/bridge.py`, `app/mcp/server.py` |
+| `MG_MCP_RESOURCES` | user | `'0'` | — | `app/mcp/server.py` |
 | `MG_MCP_RESPONSE` | user | `'compact'` | MCP: compact = context + run_id + cost metrics; full = adds sources and all metrics. | `app/mcp/server.py` |
 | `MG_MCP_SAVE` | user | `'0'` | [user] Liga a tool MCP memory_save (1). Desligada por padrão. | `app/mcp/server.py` |
+| `MG_MCP_TOKEN` | user | `''` | — | `app/mcp/bridge.py` |
 | `MG_MCP_TOOLSET` | user | `'minimal'` | MCP: minimal = one tool (memory_search); full = the 7 legacy tools. | `app/mcp/server.py`, `app/terminals/mcp_inject.py` |
 | `MG_MEMORY_DEDUPE` | user | `'warn'` | — | `app/memory_store/lifecycle.py` |
 | `MG_MEMORY_EXPIRED_EXCLUDE` | user | `'1'` | — | `app/services/provenance.py` |
@@ -158,6 +197,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `MEMORY_GATEWAY_VAULT` | user | `''` | Absolute or relative path to the Obsidian-style vault the Gateway reads notes from. | `app/api/routes.py`, `config/retrieval.py` |
 | `MODEL_CONTEXT_BUDGET` | user | — | Total token budget of the context handed to the consumer model. | `config/retrieval.py` |
 | `OBSIDIAN_VAULT_PATH` | user | `''` | Linux/macOS example:   MEMORY_GATEWAY_VAULT=/home/user/notes | `config/retrieval.py` |
+| `OFFLINE` | user | — | — | `anamnesia/cli.py` |
 | `OLLAMA_BASE_URL` | user | `'http://localhost:11434'` | Base URL of a local Ollama server. | `config/agents.py` |
 | `OLLAMA_HOST` | user | — | [user] Alias do endpoint do Ollama usado pelo teste de conexão (a config principal é OLLAMA_BASE_URL). | `app/api/connections.py` |
 | `OPENAI_API_KEY` | user | — | Secret: OpenAI API key. Leave empty unless using the OpenAI consumer. | `app/adapters/models/providers.py`, `app/adapters/registry.py` |

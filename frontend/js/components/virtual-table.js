@@ -46,10 +46,10 @@ export function createVirtualTable({
   const tpl = columns.map((c) => c.width || '1fr').join(' ');
   container.innerHTML = `
     <div class="vtable" role="table" aria-label="${esc(ariaLabel)}" aria-rowcount="${data.length}">
-      <div class="vtable-head" role="row" style="grid-template-columns:${tpl}">
+      <div class="vtable-head" role="row" data-css="${esc(`grid-template-columns:${tpl}`)}">
         ${columns.map((c) => `<div class="vtable-cell vtable-th${c.align === 'right' ? ' is-right' : ''}" role="columnheader">${esc(c.label ?? c.key ?? '')}</div>`).join('')}
       </div>
-      <div class="vtable-viewport" style="height:${Number(height) || 420}px" tabindex="0">
+      <div class="vtable-viewport" data-css="height:${Number(height) || 420}px" tabindex="0">
         <div class="vtable-spacer"></div>
         <div class="vtable-empty" hidden></div>
       </div>
@@ -73,7 +73,7 @@ export function createVirtualTable({
     let html = '';
     for (let i = start; i < end; i += 1) {
       const row = data[i];
-      html += `<div class="vtable-row" role="row" aria-rowindex="${i + 2}" data-row-index="${i}"${rowKey ? ` data-row-key="${esc(rowKey(row, i))}"` : ''} style="grid-template-columns:${tpl};height:${RH}px;transform:translateY(${i * RH}px)">${columns.map((c) => cell(c, row, i)).join('')}</div>`;
+      html += `<div class="vtable-row" role="row" aria-rowindex="${i + 2}" data-row-index="${i}"${rowKey ? ` data-row-key="${esc(rowKey(row, i))}"` : ''} data-css="${esc(`grid-template-columns:${tpl};height:${RH}px;transform:translateY(${i * RH}px)`)}">${columns.map((c) => cell(c, row, i)).join('')}</div>`;
     }
     // reaproveita o spacer (altura total) e substitui apenas as linhas
     spacer.innerHTML = html;

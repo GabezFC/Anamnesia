@@ -1,107 +1,55 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- * COMPARE LAB: FLUXO DE PIPELINE (#/compare/pipeline)
- * Fluxo visual interativo: Query → Retrieval → Graphify → Pré-filtro → JEV → Filtro → Contexto → Modelo.
+ * COMPARE LAB: FLUXO DO PIPELINE (#/compare/pipeline) — estágios com latência média REAL gravada (ANA-200).
  */
+import { I18N } from '../../i18n.js';
+import { esc, fmtNum } from '../../format.js';
+import { lab, STAGES, stageMeans } from '../../lab-data.js';
+import { makeTab, vMs, pipeName, table } from './_shared.js';
 
-import { icon } from '../../icons.js';
-import { mockBenchmark } from '../../mock-data.js';
+let selected = null;
 
-let selectedStageId = 'stage-jev';
-
-export function render() {
-  const stages = mockBenchmark.pipeline_flow_stages;
-  const currentStage = stages.find(s => s.id === selectedStageId) || stages[4];
-
+function body() {
+  const t = I18N.lab;
+  const means = stageMeans(lab.runs);
+  if (!means.length) return `<p class="lab-note">${esc(t.noStageData)}</p>`;
+  const cur = means.find((m) => m.pipeline === selected) || means.find((m) => m.pipeline === 'graphify_jev_opt') || means[0];
+  selected = cur.pipeline;
+  const stages = STAGES.filter((s) => cur.stages[s.id].n > 0);
   return `
-    <div class="lab-view-container">
-      <div class="lab-section-header">
-        <div>
-          <h2 class="lab-section-title">Diagrama de Fluxo do Pipeline de Memória</h2>
-          <p class="lab-section-desc">Decomposição das 8 etapas de processamento do prompt antes da inferência.</p>
-        </div>
-      </div>
-
-      <!-- Fluxo horizontal com nós conectores -->
-      <div class="pipeline-flow-board">
-        ${stages.map((stage, idx) => {
-          const isSelected = stage.id === selectedStageId;
-          const isLast = idx === stages.length - 1;
-          return `
-            <div 
-              class="pipeline-node ${isSelected ? 'is-active-stage' : ''}" 
-              data-action="inspect-stage" 
-              data-stage-id="${stage.id}"
-              tabindex="0"
-              role="button"
-              aria-label="Inspecionar etapa ${stage.name}"
-            >
-              <span class="node-step-num">${stage.step}</span>
-              <span class="node-title">${stage.name}</span>
-              <span style="font-size: 10px; color: var(--text-tertiary);">${stage.type}</span>
-              <span class="node-metric">${stage.avg_latency_ms} ms</span>
-            </div>
-            ${!isLast ? `
-              <div class="pipeline-arrow" aria-hidden="true">
-                ${icon('chevronRight', '', 14)}
-              </div>
-            ` : ''}
-          `;
-        }).join('')}
-      </div>
-
-      <!-- Inspetor da Etapa Selecionada -->
-      <div class="stage-inspector-card">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div>
-            <span class="badge-origin badge-origin-measured" style="margin-bottom: 6px;">Etapa ${currentStage.step} · ${currentStage.type}</span>
-            <h3 style="font-size: var(--text-lg); font-weight: var(--font-semibold); color: var(--text-primary);">${currentStage.name}</h3>
-          </div>
-          <span class="kpi-value tabular" style="color: var(--lab-accent); font-size: 20px;">${currentStage.avg_latency_ms} ms médio</span>
-        </div>
-
-        <p style="font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.6;">
-          ${currentStage.desc}. Esta fase assegura a consistência referencial e a eliminação de ruídos no contexto do agente.
-        </p>
-
-        <div class="readonly-kv-grid" style="margin-top: var(--space-2);">
-          <div class="readonly-kv-item">
-            <span class="readonly-kv-label">Tipo de processamento</span>
-            <span class="readonly-kv-value">${currentStage.type}</span>
-          </div>
-          <div class="readonly-kv-item">
-            <span class="readonly-kv-label">Desvio padrão de latência</span>
-            <span class="readonly-kv-value tabular">± 12.4 ms</span>
-          </div>
-          <div class="readonly-kv-item">
-            <span class="readonly-kv-label">Taxa de filtragem média</span>
-            <span class="readonly-kv-value tabular">${currentStage.id === 'stage-jev' ? '46.2% descartados' : 'Nominal'}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+    <label class="lab-field"><span>${esc(t.colPipeline)}</span>
+      <select class="select-control" data-action="pipeline-select" aria-label="${esc(t.colPipeline)}">
+        ${means.map((m) => `<option value="${esc(m.pipeline)}"${m.pipeline === cur.pipeline ? ' selected' : ''}>${esc(pipeName(m.pipeline))}</option>`).join('')}
+      </select></label>
+    <p class="lab-note" role="note">${esc(t.sampleNote.replace('{n}', String(cur.sample)))}</p>
+    <ol class="pipeline-flow-board" aria-label="${esc(t.pipelineTitleFlow)}">
+      ${stages.map((s, i) => `<li class="pipeline-node"><span class="node-step-num">${String(i + 1).padStart(2, '0')}</span>
+        <span class="node-title">${esc(t.stage[s.id])}</span><span class="node-metric">${vMs(cur.stages[s.id].mean)}</span>
+        <span class="lab-n">n=${esc(fmtNum(cur.stages[s.id].n))}</span></li>`).join('')}
+    </ol>
+    <div class="card u-b38a50">${table({
+      caption: t.pipelineTableCaption,
+      cols: [
+        { label: t.colStage, html: (s) => esc(t.stage[s.id]) },
+        { label: t.colMeanMs, num: true, html: (s) => vMs(cur.stages[s.id].mean) },
+        { label: t.colSampleN, num: true, html: (s) => esc(fmtNum(cur.stages[s.id].n)) },
+      ],
+      rows: STAGES })}
+      <p class="lab-note">${esc(t.totalLatency)}: ${vMs(cur.total)}</p></div>`;
 }
-
+const tab = makeTab({ title: 'pipelineTitle', desc: 'pipelineDesc', body });
+export const render = tab.render;
 export function mount(root) {
-  const handleClick = (e) => {
-    const target = e.target.closest('[data-action="inspect-stage"]');
-    if (target) {
-      selectedStageId = target.getAttribute('data-stage-id');
-      root.innerHTML = render();
-    }
+  tab.mount(root);
+  const onChange = (e) => {
+    const el = e.target.closest('[data-action="pipeline-select"]');
+    if (!el) return;
+    selected = el.value;
+    root.innerHTML = tab.render();
   };
-
-  root.addEventListener('click', handleClick);
-  root._pipelineCleanup = () => {
-    root.removeEventListener('click', handleClick);
-  };
+  root.addEventListener('change', onChange);
+  const prev = root._tabCleanup;
+  root._tabCleanup = () => { root.removeEventListener('change', onChange); prev?.(); };
 }
-
-export function unmount(root) {
-  if (root && root._pipelineCleanup) {
-    root._pipelineCleanup();
-    delete root._pipelineCleanup;
-  }
-}
+export const unmount = tab.unmount;

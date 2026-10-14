@@ -80,13 +80,13 @@ export function renderTerminalFrame(session, options = {}) {
     .map(line => {
       // Formatação sutil de prompt sem emojis
       if (line.startsWith('➜')) {
-        return `<span style="color: var(--term-cyan); font-weight: 600;">${line}</span>`;
+        return `<span class="u-c36fe1">${line}</span>`;
       }
       if (line.includes('[?]') || line.includes('✔')) {
-        return `<span style="color: var(--term-green);">${line}</span>`;
+        return `<span class="u-cbe6f5">${line}</span>`;
       }
       if (line.includes('>')) {
-        return `<span style="color: var(--term-fg);">${line}</span>`;
+        return `<span class="u-7c511a">${line}</span>`;
       }
       return `<span>${line}</span>`;
     })
@@ -108,12 +108,12 @@ export function renderTerminalFrame(session, options = {}) {
         <div class="statusbar-item">
           <span>${session.projectName}</span>
           <span aria-hidden="true">/</span>
-          <span style="color: var(--text-primary); font-weight: 500;">${session.profileId}</span>
+          <span class="u-3171f9">${session.profileId}</span>
         </div>
         <div class="statusbar-item tabular">
           <span>${session.cols}×${session.rows}</span>
           <span aria-hidden="true">·</span>
-          <span style="color: var(--success);">${session.statusText || 'Ativo'}</span>
+          <span class="u-691250">${session.statusText || 'Ativo'}</span>
         </div>
       </div>
     </div>

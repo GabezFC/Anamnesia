@@ -45,6 +45,12 @@ def budget_view(db: Database) -> dict:
                     "exceeded": percent is not None and percent >= 100}
     out["alert"] = out["daily"]["alert"] or out["monthly"]["alert"]
     out["budgets"] = budgets  # legacy shape {day, month}
+    from app.gateway import budget_guard as bg   # T6.4: would a paid pipeline degrade to baseline now?
+    on = bg.enforcement_enabled(budgets)
+    out["degrade"] = {"enabled": on, "fallback_pipeline": bg.FALLBACK_PIPELINE,
+                      "active": on and (out["daily"]["exceeded"] or out["monthly"]["exceeded"]),
+                      "unknown_spend": [k for k, p in (("day", "daily"), ("month", "monthly"))
+                                        if (budgets.get(k) or 0) > 0 and out[p]["spent_usd"] is None]}
     return out
 
 

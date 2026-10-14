@@ -22,6 +22,7 @@ from config import PROJECT_ROOT
 from config.paths import data_dir
 from config.agents import AgentsConfig
 from app.adapters.models.providers import GenerationResult
+from app.services.offline import ensure_online
 
 HERMES_HOME = PROJECT_ROOT / "integrations" / "hermes" / "hermes_home"     # MCP integration (agent calls tools)
 HERMES_BENCH_HOME = PROJECT_ROOT / "integrations" / "hermes" / "hermes_bench"  # benchmark consumer, no tools
@@ -160,6 +161,7 @@ class ClaudeCodeAdapter:
             args += ["--model", model]
         t0 = time.perf_counter()
         try:
+            ensure_online("agent:claude_code")  # ANA-224 (hosted agent CLI; outside the socket guard)
             r = _run(args, timeout=timeout or self.cfg.agent_timeout_s, stdin=prompt, cwd=str(PROJECT_ROOT))
             data = json.loads(r.stdout.decode("utf-8", "replace") or "{}")
             usage = data.get("usage") or {}
@@ -188,7 +190,8 @@ class CodexAdapter:
         if v:
             try:
                 r = _run([shutil.which(self.cfg.codex_bin), "login", "status"], timeout=30)
-                logged = "logged in" in (r.stdout + r.stderr).decode("utf-8", "replace").lower()
+                txt = (r.stdout + r.stderr).decode("utf-8", "replace").lower()
+                logged = "logged in" in txt and "not logged in" not in txt  # "Not logged in" contains "logged in"
             except Exception:  # noqa: BLE001
                 logged = False
         ok = bool(v and logged)
@@ -206,6 +209,7 @@ class CodexAdapter:
         args.append("-")
         t0 = time.perf_counter()
         try:
+            ensure_online("agent:codex")  # ANA-224
             r = _run(args, timeout=timeout or self.cfg.agent_timeout_s, stdin=prompt)
             inp = outp = None
             for line in r.stdout.decode("utf-8", "replace").splitlines():

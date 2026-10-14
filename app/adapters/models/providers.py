@@ -14,6 +14,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.adapters.models.errors import classify_exception, ensure_paid_allowed
+from app.services.offline import ensure_online
 
 
 @dataclass
@@ -74,6 +75,7 @@ class OpenAICompatibleAdapter:
         t0 = time.perf_counter()
         try:
             ensure_paid_allowed(self.provider)          # ANA-168 kill-switch (local providers exempt)
+            ensure_online(self.provider, self.base_url)  # ANA-224: OFFLINE=1 allows loopback only
             r = httpx.post(f"{self.base_url}/chat/completions", json=body, headers=self._headers(),
                            timeout=self.timeout_s)
             r.raise_for_status()

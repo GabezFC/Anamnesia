@@ -12,6 +12,7 @@ import { esc } from '../format.js';
 import { mockConnections } from '../mock-data.js';
 import { testConn, snippetOf } from '../live.js';
 import { listConnections, setSecret, removeSecret } from '../anamnesia-api.js';
+import { healthSection, mountHealth } from './provider-health.js';
 
 /* ------------------------------------------------------------------ chaves por provedor */
 // Estado por variável vindo de GET /api/connections ({cid: {ENV: {has_key, masked}}}); só máscara, nunca o segredo.
@@ -136,11 +137,11 @@ export function render() {
   if (currentState === 'loading') {
     return `
       <div class="connections-page">
-        <div class="skeleton" style="height: 32px; width: 280px;"></div>
+        <div class="skeleton u-da8145"></div>
         <div class="cards-grid">
-          <div class="skeleton" style="height: 190px;"></div>
-          <div class="skeleton" style="height: 190px;"></div>
-          <div class="skeleton" style="height: 190px;"></div>
+          <div class="skeleton u-35e8b6"></div>
+          <div class="skeleton u-35e8b6"></div>
+          <div class="skeleton u-35e8b6"></div>
         </div>
       </div>
     `;
@@ -149,8 +150,8 @@ export function render() {
   // Error State
   if (currentState === 'error') {
     return `
-      <div class="state-container" style="height: 100%;">
-        <div class="state-icon-wrap" style="color: var(--danger);">${icon('alertTriangle', '', 24)}</div>
+      <div class="state-container u-2d3094">
+        <div class="state-icon-wrap u-52b1c0">${icon('alertTriangle', '', 24)}</div>
         <h2 class="state-title">${I18N.app.errorTitle}</h2>
         <p class="state-description">Não foi possível carregar os descritores de sockets e tokens locais.</p>
         <button class="btn btn-secondary" data-action="retry-connections">${I18N.app.errorRetry}</button>
@@ -161,7 +162,7 @@ export function render() {
   // Empty State
   if (currentState === 'empty') {
     return `
-      <div class="state-container" style="height: 100%;">
+      <div class="state-container u-2d3094">
         <div class="state-icon-wrap">${icon('connections', '', 28)}</div>
         <h2 class="state-title">Nenhuma conexão registrada</h2>
         <p class="state-description">Adicione agentes locais ou configure chaves de provedores de modelos.</p>
@@ -170,7 +171,7 @@ export function render() {
   }
 
   const backendNotice = currentState === 'backend-unavailable' ? `
-    <div class="callout-notice" style="margin-bottom: var(--space-4);">
+    <div class="callout-notice u-36fc7e">
       <div class="callout-notice-icon">${icon('info', '', 18)}</div>
       <div class="callout-notice-body">
         <strong>${I18N.app.backendUnavailableTitle}</strong>
@@ -229,8 +230,8 @@ export function render() {
 
       <div class="connections-header-bar">
         <div>
-          <h1 style="font-size: var(--text-2xl); font-weight: var(--font-semibold);">${I18N.nav.connections}</h1>
-          <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">
+          <h1 class="u-23e58e">${I18N.nav.connections}</h1>
+          <p class="u-47c8df">
             Gerencie instâncias de agentes CLI, roteadores de modelos e conexões MCP locais.
           </p>
         </div>
@@ -268,6 +269,8 @@ export function render() {
           ${mockConnections.mcp.map(renderCard).join('')}
         </div>
       </section>
+
+      ${healthSection()}
     </div>
   `;
 }
@@ -298,9 +301,11 @@ export function mount(root) {
   };
 
   root.addEventListener('click', handleClick);
+  const stopHealth = mountHealth(root);
   refreshKeyStatus().then(() => { if (root.isConnected) root.innerHTML = render(); });
   root._connectionsCleanup = () => {
     root.removeEventListener('click', handleClick);
+    stopHealth();
   };
 }
 

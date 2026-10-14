@@ -208,6 +208,6 @@ def test_terminal_theme_reads_css_tokens_and_reacts_to_theme_switch():
 def test_lab_tabs_are_lazy_dynamic_imports():
     idx = read(FRONT / "js" / "pages" / "compare" / "index.js")
     assert not re.search(r"^import \* as \w+ from '\./\w[\w-]*\.js'", idx, flags=re.M)
-    assert len(re.findall(r"import\('\./[\w-]+\.js'\)", idx)) == 8
+    assert len(re.findall(r"import\('\./[\w-]+\.js'\)", idx)) == 9
     assert "tabCache" in idx
 

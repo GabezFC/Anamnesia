@@ -91,11 +91,12 @@ def test_side_effect_coverage_is_documented_honestly():
     """Known side-effect points. `routed` ones have a guard today; the rest are LISTED, not hidden."""
     routed = {"model_calls": "ensure_paid_allowed (ANA-168 kill-switch)",
               "role_actions": "roles.check_action (via enforcement.enforce, opt-in ANAMNESIA_ENFORCE_ROLES)"}
-    not_yet_through_policy_check = ["launchers.TerminalLauncher.launch", "git worktree creation",
-                                    "mcp memory_save", "exec_audit launchers"]
+    # Onda 5: the orchestrator launch point (launcher exec + model pay) now goes through policy.require (opt-in).
+    not_yet_through_policy_check = ["git worktree creation", "mcp memory_save", "exec_audit launchers"]
     assert routed and not_yet_through_policy_check          # the list exists and is intentionally non-empty
     import app.orchestration.orchestrator as orch
-    assert "app.policy" not in open(orch.__file__, encoding="utf-8").read()   # still not wired: do not pretend
+    src = open(orch.__file__, encoding="utf-8").read()
+    assert "pe.require(" in src and 'pe.mode() == "off"' in src      # wired lazily and a no-op when the flag is off
 
 
 # ------------------------------------------------------------ ANA-169 / 173

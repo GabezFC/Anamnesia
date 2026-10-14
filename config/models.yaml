@@ -105,12 +105,58 @@ models:
     provider: openrouter
     model: meta-llama/llama-3.1-70b-instruct
     tier: 2
-    context_window: null
+    context_window: 131072   # openrouter /models context_length (2026-10-12)
     capabilities: [code, tools]
     effort_supported: false
-    price: null   # OpenRouter models API exposes pricing; read at runtime with date
+    price:
+      input: 0.4
+      output: 0.4
+      source_url: https://openrouter.ai/api/v1/models
+      checked_at: 2026-10-12
     local: false
-    verified: false
+    verified: true
+  - id: openrouter-gpt4o-mini
+    provider: openrouter
+    model: openai/gpt-4o-mini
+    tier: 1
+    context_window: 128000   # openrouter /models context_length (2026-10-12)
+    capabilities: [code, tools, cheap_bulk]
+    effort_supported: false
+    price:
+      input: 0.15
+      output: 0.6
+      source_url: https://openrouter.ai/api/v1/models
+      checked_at: 2026-10-12
+    local: false
+    verified: true
+  - id: openrouter-gpt41-mini
+    provider: openrouter
+    model: openai/gpt-4.1-mini
+    tier: 2
+    context_window: 1047576   # openrouter /models context_length (2026-10-12)
+    capabilities: [code, tools]
+    effort_supported: false
+    price:
+      input: 0.4
+      output: 1.6
+      source_url: https://openrouter.ai/api/v1/models
+      checked_at: 2026-10-12
+    local: false
+    verified: true
+  - id: openrouter-sonnet
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+    tier: 3
+    context_window: 1000000   # openrouter /models context_length (2026-10-12)
+    capabilities: [code, reasoning, tools, long_context]
+    effort_supported: false
+    price:
+      input: 3.0
+      output: 15.0
+      source_url: https://openrouter.ai/api/v1/models
+      checked_at: 2026-10-12
+    local: false
+    verified: true
   - id: hf-inference
     provider: huggingface
     planned: true   # ANA-181: sem adapter; nunca roteável

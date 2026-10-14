@@ -8,7 +8,8 @@
 import { icon } from '../../icons.js';
 import { estimateBenchmark } from '../../live.js';
 import { I18N } from '../../i18n.js';
-import { mockBenchmark } from '../../mock-data.js';
+import { lab, ensureLab } from '../../lab-data.js';
+import { esc, fmtNum, fmtDate } from '../../format.js';
 
 import { skeletonKpis, skeletonCard, loadingBlock } from '../../components/skeleton.js';
 import { emptyState } from '../../components/empty-state.js';
@@ -24,6 +25,7 @@ const TABS = {
   'model-cost': { id: 'model-cost', get label() { return I18N.lab.modelCost; }, load: () => import('./model-cost.js') },
   results: { id: 'results', get label() { return I18N.lab.results; }, load: () => import('./results.js') },
   history: { id: 'history', get label() { return I18N.lab.history; }, load: () => import('./history.js') },
+  ab: { id: 'ab', get label() { return I18N.lab.ab; }, load: () => import('./ab.js') },
 };
 
 const tabCache = new Map(); // id -> módulo já importado
@@ -46,7 +48,11 @@ export function render(subRoute = 'overview', opts = {}) {
   currentSubTab = TABS[subRoute] ? subRoute : 'overview';
   const currentTabObj = TABS[currentSubTab];
   activeSubModule = tabCache.get(currentTabObj.id) || null;
-  const meta = mockBenchmark.meta;
+  const total = lab.stats ? lab.stats.total_runs : null;
+  const lastTs = lab.runs[0]?.created_at ?? null;
+  const na = `<span class="lab-na">${esc(I18N.app.unavailable)}</span>`;
+  const alerts = lab.alerts?.alerts || [];
+  const dot = lab.status === 'ready' ? 'dot-success' : lab.status === 'loading' || lab.status === 'idle' ? 'dot-warning' : 'dot-danger';
 
   return `
     <div class="lab-shell" data-bind="lab-shell">
@@ -57,7 +63,7 @@ export function render(subRoute = 'overview', opts = {}) {
             ${icon('arrowLeft', '', 14)}
             <span>${I18N.app.backToApp}</span>
           </a>
-          <span style="color: var(--border-strong);" aria-hidden="true">|</span>
+          <span class="u-8606ad" aria-hidden="true">|</span>
           <div class="lab-title-badge">
             ${icon('scale', '', 15)}
             <span>${I18N.app.labBadge}</span>
@@ -76,20 +82,17 @@ export function render(subRoute = 'overview', opts = {}) {
       <div class="lab-header">
         <div class="lab-header-left">
           <div class="lab-dataset-picker">
-            <span style="font-weight: 500;">Dataset:</span>
-            <select class="select-control" data-action="change-dataset">
-              <option selected>${meta.dataset_name}</option>
-              <option>HumanEval-X / 164 prompts</option>
-              <option>RepoQA-Python / 30 monorepos</option>
-            </select>
+            <span class="u-cf5948">${esc(I18N.lab.dataSource)}:</span>
+            <span>${esc(I18N.lab.dataSourceLocal)}</span>
           </div>
 
-          <div class="status-indicator">
-            <span class="dot dot-success"></span>
-            <span class="tabular">${meta.total_runs} runs</span>
+          <div class="status-indicator" role="status">
+            <span class="dot ${dot}" aria-hidden="true"></span>
+            <span class="tabular">${total === null ? na : `${esc(fmtNum(total))} runs`}</span>
             <span aria-hidden="true">·</span>
-            <span>Último: ${meta.last_benchmark}</span>
+            <span>${esc(I18N.lab.last)}: ${lastTs === null ? na : esc(fmtDate(lastTs))}</span>
           </div>
+          ${alerts.length ? `<a class="badge-origin badge-alert" href="#/compare/overview" data-action="lab-alerts" aria-label="${esc(I18N.lab.alertsAria.replace('{n}', String(alerts.length)))}">${esc(I18N.lab.alertsBadge.replace('{n}', String(alerts.length)))}</a>` : ''}
         </div>
 
         <div class="lab-header-right">
@@ -110,15 +113,14 @@ export function render(subRoute = 'overview', opts = {}) {
 
       <!-- Barra de Abas Internas do Laboratório -->
       <div class="lab-main">
-        <nav class="lab-nav-bar" role="tablist" aria-label="${I18N.app.labTabsAria}">
+        <nav class="lab-nav-bar" aria-label="${I18N.app.labTabsAria}">
           ${Object.values(TABS).map(tab => {
             const isActive = tab.id === currentSubTab;
             return `
               <a 
                 href="#/compare/${tab.id}" 
                 class="lab-nav-tab ${isActive ? 'is-active' : ''}" 
-                role="tab" 
-                aria-selected="${isActive}"
+                ${isActive ? 'aria-current="page"' : ''}
                 data-action="switch-lab-tab"
                 data-subtab="${tab.id}"
               >
@@ -129,7 +131,7 @@ export function render(subRoute = 'overview', opts = {}) {
         </nav>
 
         <!-- Conteúdo da Sub-Aba -->
-        <div class="lab-tab-content" data-bind="lab-tab-content">
+        <div class="lab-tab-content" data-bind="lab-tab-content" tabindex="-1">
           ${activeSubModule ? activeSubModule.render() : loadingBlock(skeletonKpis(4) + skeletonCard({ lines: 5 }), I18N.app.loading)}
         </div>
       </div>
@@ -138,6 +140,8 @@ export function render(subRoute = 'overview', opts = {}) {
 }
 
 export function mount(root) {
+  // Cabeçalho (nº de runs / alertas) depende dos dados reais: carrega uma vez e repinta só o cabeçalho.
+  if (lab.status === 'idle') ensureLab().then(() => { if (root.isConnected && root.querySelector('.lab-header')) window.dispatchEvent(new CustomEvent('anamnesia:lab-ready')); });
   // Mount the sub-tab module inside the container
   const container = root.querySelector('[data-bind="lab-tab-content"]');
   const tabId = currentSubTab;

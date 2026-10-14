@@ -45,6 +45,8 @@ dev = [
 
 [project.scripts]
 anamnesia = "anamnesia.cli:main"
+# ANA-197: copyable MCP command for any client config (`anamnesia-mcp`, stdio).
+anamnesia-mcp = "app.mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app", "config", "memory_gateway", "anamnesia"]

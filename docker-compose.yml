@@ -15,6 +15,11 @@ services:
       # Terminals are DISABLED by default here: the app only enables them on a loopback bind, and the
       # container binds 0.0.0.0. Do not set ANAMNESIA_ALLOW_REMOTE_TERMINALS=1 unless you accept
       # shell access for anything that can reach the published port.
+      # ANA-217: token for REST reads from a non-loopback address (e.g. the MCP bridge on the host). Set it
+      # in a private env_file/shell; leave unset and the app mints one in /data/.env on first start.
+      # MG_LOCAL_TOKEN: ""
+      # ANA-224: ANAMNESIA_OFFLINE=1 blocks every outbound non-loopback connection of the container.
+      # ANAMNESIA_OFFLINE: "1"
       # TYPESAFE_API_KEY: ""        # optional, only for the paid judge; prefer an env_file you keep private
       # MEMORY_GATEWAY_VAULT: /vault
     volumes:
@@ -25,3 +30,11 @@ services:
 
 volumes:
   anamnesia-data:
+
+# ANA-216: bridge mode. The Gateway runs in the container; your agent keeps a stdio MCP server on the HOST that
+# forwards memory_search to this REST API (127.0.0.1:8000), optionally with `Authorization: Bearer`:
+#
+#   docker compose up -d
+#   MG_MCP_BRIDGE_URL=http://127.0.0.1:8000 MG_MCP_TOKEN=<MG_LOCAL_TOKEN> anamnesia mcp
+#
+# Only memory_search is bridged (see app/mcp/bridge.py). The compose file itself needs no extra service.

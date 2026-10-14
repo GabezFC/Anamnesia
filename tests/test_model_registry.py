@@ -23,8 +23,11 @@ def test_default_file_loads_and_no_prices():
     reg = load_registry()
     assert reg.models and len(reg.version_hash()) == 64
     for m in reg.models:
-        assert m.price is None and (m.local or m.verified is False)  # local models may be verified (ollama)
-        assert reg.price_status(m.id) == ("local_zero" if m.local else "unavailable")
+        if m.price is not None:   # a price is only accepted with provenance (source_url + checked_at)
+            assert m.price.source_url and m.price.checked_at
+        else:
+            assert m.local or m.verified is False
+            assert reg.price_status(m.id) == ("local_zero" if m.local else "unavailable")
 
 
 def test_valid_load_fields(tmp_path):

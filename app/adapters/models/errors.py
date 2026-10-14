@@ -36,6 +36,9 @@ def is_local_provider(provider: str | None) -> bool:
 
 
 def ensure_paid_allowed(provider: str | None) -> None:
+    if not is_local_provider(provider):
+        from app.services.offline import ensure_online  # ANA-224: OFFLINE=1 blocks every hosted provider
+        ensure_online(f"provider:{provider}")
     if not is_local_provider(provider) and not paid_calls_enabled():
         raise PaidCallsDisabled(f"ANAMNESIA_PAID_CALLS=0: chamada ao provedor '{provider}' bloqueada")
 
@@ -55,7 +58,8 @@ def kind_from_status(status: int | None, body: str = "") -> str:
     if status in (400, 413, 422):
         if any(w in low for w in _CONTEXT_WORDS) or status == 413:
             return "context_overflow"
-        if "model" in low and ("not found" in low or "does not exist" in low or "unknown" in low):
+        if "model" in low and ("not found" in low or "does not exist" in low or "unknown" in low
+                               or "not a valid model" in low):      # OpenRouter: 400 "<id> is not a valid model ID" (Onda 4e, real)
             return "model_not_found"
         return "other"
     if status >= 500:

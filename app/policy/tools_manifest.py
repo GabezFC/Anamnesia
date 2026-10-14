@@ -57,5 +57,20 @@ def log_use(tool: str, profile: str = "default", allowed: bool = True, run_id: s
                               "allowed": allowed, "run_id": run_id, "scope": MANIFEST.get(tool, {}).get("scope")})
 
 
+def apply_profile(srv, profile: str | None = None) -> list[str]:
+    """ANA-192 wiring: remove from a running MCPServer every tool the profile does not allow. `default`/unset = no-op
+    (rollback = unset ANAMNESIA_TOOL_PROFILE). Unknown profile fails CLOSED to `restricted`. Returns removed names."""
+    prof = profile if profile is not None else os.environ.get("ANAMNESIA_TOOL_PROFILE", "").strip().lower()
+    if not prof or prof == "default":
+        return []
+    allowed = set(PROFILES.get(prof, PROFILES["restricted"]))
+    removed = []
+    for t in list(srv._tool_manager.list_tools()):
+        if t.name not in allowed:
+            srv.remove_tool(t.name)
+            removed.append(t.name)
+    return removed
+
+
 def active_profile() -> str:
     return os.environ.get("ANAMNESIA_TOOL_PROFILE", "default").strip().lower() or "default"

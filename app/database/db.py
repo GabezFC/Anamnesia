@@ -280,6 +280,10 @@ class Database:
             row["terminal_session_id"] = os.environ.get("MG_TERMINAL_SESSION") or None
         if row.get("cost_origin") is None:
             row["cost_origin"] = cost_origin_for(m, row.get("pipeline"))
+        if _env_on("ANAMNESIA_COST_SCHEMA") and "cost_schema" not in m and m:
+            # ANA-175: every saved run carries the typed parcels; unmeasured parcels stay 'unavailable' (never 0).
+            from app.services.cost_ledger import attach_cost_schema, build_cost_schema
+            row["metrics_json"] = attach_cost_schema(m, build_cost_schema())
 
     def save_run(self, row: dict[str, Any], candidates: list[dict] | None = None) -> None:
         if self._writer is not None:                       # ANA-103 (experiment, flag off by default)

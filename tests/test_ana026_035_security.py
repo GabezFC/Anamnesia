@@ -197,15 +197,16 @@ def test_ana033_rate_limit_429(monkeypatch):
     assert 429 in codes and codes[0] != 429
 
 
-def test_ana033_budget_default_follows_paid_key(monkeypatch):
+def test_ana033_budget_default_follows_configured_ceiling(monkeypatch):
+    # T6.4: default ON only when a ceiling exists (no longer tied to the paid key); explicit flag wins
     from app.gateway import budget_guard as bg
     monkeypatch.delenv(bg.ENV_FLAG, raising=False)
-    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    monkeypatch.delenv(bg.DEGRADE_FLAG, raising=False)
     assert bg.enforcement_enabled() is False
-    monkeypatch.setenv("TYPESAFE_API_KEY", "k")
-    assert bg.enforcement_enabled() is True
+    assert bg.enforcement_enabled({"day": None, "month": 0}) is False
+    assert bg.enforcement_enabled({"day": 1.0, "month": None}) is True
     monkeypatch.setenv(bg.ENV_FLAG, "0")
-    assert bg.enforcement_enabled() is False
+    assert bg.enforcement_enabled({"day": 1.0}) is False
 
 
 # -- ANA-034 ------------------------------------------------------------------------------------

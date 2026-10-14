@@ -15,6 +15,7 @@ from app.api.costs import get_db
 from app.database.db import Database
 
 router = APIRouter(prefix="/api/memory")
+PREVIEW_PIPELINES = ("baseline", "graphify")  # free: no judge/model call (JEV pipelines are paid -> excluded)
 
 
 def _metrics_only() -> bool:
@@ -56,10 +57,15 @@ def last_search(db: Database = Depends(get_db)) -> dict:
 
 @router.get("/search-preview")
 def search_preview(q: str = Query(..., min_length=1, max_length=2000), max_results: int = Query(10, ge=1, le=50),
-                   scope: str | None = Query(None, max_length=500)) -> dict:
+                   scope: str | None = Query(None, max_length=500),
+                   pipeline: str = Query("baseline", max_length=40)) -> dict:
+    """Free preview, never recorded. ANA-208: `pipeline` may be baseline|graphify (both local, zero model
+    tokens). The JEV pipelines call a paid judge, so a preview of them is refused (422), not silently run."""
     from app.api import routes
+    if pipeline not in PREVIEW_PIPELINES:
+        raise HTTPException(422, f"pipeline de prévia inválido: {pipeline}. Gratuitos: {list(PREVIEW_PIPELINES)}")
     try:
-        r = routes.gw().search(q, "baseline", max_results, scope=scope, persist=False)
+        r = routes.gw().search(q, pipeline, max_results, scope=scope, persist=False)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     m = r.metrics or {}

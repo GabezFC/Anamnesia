@@ -5,16 +5,18 @@
 
 Contrato único de REST, CLI e MCP. Contexto e semântica: [README](../README.md) · [MEMORY_SEARCH_MODES](guides/MEMORY_SEARCH_MODES.md) · [SECURITY](guides/SECURITY.md).
 
-## REST (OpenAPI 3.1.0, 102 operações)
+## REST (OpenAPI 3.1.0, 106 operações)
 
 Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`. `?` = parâmetro opcional.
 
 | Método | Caminho | Parâmetros | Corpo | Resumo |
 | --- | --- | --- | --- | --- |
+| GET | `/api/alerts` | window?, tokens_pct?, latency_p95_pct?, cost_pct? | — | Alerts |
 | GET | `/api/benchmark/aggregate` | range?, session_id?, include_warmup? | — | Aggregate |
 | GET | `/api/benchmark/report.json` | range?, session_id?, include_warmup? | — | Report Json |
 | GET | `/api/benchmark/report.md` | range?, session_id?, include_warmup? | — | Report Md |
 | GET | `/api/connections` | — | — | List Connections |
+| GET | `/api/connections/resilience/state` | — | — | Resilience State |
 | DELETE | `/api/connections/{cid}/secret` | cid | sim | Delete Secret |
 | PUT | `/api/connections/{cid}/secret` | cid | sim | Put Secret |
 | GET | `/api/connections/{cid}/snippet` | cid | — | Get Snippet |
@@ -40,6 +42,7 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | POST | `/api/memory/forget` | — | sim | Forget |
 | POST | `/api/memory/import` | overwrite? | — | Import Jsonl |
 | GET | `/api/memory/last-search` | — | — | Last Search |
+| GET | `/api/memory/lineage` | limit_runs? | — | Memory Lineage |
 | POST | `/api/memory/migrate` | — | sim | Migrate |
 | GET | `/api/memory/notes` | project?, tag?, kind?, include_expired? | — | List Notes |
 | POST | `/api/memory/notes` | — | sim | Create Note |
@@ -73,6 +76,7 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | GET | `/api/projects/{project_id}/worktrees` | project_id | — | List Project Worktrees |
 | POST | `/api/projects/{project_id}/worktrees` | project_id | sim | Create Project Worktree |
 | DELETE | `/api/projects/{project_id}/worktrees/{worktree_id}` | project_id, worktree_id, confirm?, force? | — | Delete Project Worktree |
+| GET | `/api/providers/health` | last_n? | — | Providers Health |
 | GET | `/api/sessions` | — | — | List Sessions |
 | POST | `/api/sessions` | — | sim | Create Session |
 | DELETE | `/api/sessions/{session_id}` | session_id | — | Delete Session |
@@ -217,13 +221,85 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 
 ### anamnesia
 
-`anamnesia` — 3 subcomandos: `version`, `doctor`, `start`
+`anamnesia` — 15 subcomandos: `version`, `doctor`, `start`, `mcp`, `search`, `index`, `memory-audit`, `vault-lint`, `vault-check`, `benchmark`, `sweep`, `stats`, `info`, `db-maintenance`, `db-prune`
 
 #### `anamnesia version` — print version
 
-#### `anamnesia doctor` — offline environment checks
+#### `anamnesia doctor` — offline environment checks + local-first grade (L0-L5)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `--json` | machine-readable output | — |
 
 #### `anamnesia start` — start REST API + dashboard (same as python -m app.main)
+
+#### `anamnesia mcp` — run the MCP server over stdio (same as the anamnesia-mcp script)
+
+#### `anamnesia search` — same as `python -m memory_gateway search` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
+
+#### `anamnesia index` — same as `python -m memory_gateway index` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
+
+#### `anamnesia memory-audit` — same as `python -m memory_gateway memory-audit` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
+
+#### `anamnesia vault-lint` — same as `python -m memory_gateway vault-lint` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
+
+#### `anamnesia vault-check` — same as `python -m memory_gateway vault-check` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
+
+#### `anamnesia benchmark` — same as `python -m memory_gateway benchmark` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
+
+#### `anamnesia sweep` — same as `python -m memory_gateway sweep` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
+
+#### `anamnesia stats` — same as `python -m memory_gateway stats` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
+
+#### `anamnesia info` — same as `python -m memory_gateway info` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
+
+#### `anamnesia db-maintenance` — same as `python -m memory_gateway db-maintenance` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
+
+#### `anamnesia db-prune` — same as `python -m memory_gateway db-prune` (extra args are forwarded)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `rest` |  | posicional |
 
 ## MCP (servidor `memory-gateway`, stdio)
 

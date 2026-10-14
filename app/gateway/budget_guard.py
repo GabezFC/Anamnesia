@@ -28,20 +28,25 @@ from app.schemas.models import JEV_PIPELINES
 from app.services import costs as svc
 
 ENV_FLAG = "ANAMNESIA_BUDGET_ENFORCE"
+DEGRADE_FLAG = "ANAMNESIA_BUDGET_DEGRADE"   # T6.4: explicit 0/1 wins; unset -> ON only when a ceiling is configured
 WARN_FLAG = "ANAMNESIA_BUDGET_WARN"   # ANA-180: warn mode is ON by default; =0/off silences it (rollback)
 FALLBACK_PIPELINE = "baseline"
 _ORDER = {"ok": 0, "warn": 1, "exceeded": 2}
 _CACHE_TTL_S = 5.0   # spend is re-read at most every few seconds per guard (a search is ~ms)
 
 
-def enforcement_enabled() -> bool:
-    """ANA-033: explicit flag wins (0/off disables). Unset -> ON as soon as a paid-judge key
-    (TYPESAFE_API_KEY) is configured, because that is exactly when spend can happen; with no key the
-    JEV pipelines cannot spend and the guard stays inert (byte-identical path)."""
-    raw = os.environ.get(ENV_FLAG, "").strip().lower()
-    if raw:
-        return raw in ("1", "true", "yes", "on")
-    return bool(os.environ.get("TYPESAFE_API_KEY", "").strip())
+def has_ceiling(budgets: dict | None) -> bool:
+    return any((v or 0) > 0 for v in (budgets or {}).values() if isinstance(v, (int, float)))
+
+
+def enforcement_enabled(budgets: dict | None = None) -> bool:
+    """T6.4: ANAMNESIA_BUDGET_DEGRADE (explicit 0/1) wins, then the legacy ANAMNESIA_BUDGET_ENFORCE.
+    Unset -> ON only when a day/month ceiling (>0) is configured (`budgets`); empty/0 = no ceiling = OFF."""
+    for flag in (DEGRADE_FLAG, ENV_FLAG):
+        raw = os.environ.get(flag, "").strip().lower()
+        if raw:
+            return raw in ("1", "true", "yes", "on")
+    return has_ceiling(budgets)
 
 
 def warn_enabled() -> bool:
@@ -63,7 +68,8 @@ def evaluate(db, now: float | None = None) -> dict:
            "month": svc.budget_status(svc.spend_of(month_rows), budgets.get("month"))}
     worst = max(per, key=lambda p: _ORDER[per[p]["status"]])
     return {"status": per[worst]["status"], "worst_period": worst if per[worst]["status"] != "ok" else None,
-            "day": per["day"], "month": per["month"]}
+            "day": per["day"], "month": per["month"], "budgets": budgets,
+            "unknown_spend": [p for p, b in per.items() if b["spent_usd"] is None and (b["ceiling_usd"] or 0) > 0]}
 
 
 class BudgetGuard:
@@ -89,7 +95,10 @@ class BudgetGuard:
         """
         if not spends_paid_tokens(plan.pipeline):
             return plan, {}
-        enforce = enforcement_enabled()
+        try:
+            enforce = enforcement_enabled(db.get_budgets())
+        except Exception:  # noqa: BLE001
+            enforce = enforcement_enabled()
         if not enforce and not warn_enabled():
             return plan, {}
         try:
@@ -99,6 +108,9 @@ class BudgetGuard:
         extra: dict[str, Any] = {"budget_status": st["status"]}
         if not enforce:
             extra["budget_mode"] = "warn"
+        if st.get("unknown_spend") and st["status"] == "ok":
+            extra["budget_status"] = "unknown"   # ceiling set but spend unknown: never degrades, but warns
+            extra["budget_warning"] = f"gasto desconhecido (teto {', '.join(st['unknown_spend'])}); sem degradação"
         if st["status"] == "warn" or (st["status"] == "exceeded" and not enforce):
             p = st["worst_period"]
             extra["budget_warning"] = (f"gasto {st[p]['ratio']:.0%} do teto {p} "
@@ -108,6 +120,8 @@ class BudgetGuard:
             reason = (f"teto {p} excedido (US$ {st[p]['spent_usd']} >= {st[p]['ceiling_usd']}); "
                       f"{plan.pipeline} -> {FALLBACK_PIPELINE}")
             extra.update({"budget_degraded": True, "budget_degraded_reason": reason,
-                          "budget_requested_pipeline": plan.pipeline})
+                          "budget_requested_pipeline": plan.pipeline,
+                          "budget_effective_pipeline": FALLBACK_PIPELINE,
+                          "budget_warning": f"teto {p} atingido: pipeline degradado para {FALLBACK_PIPELINE}"})
             plan = replace(plan, pipeline=FALLBACK_PIPELINE, reason=f"budget_degraded:{p}")
         return plan, extra

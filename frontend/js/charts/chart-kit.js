@@ -13,6 +13,8 @@
  * - All colors defined via var(--chart-1)...var(--chart-8), var(--grid), var(--axis).
  */
 
+import { esc } from '../format.js';
+
 /**
  * Calculates human-friendly "nice" ticks for axis scales.
  */
@@ -87,9 +89,9 @@ function createTooltip(container) {
         <div class="chart-tooltip-title">${title}</div>
         ${rows.map(r => `
           <div class="chart-tooltip-row">
-            <span class="chart-tooltip-badge" style="background-color: ${r.color};"></span>
+            <span class="chart-tooltip-badge" data-css="background-color:${esc(r.color)}"></span>
             <span>${r.label}:</span>
-            <span style="font-family: var(--font-mono);">${r.value}</span>
+            <span class="u-f6db11">${r.value}</span>
           </div>
         `).join('')}
       `;
@@ -102,6 +104,12 @@ function createTooltip(container) {
     },
     element: tooltip
   };
+}
+
+/** ANA-206: SVG com nome acessível quando `ariaLabel` é dado; senão decorativo (a tabela ao lado carrega os dados). */
+function svgA11y(options = {}) {
+  const l = options && options.ariaLabel ? String(options.ariaLabel).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`) : '';
+  return l ? ` role="img" aria-label="${l}"` : ' aria-hidden="true"';
 }
 
 /**
@@ -171,7 +179,7 @@ export function createLineChart(container, options = {}) {
 
   return bindResponsiveChart(container, (width) => {
     if (data.length === 0) {
-      container.innerHTML = `<div class="chart-empty" style="padding: 24px; text-align: center; color: var(--text-tertiary);">Sem dados para exibição</div>`;
+      container.innerHTML = `<div class="chart-empty u-863d48">Sem dados para exibição</div>`;
       return;
     }
 
@@ -206,7 +214,7 @@ export function createLineChart(container, options = {}) {
 
     // Build SVG elements
     let svgHtml = `
-      <svg class="chart-svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
+      <svg class="chart-svg"${svgA11y(options)} viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
         <defs>
           ${series.map((s, idx) => `
             <linearGradient id="chart-grad-${idx}" x1="0" y1="0" x2="0" y2="1">
@@ -297,7 +305,7 @@ export function createLineChart(container, options = {}) {
         <div class="chart-legend">
           ${series.map(s => `
             <div class="chart-legend-item">
-              <span class="chart-legend-dot" style="background-color: ${s.color};"></span>
+              <span class="chart-legend-dot" data-css="background-color:${esc(s.color)}"></span>
               <span>${s.label}</span>
             </div>
           `).join('')}
@@ -396,7 +404,7 @@ export function createBarChart(container, options = {}) {
 
   return bindResponsiveChart(container, (width) => {
     if (categories.length === 0) {
-      container.innerHTML = `<div class="chart-empty" style="padding: 24px; text-align: center; color: var(--text-tertiary);">Sem dados para exibição</div>`;
+      container.innerHTML = `<div class="chart-empty u-863d48">Sem dados para exibição</div>`;
       return;
     }
 
@@ -426,7 +434,7 @@ export function createBarChart(container, options = {}) {
     const barWidth = Math.max(availableBarSpace / series.length, 6);
 
     let svgHtml = `
-      <svg class="chart-svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
+      <svg class="chart-svg"${svgA11y(options)} viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
         <!-- Gridlines -->
         <g class="chart-grid">
           ${scale.ticks.map(tick => {
@@ -499,7 +507,7 @@ export function createBarChart(container, options = {}) {
         <div class="chart-legend">
           ${series.map(s => `
             <div class="chart-legend-item">
-              <span class="chart-legend-dot" style="background-color: ${s.color};"></span>
+              <span class="chart-legend-dot" data-css="background-color:${esc(s.color)}"></span>
               <span>${s.label}</span>
             </div>
           `).join('')}
@@ -563,7 +571,7 @@ export function createStackedBarChart(container, options = {}) {
 
   return bindResponsiveChart(container, (width) => {
     if (categories.length === 0 || series.length === 0) {
-      container.innerHTML = `<div class="chart-empty" style="padding: 24px; text-align: center; color: var(--text-tertiary);">Sem dados para exibição</div>`;
+      container.innerHTML = `<div class="chart-empty u-863d48">Sem dados para exibição</div>`;
       return;
     }
 
@@ -584,7 +592,7 @@ export function createStackedBarChart(container, options = {}) {
       const barHeight = Math.min(Math.max(rowHeight * 0.54, 18), 30);
 
       let svgHtml = `
-        <svg class="chart-svg" viewBox="0 0 ${width} ${calculatedHeight}" width="${width}" height="${calculatedHeight}">
+        <svg class="chart-svg"${svgA11y(options)} viewBox="0 0 ${width} ${calculatedHeight}" width="${width}" height="${calculatedHeight}">
           <!-- Vertical Gridlines -->
           <g class="chart-grid">
             ${scale.ticks.map(tick => {
@@ -642,7 +650,7 @@ export function createStackedBarChart(container, options = {}) {
                     x="${marginLeft - 12}" 
                     y="${barY + barHeight / 2 + 4}" 
                     text-anchor="end"
-                    style="font-weight: 600; fill: var(--text-primary);"
+                    class="u-svg-lbl-primary"
                   >
                     ${cat}
                   </text>
@@ -652,7 +660,7 @@ export function createStackedBarChart(container, options = {}) {
                     x="${marginLeft + accumulatedWidth + 8}" 
                     y="${barY + barHeight / 2 + 4}" 
                     text-anchor="start"
-                    style="font-weight: 600; fill: var(--text-secondary);"
+                    class="u-svg-lbl-secondary"
                   >
                     ${yFormatter(totalVal)}
                   </text>
@@ -668,7 +676,7 @@ export function createStackedBarChart(container, options = {}) {
         <div class="chart-legend">
           ${series.map(s => `
             <div class="chart-legend-item">
-              <span class="chart-legend-dot" style="background-color: ${s.color};"></span>
+              <span class="chart-legend-dot" data-css="background-color:${esc(s.color)}"></span>
               <span>${s.label}</span>
             </div>
           `).join('')}
@@ -725,7 +733,7 @@ export function createDonutChart(container, options = {}) {
 
   return bindResponsiveChart(container, (width) => {
     if (data.length === 0) {
-      container.innerHTML = `<div class="chart-empty" style="padding: 24px; text-align: center; color: var(--text-tertiary);">Sem dados para exibição</div>`;
+      container.innerHTML = `<div class="chart-empty u-863d48">Sem dados para exibição</div>`;
       return;
     }
 
@@ -774,8 +782,8 @@ export function createDonutChart(container, options = {}) {
     });
 
     const svgHtml = `
-      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
-        <svg class="chart-svg" viewBox="0 0 ${chartSize} ${chartSize}" width="${chartSize}" height="${chartSize}" style="max-width: ${chartSize}px;">
+      <div class="u-813178">
+        <svg class="chart-svg"${svgA11y(options)} viewBox="0 0 ${chartSize} ${chartSize}" width="${chartSize}" height="${chartSize}" data-css="max-width:${chartSize}px">
           <g class="chart-donut-slices">
             ${slices.map(s => `
               <path 
@@ -786,22 +794,22 @@ export function createDonutChart(container, options = {}) {
                 data-val="${s.value}" 
                 data-pct="${s.pct}" 
                 data-color="${s.color}"
-                style="stroke: var(--bg-surface); stroke-width: 2px;"
+                class="u-svg-slice"
               />
             `).join('')}
           </g>
 
           <!-- Center Text -->
-          <text x="${center}" y="${center - 6}" text-anchor="middle" class="chart-axis-text" style="font-size: 11px; fill: var(--text-tertiary);">${centerLabel}</text>
-          <text x="${center}" y="${center + 14}" text-anchor="middle" style="font-size: 16px; font-weight: 700; fill: var(--text-primary); font-family: var(--font-sans);">${formatter(total)}</text>
+          <text x="${center}" y="${center - 6}" text-anchor="middle" class="chart-axis-text u-ecef09">${centerLabel}</text>
+          <text x="${center}" y="${center + 14}" text-anchor="middle" class="u-aa6c37">${formatter(total)}</text>
         </svg>
 
-        <div class="chart-legend" style="justify-content: center; margin-top: 12px;">
+        <div class="chart-legend u-4d9102">
           ${data.map(d => `
             <div class="chart-legend-item">
-              <span class="chart-legend-dot" style="background-color: ${d.color};"></span>
+              <span class="chart-legend-dot" data-css="background-color:${esc(d.color)}"></span>
               <span>${d.label}</span>
-              <span class="font-mono tabular" style="color: var(--text-tertiary); font-size: 11px;">(${((d.value / total) * 100).toFixed(0)}%)</span>
+              <span class="font-mono tabular u-bc2c4c">(${((d.value / total) * 100).toFixed(0)}%)</span>
             </div>
           `).join('')}
         </div>

@@ -12,6 +12,7 @@ from typing import Any
 
 from app.core.tokens import estimate_tokens
 from app.retrieval.registry import PIPELINE_FUNCS, register_pipeline
+from app.retrieval.experiments import dedup_limit, lexical_search, post_dedup
 from app.retrieval.common import (_apply_scope, _graphify_candidates, _tokens,  # noqa: F401
                                   full_note_text)
 from app.schemas.models import PIPELINES, Candidate
@@ -24,12 +25,13 @@ from app.services.prefilter import prefilter
 def run_baseline(gw, query: str, max_results: int) -> tuple[list[Candidate], dict, dict[str, Any]]:
     rc = gw.retrieval_cfg
     t0 = time.perf_counter()
-    raw = gw.baseline.search(query, limit=rc.max_candidates)
+    raw = lexical_search(gw, query, rc.max_candidates)   # == gw.baseline.search(...) with every Onda 9 flag off
     t1 = time.perf_counter()
     raw, out_of_scope = _apply_scope(gw, raw)
     cands = preprocess(raw, rc.snippet_max_tokens)
     cand_tokens = _tokens(cands)
-    uniq, removed = deduplicate(cands, rc.dedup_max_per_note)
+    uniq, removed = deduplicate(cands, dedup_limit(gw, query, rc.dedup_max_per_note))
+    uniq = post_dedup(gw, query, uniq)
     t2 = time.perf_counter()
     final = uniq[:max_results]
     return final, {}, {

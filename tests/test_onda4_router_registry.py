@@ -73,7 +73,8 @@ def test_planned_cannot_be_verified(tmp_path):
 
 def test_coverage_report_counts_honestly():
     r = coverage_report(load_registry())
-    assert r["planned"] and r["with_price"] == 0 and r["with_price_pct"] == 0.0
+    assert r["planned"] and 0 <= r["with_price"] <= r["considered"]
+    assert r["with_price_pct"] == round(100.0 * r["with_price"] / r["considered"], 1)
     assert r["context_window_null_count"] == len(r["context_window_null"]) > 0
     assert r["considered"] == r["models_total"] - len(r["planned"])
 
@@ -114,7 +115,7 @@ def test_verify_report_has_no_price_claims(tmp_path, capsys):
     vr = _vr()
     assert vr.main([]) == 0
     out = capsys.readouterr().out
-    assert "with price: 0.0%" in out
+    assert "with price: " in out
 
 
 class _Fake(BaseHTTPRequestHandler):

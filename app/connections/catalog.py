@@ -15,6 +15,7 @@ from app.routing.registry import RegistryError, _parse_yaml
 from config.paths import PACKAGE_ROOT
 
 CATALOG_PATH = PACKAGE_ROOT / "config" / "connections.yaml"
+DEFAULT_CATALOG_PATH = CATALOG_PATH      # ANA-198: derived agents are added only for the shipped file
 TYPES = ("agent", "model", "mcp")
 STATUSES = ("available", "planned")
 SNIPPET_FORMATS = ("hermes_yaml", "claude_json", "codex_toml")
@@ -75,7 +76,8 @@ def _entry(raw, idx: int) -> Connection:
     return Connection(cid, raw["type"], raw["name"], command, tuple(env_keys), docs, raw["status"], snip)
 
 
-def load_catalog(path: Path | str | None = None) -> list[Connection]:
+def load_catalog(path: Path | str | None = None, derive: bool = True) -> list[Connection]:
+    """With the default file and `derive`, agents in config/agents.yaml missing here are appended (ANA-198)."""
     p = Path(path) if path is not None else CATALOG_PATH
     try:
         data = _parse_yaml(p.read_text(encoding="utf-8"))
@@ -93,6 +95,12 @@ def load_catalog(path: Path | str | None = None) -> list[Connection]:
             raise CatalogError(f"duplicate connection id {c.id!r}")
         seen.add(c.id)
         out.append(c)
+    if derive and p == DEFAULT_CATALOG_PATH:
+        from app.connections.agents import derive_connection_dict, load_agents
+        for j, a in enumerate(load_agents()):
+            if a.id not in seen:
+                out.append(_entry(derive_connection_dict(a), len(items) + j))
+                seen.add(a.id)
     return out
 
 

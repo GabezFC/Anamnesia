@@ -369,6 +369,7 @@ def test_budget_warn_default_records_but_never_blocks(tmp_path, monkeypatch):
     from tests.test_budget_and_measurement import db_with_spend, plan
     monkeypatch.delenv(bg.ENV_FLAG, raising=False)
     monkeypatch.delenv(bg.WARN_FLAG, raising=False)
+    monkeypatch.setenv(bg.DEGRADE_FLAG, "0")   # T6.4: ceiling => degrade default ON; this test covers warn mode
     monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
     db = db_with_spend(tmp_path, ceiling_day=0.00001)
     pl = plan("graphify_jev")
@@ -377,9 +378,9 @@ def test_budget_warn_default_records_but_never_blocks(tmp_path, monkeypatch):
     assert "budget_degraded" not in extra and extra["budget_warning"]
     free = plan("baseline")
     assert bg.BudgetGuard(ttl_s=0).apply(free, db) == (free, {})
-    monkeypatch.setenv(bg.ENV_FLAG, "1")                        # enforce stays opt-in and still degrades
+    monkeypatch.setenv(bg.DEGRADE_FLAG, "1")                    # explicit flag still degrades
     new, extra = bg.BudgetGuard(ttl_s=0).apply(pl, db)
     assert new.pipeline == "baseline" and "budget_mode" not in extra
-    monkeypatch.setenv(bg.ENV_FLAG, "0")
+    monkeypatch.setenv(bg.DEGRADE_FLAG, "0")
     monkeypatch.setenv(bg.WARN_FLAG, "0")
     assert bg.BudgetGuard(ttl_s=0).apply(pl, db) == (pl, {})

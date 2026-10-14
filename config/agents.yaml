@@ -1,0 +1,88 @@
+# Agent catalog (ANA-198 / ANA-199): the single source for every CLI agent Anamnesia knows about.
+# Loaded by app/connections/agents.py. config/profiles.yaml (terminal launch), config/connections.yaml (catalog +
+# detection) and the headless AgentCliLauncher derive from / are checked against this file
+# (tests/test_onda6_agent_catalog.py). Adding an agent = ONE entry here: profiles and connections gain a derived
+# entry automatically when their own yaml has none.
+# Subset YAML only (maps, lists, [a, b], # comments).
+#
+# Fields
+#   id / name / command / description   same meaning as in profiles.yaml / connections.yaml
+#   env_keys          extra env copied into a terminal session (profiles.yaml semantics)
+#   detect_env_keys   env vars whose presence marks the agent "detected" (connections.yaml semantics)
+#   status            available | planned (connections.yaml semantics)
+#   docs_url          only URLs already present in this repo, else null
+#   mcp_snippet       hermes_yaml | claude_json | codex_toml | null (connections snippets)
+#   mcp_mode          native | env | none  (must equal app.terminals.mcp_inject.mode_for)
+#   adapter           headless adapter key (hermes | claude_code | codex | opencode) or null
+#   bin_env           env var that overrides the executable of the adapter (AgentsConfig)
+#   model_provider    registry provider whose model ids the CLI accepts via --model, or null (use CLI default)
+#   supports          capabilities VERIFIED for this agent (ANA-199):
+#                       mcp              consumes the Gateway MCP server
+#                       headless         one-shot non-interactive call (no PTY)
+#                       usage_json       reports token usage in machine-readable form
+#                       readonly_sandbox has a verified sandbox / permission switch to confine writes
+#                       worktree         validated with git worktree isolation
+#   validated_on      "<cli version> / <date>" of the last real validation; null = prepared, NOT validated
+#                     (an agent with validated_on null supports nothing, whatever `supports` says)
+version: 1
+agents:
+  - id: hermes
+    name: Hermes
+    command: hermes
+    env_keys: []
+    detect_env_keys: []
+    status: available
+    docs_url: https://hermes-agent.nousresearch.com/docs/reference/model-catalog
+    mcp_snippet: hermes_yaml
+    mcp_mode: env
+    adapter: hermes
+    bin_env: HERMES_BIN
+    model_provider: null
+    supports: [mcp, headless, usage_json]
+    validated_on: hermes 0.20.5 (version cited by HermesAdapter docstring)
+    description: Hermes Agent CLI no diretório do projeto.
+  - id: claude-code
+    name: Claude Code
+    command: claude
+    env_keys: [ANTHROPIC_API_KEY]
+    detect_env_keys: []
+    status: available
+    docs_url: null
+    mcp_snippet: claude_json
+    mcp_mode: native
+    adapter: claude_code
+    bin_env: CLAUDE_BIN
+    model_provider: anthropic
+    supports: [mcp, headless, usage_json, readonly_sandbox]
+    validated_on: claude 2.1.x / 2026-09-24 (ClaudeCodeAdapter docstring)
+    description: Claude Code CLI (usa login próprio se não houver chave).
+  - id: codex
+    name: Codex
+    command: codex
+    env_keys: [OPENAI_API_KEY]
+    detect_env_keys: []
+    status: available
+    docs_url: null
+    mcp_snippet: codex_toml
+    mcp_mode: env
+    adapter: codex
+    bin_env: CODEX_BIN
+    model_provider: openai
+    supports: [mcp, headless, usage_json, readonly_sandbox]
+    validated_on: codex 0.155 (version cited by CodexAdapter docstring)
+    description: OpenAI Codex CLI.
+  - id: opencode
+    name: OpenCode
+    command: opencode
+    env_keys: [ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY]
+    detect_env_keys: []
+    status: available
+    docs_url: null
+    mcp_snippet: null
+    mcp_mode: env
+    adapter: opencode
+    bin_env: OPENCODE_BIN
+    model_provider: null
+    supports: []
+    validated_on: null
+    description: OpenCode CLI.

@@ -65,21 +65,48 @@ def resolve_project_path(scope: str | None = None) -> str | None:
     return env if env and os.path.isdir(env) else None
 
 
+class DelegateError(ValueError):
+    """Refusal before anything is launched. `reason_code` is what the search response reports (`delegate_error:<code>`)."""
+
+    def __init__(self, reason_code: str):
+        super().__init__(reason_code)
+        self.reason_code = reason_code
+
+
+def _agent_profile(profile_id: str):
+    """ANA-195: terminal/agent delegation needs a profile with kind=agent; `shell` (or anything else) is refused."""
+    from app.terminals.profiles import load_profiles
+    p = load_profiles().get(profile_id)
+    if p is None:
+        raise DelegateError("profile_unknown")
+    if p.kind != "agent":
+        raise DelegateError("profile_not_agent")
+    return p
+
+
 def get_orchestrator():
-    if os.getenv("ANAMNESIA_DELEGATE_LAUNCHER", "").strip().lower() == "terminal":
+    mode = os.getenv("ANAMNESIA_DELEGATE_LAUNCHER", "").strip().lower()
+    if mode in ("terminal", "agent_cli"):
         global _term_orch
+        profile = os.getenv("ANAMNESIA_DELEGATE_PROFILE", "").strip() or "shell"
+        _agent_profile(profile)                       # ANA-195: validated on EVERY call, never cached past a bad env
         with _lock:
+            if _term_orch is not None and getattr(_term_orch, "_delegate_key", None) != (mode, profile):
+                _term_orch = None
             if _term_orch is None:
-                from app.orchestration.launchers import TerminalLauncher
+                from app.orchestration.launchers import AgentCliLauncher, TerminalLauncher
                 from app.orchestration.orchestrator import Orchestrator
                 from app.routing.answer import get_availability, get_registry, usable_registry
                 reg = get_registry()
                 usable = usable_registry(reg, get_availability())
-                profile = os.getenv("ANAMNESIA_DELEGATE_PROFILE", "").strip() or "shell"
-                _term_orch = Orchestrator(TerminalLauncher(_provide("terminal_manager", "app.api.workspace", "get_manager"),
-                                                          default_profile_id=profile),
-                                          registry=reg, profile_id=profile,
+                if mode == "agent_cli":    # ANA-194: one headless CLI call per step (usage JSON), no PTY
+                    launcher = AgentCliLauncher(registry=reg)
+                else:
+                    launcher = TerminalLauncher(_provide("terminal_manager", "app.api.workspace", "get_manager"),
+                                                default_profile_id=profile)
+                _term_orch = Orchestrator(launcher, registry=reg, profile_id=profile,
                                           available_providers={m.provider for m in usable.models})
+                _term_orch._delegate_key = (mode, profile)
             return _term_orch
     return _provide("default_orchestrator", "app.api.orchestration", "get_orchestrator")
 

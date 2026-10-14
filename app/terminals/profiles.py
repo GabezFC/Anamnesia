@@ -76,7 +76,9 @@ def _str_list(v, where) -> tuple[str, ...]:
     return tuple(str(x) for x in v)
 
 
-def load_profiles(path=None) -> dict[str, Profile]:
+def load_profiles(path=None, derive: bool = True) -> dict[str, Profile]:
+    """Profiles from profiles.yaml. With the default file and `derive`, agents that exist in config/agents.yaml but
+    have no entry here get a derived `kind=agent` profile (ANA-198: adding an agent = one entry)."""
     p = Path(path) if path else DEFAULT_PATH
     try:
         doc = _parse_yaml(p.read_text(encoding="utf-8"))
@@ -99,4 +101,11 @@ def load_profiles(path=None) -> dict[str, Profile]:
             windows_args=(_str_list(raw["windows_args"], f"{pid}.windows_args")
                           if "windows_args" in raw else None),
             description=str(raw.get("description") or ""))
+    if derive and not path:
+        from app.connections.agents import derive_profile_dict, load_agents
+        for a in load_agents():
+            if a.id not in out:
+                d = derive_profile_dict(a)
+                out[a.id] = Profile(id=a.id, name=d["name"], command=d["command"], kind="agent",
+                                    env_keys=tuple(d["env_keys"]), description=d["description"])
     return out

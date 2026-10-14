@@ -48,8 +48,30 @@ def _hits(folded_padded: str, cues) -> int:
     return n
 
 
-def difficulty_features(query: str, context_tokens: int, policy: RoutingPolicy) -> dict:
-    """Cheap features, each in [0, 1]. Reuses query_fp.classify() and its identifier heuristic."""
+def build_vocab(texts) -> frozenset:
+    """Corpus vocabulary (query_fp.tokens of every text) for the `ungrounded` feature. Pure; the caller
+    reads the files. Built from the CORPUS only: no labels, no answers, no task fields."""
+    v: set = set()
+    for t in texts:
+        v.update(tokens(t or ""))
+    return frozenset(v)
+
+
+def ungrounded_ids(query: str, vocab) -> list:
+    """Identifier-like terms of the query (proper names, CamelCase, rare/version-like tokens) that never occur
+    in the corpus vocabulary. A question about an entity the vault has never seen is the signature of an
+    unanswerable / out-of-corpus request. Terms inside file paths are skipped (the path is the input, not the ask)."""
+    q = query or ""
+    path_toks = set(tokens(" ".join(_PATH.findall(q))))
+    cand = {fold(m) for m in _CAMEL.findall(q)} | {fold(m) for m in _PROPER.findall(q)}
+    cand |= {t for t in tokens(q) if _is_rare(t)}
+    return sorted(c for c in cand
+                  if c and c not in vocab and c not in path_toks and not any(c in p for p in path_toks))
+
+
+def difficulty_features(query: str, context_tokens: int, policy: RoutingPolicy, vocab=None) -> dict:
+    """Cheap features, each in [0, 1]. Reuses query_fp.classify() and its identifier heuristic.
+    `ungrounded` is emitted only when a corpus `vocab` is supplied (score renormalises over present features)."""
     q = query or ""
     folded = f" {fold(q)} "
     n_words = len(_WORD.findall(q))
@@ -59,7 +81,7 @@ def difficulty_features(query: str, context_tokens: int, policy: RoutingPolicy) 
     ids |= {m.lower() for m in _PATH.findall(q)}
     ids |= {m.lower() for m in _PROPER.findall(q)}
     multi = _hits(folded, policy.multi_hop_cues) + (1 if profile.multi_hop_hint else 0)
-    return {
+    feats = {
         "length": _sat(n_words, policy.length_saturation_tokens),
         "entities": _sat(len(ids), policy.entities_saturation),
         "multi_hop": _sat(multi, policy.multi_hop_saturation),
@@ -68,6 +90,9 @@ def difficulty_features(query: str, context_tokens: int, policy: RoutingPolicy) 
         "reasoning": _sat(_hits(folded, policy.reasoning_cues), policy.reasoning_saturation),
         "classifier": float(policy.classifier_scores.get(profile.complexity, 0.5)),
     }
+    if vocab is not None:
+        feats["ungrounded"] = _sat(len(ungrounded_ids(q, vocab)), policy.ungrounded_saturation)
+    return feats
 
 
 def difficulty_score(features: dict, policy: RoutingPolicy) -> float:
@@ -82,7 +107,8 @@ def _level(value: float, cutoffs) -> int:
     return sum(1 for c in cutoffs if value >= c)
 
 
-def route(query, context_tokens, task_kind, risk, registry, policy, available_providers=None) -> RoutingDecision:
+def route(query, context_tokens, task_kind, risk, registry, policy, available_providers=None,
+          vocab=None) -> RoutingDecision:
     reg_v = registry.version_hash() if registry is not None else ""
     pol_v = policy.version_hash()
     reasons: list[str] = []
@@ -95,7 +121,7 @@ def route(query, context_tokens, task_kind, risk, registry, policy, available_pr
     if not policy.enabled:
         return miss("routing_disabled")
 
-    feats = difficulty_features(query, ctx, policy)
+    feats = difficulty_features(query, ctx, policy, vocab)
     diff = difficulty_score(feats, policy)
 
     if risk not in RISK_LEVELS:

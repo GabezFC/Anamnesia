@@ -206,6 +206,23 @@ class TerminalLauncher:
             raise ValueError(f"unknown terminal profile: {pid}")
         return self._profiles[pid]
 
+    @staticmethod
+    def _harden(profile, env_overrides):
+        """ANA-173 (opt-in, ANAMNESIA_ENFORCE_ROLES=1): append the agent's own read-only switch to the argv of a
+        read-only role, but ONLY when that switch is verified (claude). Unverified (codex) => unchanged (stays soft)."""
+        from app.orchestration.enforcement import enforce_roles_enabled, readonly_argv
+        if not enforce_roles_enabled() or str(env_overrides.get("ANAMNESIA_READ_ONLY")) != "1":
+            return profile
+        agent = {"claude-code": "claude"}.get(profile.id, profile.id)
+        spec = readonly_argv(agent, env_overrides.get("ANAMNESIA_ROLE", "researcher"))
+        if not spec["argv"] or not spec["verified"]:
+            return profile
+        import dataclasses
+        extra = tuple(spec["argv"])
+        return dataclasses.replace(profile, args=tuple(profile.args) + extra,
+                                   windows_args=None if profile.windows_args is None
+                                   else tuple(profile.windows_args) + extra)
+
     def launch(self, project_id, profile_id, env_overrides, cwd) -> str:
         bad = [k for k in env_overrides if not str(k).startswith(self.ENV_PREFIX)]
         if bad:
@@ -213,6 +230,7 @@ class TerminalLauncher:
         from app.terminals.projects import Project
         import os
         profile = self._profile(profile_id)
+        profile = self._harden(profile, env_overrides)
         project = Project(project_id or "orchestration", os.path.basename(os.path.normpath(cwd)) or "project",
                           str(cwd), time.time())
         self._backend._tls.extra = {str(k): str(v) for k, v in env_overrides.items()}
@@ -254,3 +272,94 @@ class TerminalLauncher:
             pass
         with self._lock:
             self._started.pop(session_id, None)
+
+
+class AgentCliLauncher:
+    """ANA-194 - headless launcher over the agent CLI adapters (Hermes / Claude Code / Codex): ONE call per step, no PTY.
+
+    launch(): `profile_id` is an agent id of config/agents.yaml (e.g. `claude-code`); its adapter must be declared and
+    the agent must be validated and support `headless` + `usage_json` (ANA-199), else ValueError(reason_code).
+    send(): `adapter.generate(prompt, model=..., timeout=...)` (usage JSON, timeout) and the SAME file contract as every
+    launcher: `result.md` + `status.json`. Tokens/latency come from the CLI's own report, never estimated (null when the
+    CLI did not report them); `agent_cost` of the CLI is ignored - the orchestrator prices from the registry.
+    The model id is forwarded only when the registry provider equals the agent's `model_provider`; otherwise the CLI
+    uses its own default model. The adapters' own sandboxing applies (claude: `--tools ""`; codex: `-s read-only`).
+    `adapter_factory(spec)` lets tests inject a fake adapter; the default builds the real one lazily.
+    """
+
+    def __init__(self, registry=None, adapter_factory: Callable | None = None, timeout_s: int | None = None,
+                 agents: dict | None = None):
+        self.registry = registry
+        self._factory = adapter_factory
+        self.timeout_s = timeout_s
+        self._agents = agents
+        self.sessions: dict = {}
+        self._n = 0
+        self._lock = threading.Lock()
+
+    def _spec(self, agent_id):
+        if self._agents is None:
+            from app.connections.agents import load_agents
+            self._agents = {a.id: a for a in load_agents()}
+        spec = self._agents.get(agent_id or "")
+        if spec is None:
+            raise ValueError(f"agent_unknown:{agent_id}")
+        if spec.adapter is None:
+            raise ValueError(f"agent_no_adapter:{spec.id}")
+        sup = set(spec.effective_supports())
+        miss = [c for c in ("headless", "usage_json") if c not in sup]
+        if miss:
+            raise ValueError(f"agent_not_headless:{spec.id}:{'+'.join(miss)}")
+        return spec
+
+    def _make(self, spec):
+        if self._factory is not None:
+            return self._factory(spec)
+        from config.agents import AgentsConfig
+        from app.adapters.agents import agents as mod
+        cls = {"hermes": mod.HermesAdapter, "claude_code": mod.ClaudeCodeAdapter, "codex": mod.CodexAdapter}.get(spec.adapter)
+        if cls is None:
+            raise ValueError(f"agent_adapter_unsupported:{spec.adapter}")
+        return cls(AgentsConfig())
+
+    def launch(self, project_id, profile_id, env_overrides, cwd) -> str:
+        spec = self._spec(profile_id)
+        with self._lock:
+            self._n += 1
+            sid = f"agentcli-{self._n}"
+            self.sessions[sid] = {"env": dict(env_overrides), "cwd": cwd, "alive": True, "spec": spec}
+        return sid
+
+    def _model_arg(self, spec, env) -> str | None:
+        if self.registry is None or not spec.model_provider:
+            return None
+        try:
+            entry = self.registry.get(env.get("ANAMNESIA_MODEL_ID", ""))
+        except Exception:  # noqa: BLE001
+            return None
+        return entry.model if entry.provider == spec.model_provider else None
+
+    def send(self, session_id: str, text: str) -> None:
+        sess = self.sessions[session_id]
+        env, spec = sess["env"], sess["spec"]
+        step_dir = Path(env["ANAMNESIA_STEP_DIR"])
+        status = {"ok": False, "error": None, "input_tokens": None, "output_tokens": None, "latency_ms": None}
+        result = None
+        try:
+            kw = {"timeout": self.timeout_s} if self.timeout_s else {}
+            g = self._make(spec).generate(text, model=self._model_arg(spec, env), **kw)
+            status.update(input_tokens=g.input_tokens, output_tokens=g.output_tokens, latency_ms=g.latency_ms)
+            if g.error or not (g.answer or "").strip():
+                status["error"] = (g.error or "empty answer")[:200]
+            else:
+                status["ok"], result = True, g.answer
+        except Exception as e:  # noqa: BLE001 - a failing CLI is a failed step, not a crash
+            status["error"] = f"{type(e).__name__}: {str(e)[:150]}"
+        _write_step(step_dir, result, status)
+
+    def close(self, session_id: str) -> None:
+        if session_id in self.sessions:
+            self.sessions[session_id]["alive"] = False
+
+    def is_alive(self, session_id: str) -> bool:
+        return bool(self.sessions.get(session_id, {}).get("alive"))

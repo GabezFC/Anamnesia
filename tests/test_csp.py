@@ -64,3 +64,20 @@ def test_no_eval_or_document_write_in_frontend():
         src = f.read_text(encoding="utf-8")
         assert not re.search(r"\beval\s*\(|new Function\s*\(|document\.write\s*\(", src), f.name
         assert not re.search(r"\.on[a-z]+\s*=\s*['\"]", src), f.name
+
+
+def test_style_src_has_no_unsafe_inline():
+    csp = _client().get("/").headers["content-security-policy"]
+    directives = {d.strip().split(" ", 1)[0]: d.strip() for d in csp.split(";") if d.strip()}
+    assert directives["style-src"] == "style-src 'self'"
+    assert "unsafe-inline" not in csp
+
+
+def test_frontend_has_no_inline_style_attribute():
+    """style="..." in templates/HTML is blocked by the CSP: use utilities.css classes or data-css."""
+    bad = []
+    for p in [*(FRONTEND / "js").rglob("*.js"), FRONTEND / "index.html"]:
+        for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r"""(?<![\w.-])style\s*=\s*["'`]""", line) or "setAttribute('style'" in line:
+                bad.append(f"{p.relative_to(FRONTEND)}:{n}")
+    assert not bad, bad

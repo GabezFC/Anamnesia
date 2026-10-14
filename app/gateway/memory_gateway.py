@@ -26,6 +26,7 @@ from app.database.db import Database
 from app.gateway.budget_guard import BudgetGuard
 from app.gateway.context_builder import ModelContextBuilder
 from app.gateway.optimizer import MemoryOptimizer
+from app.retrieval.experiments import get_flags
 from app.retrieval.incremental_index import make_baseline_index
 from app.retrieval.graphify_hybrid import GraphIndex
 from app.retrieval.optional_stages import apply_optional_stages
@@ -172,15 +173,18 @@ class MemoryGateway:
         return jev.evaluate(query, candidates)
 
     def build_context(self, candidates, full_texts=None, budget: int | None = None, provenance=None,
-                      mark_unjudged: bool = False, nonce: bool = False):
+                      mark_unjudged: bool = False, nonce: bool = False, fit_query: str | None = None):
         oc = self.optimizer.cfg
         b = ModelContextBuilder(budget or self.retrieval_cfg.model_context_budget,
                                 self.retrieval_cfg.per_source_max_tokens,
                                 compact_headers=oc.enabled and oc.compact_headers,
                                 section_max_chars=oc.header_section_max_chars,
                                 screen_delivered=oc.enabled and oc.injection_flag,
-                                mark_unjudged=mark_unjudged, nonce=nonce)
-        return b.build(candidates, full_texts, provenance=provenance)
+                                mark_unjudged=mark_unjudged, nonce=nonce, fit_query=fit_query)
+        out = b.build(candidates, full_texts, provenance=provenance)
+        self.last_budget_stats = {"blocks_dropped_budget": b.blocks_dropped_budget,
+                                  "blocks_fitted_budget": b.blocks_fitted_budget}
+        return out
 
     def provenance_for(self, cands, pipeline: str):
         """Provenance lines for the delivered candidates — {} for the frozen reference pipeline.
@@ -291,7 +295,9 @@ class MemoryGateway:
                                                           mark_unjudged=pipeline not in FROZEN_PIPELINES,
                                                           nonce=pipeline not in FROZEN_PIPELINES
                                                           and os.environ.get("MG_CONTEXT_NONCE", "0").strip().lower()
-                                                          in ("1", "true", "on", "yes", "random"))
+                                                          in ("1", "true", "on", "yes", "random"),
+                                                          fit_query=query if (pipeline not in FROZEN_PIPELINES
+                                                                              and get_flags(self).budget_fit) else None)
         t1 = time.perf_counter()
 
         before = m.get("candidate_tokens_before_filter") or 0

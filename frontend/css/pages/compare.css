@@ -81,3 +81,18 @@
   font-weight: var(--font-bold);
   color: var(--success);
 }
+
+/* ANA-211 — responsividade do Laboratório: tabelas com rolagem horizontal, Lab em coluna */
+@media (max-width: 900px) {
+  .lab-view-container { gap: var(--space-4); padding: 0 var(--space-3); }
+  .lab-header, .lab-banner { flex-wrap: wrap; gap: var(--space-2); }
+  .lab-section-header { flex-wrap: wrap; gap: var(--space-2); }
+  .pipeline-flow-board { flex-wrap: wrap; }
+}
+@media (max-width: 640px) {
+  .lab-view-container { padding: 0 var(--space-2); }
+  .lab-header-left, .lab-header-right, .lab-banner-left, .lab-banner-right { width: 100%; flex-wrap: wrap; }
+  .lab-filters { flex-direction: column; align-items: stretch; }
+  .lab-field { min-width: 0; width: 100%; }
+  .table { min-width: 520px; }
+}

@@ -1,5 +1,8 @@
 # Anamnésia: local-first image. Built and verified with `docker build` + `anamnesia version` + GET /health.
-FROM python:3.14-slim
+# ANA-221: pinned by digest (multi-arch image index of python:3.14-slim, read from the Docker Hub registry
+# API on 2026-10-12 via HEAD /v2/library/python/manifests/3.14-slim). The digest freezes the base layer;
+# it does NOT receive security patches by itself: refresh it on purpose (docs/guides/QUICKSTART.md).
+FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \

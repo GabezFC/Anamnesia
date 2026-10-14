@@ -122,6 +122,12 @@ class ResultCache:
                 "hit_rate": round(self.hits / total, 4) if total else None}
 
 
+def _experiments_digest(gw) -> dict | None:
+    from app.retrieval.experiments import get_flags
+    exp = get_flags(gw)
+    return exp.digest() if exp.active() else None
+
+
 class MemoryOptimizer:
     def __init__(self, cfg: OptimizerConfig | None = None):
         self.cfg = cfg or OptimizerConfig()
@@ -275,6 +281,7 @@ class MemoryOptimizer:
             "optimizer": _d(self.cfg),
             "opt": _d(getattr(gw, "opt_cfg", None)),
             "graph": graph_id,
+            "experiments": _experiments_digest(gw),   # Onda 9: flipping a flag must change the key
         }
         raw = json.dumps(doc, sort_keys=True, default=str, ensure_ascii=False)
         return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]

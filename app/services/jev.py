@@ -239,7 +239,10 @@ def cache_key(query: str, c: Candidate, cfg: JevConfig, namespace: str = "") -> 
     Production passes "".
     """
     terms = sorted(_cache_terms(query))
-    raw = json.dumps([terms, c.content_hash, cfg.model, cfg.prompt_version, cfg.mode, namespace])
+    parts = [terms, c.content_hash, cfg.model, cfg.prompt_version, cfg.mode, namespace]
+    if getattr(cfg, "backend", "typesafe") != "typesafe":   # ANA-225: a local judge never reads paid-judge entries
+        parts += [cfg.backend, cfg.local_model]
+    raw = json.dumps(parts)
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
@@ -285,7 +288,8 @@ class JevService:
         if self._backend is None:
             if self._parent is not None:   # share one lazily-built backend with the parent (ANA-022)
                 return self._parent.backend
-            self._backend = TypeSafeBackend(self.cfg)
+            from app.services.jev_ollama import make_backend   # ANA-225: local judge, opt-in
+            self._backend = make_backend(self.cfg) or TypeSafeBackend(self.cfg)
         return self._backend
 
     # -- payload --------------------------------------------------------------

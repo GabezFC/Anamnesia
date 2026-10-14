@@ -66,8 +66,16 @@ def render_prompt(context: str, question: str) -> str:
 class ModelContextBuilder:
     def __init__(self, budget_tokens: int, per_source_max_tokens: int = 1500, compact_headers: bool = False,
                  section_max_chars: int = 60, screen_delivered: bool = False,
-                 mark_unjudged: bool = False, nonce: bool = False):
+                 mark_unjudged: bool = False, nonce: bool = False, fit_query: str | None = None,
+                 min_fit_tokens: int = 30):
         self.budget = budget_tokens
+        # ANA-237 (flag MG_EXP_BUDGET_FIT): with a query, a block that does not fit is re-cut query-aware
+        # (snippet.extract) down to what is left instead of being dropped when `remaining < 120`.
+        # None == the legacy behaviour. Counters feed the `blocks_dropped_budget` metric.
+        self.fit_query = fit_query
+        self.min_fit_tokens = min_fit_tokens
+        self.blocks_dropped_budget = 0
+        self.blocks_fitted_budget = 0
         self.per_source_max = per_source_max_tokens
         # Compact headers (optimization layer): the section attribute carries only the LAST heading,
         # capped. Measured 2026-09-28: <note> headers were ~23% of every delivered context, mostly
@@ -142,6 +150,17 @@ class ModelContextBuilder:
                 section = section[: self.section_max_chars - 1].rstrip() + "…"
         return f'<note source="{src}"{nn} section="{escape_attr(section)}"{rel}{warn}>\n{head}{text}\n</note>'
 
+    def _fit(self, text: str, remaining: int, c: Candidate) -> str:
+        """Query-aware cut of `text` to `remaining` tokens (ANA-237); never longer than the plain truncation."""
+        from app.services.snippet import extract
+        try:
+            res = extract(text, self.fit_query or "", remaining, heading=c.section.split(" > ")[-1])
+            if res.text and estimate_tokens(res.text) <= remaining:
+                return res.text
+        except Exception:  # noqa: BLE001 -- fitting must never break delivery
+            pass
+        return truncate_to_tokens(text, remaining)
+
     def _flag_delivered(self, c: Candidate, text: str) -> None:
         if not self.screen_delivered or (c.meta or {}).get("injection_flag"):
             return
@@ -175,9 +194,17 @@ class ModelContextBuilder:
             t = estimate_tokens(b)
             if used + t > self.budget:
                 remaining = self.budget - used - 40
-                if remaining < 120:
-                    continue
-                text = truncate_to_tokens(text, remaining)
+                if self.fit_query is not None:
+                    if remaining < self.min_fit_tokens:
+                        self.blocks_dropped_budget += 1
+                        continue
+                    text = self._fit(text, remaining, c)
+                    self.blocks_fitted_budget += 1
+                else:
+                    if remaining < 120:
+                        self.blocks_dropped_budget += 1
+                        continue
+                    text = truncate_to_tokens(text, remaining)
                 self._flag_delivered(c, text)
                 b = self.block(c, text, line)
                 t = estimate_tokens(b)

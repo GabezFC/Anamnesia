@@ -5,6 +5,7 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -42,3 +43,32 @@ jobs:
       # scripts/mcp_smoke.py and any script that needs a live `python -m app.main` server or a
       # headless Chrome/Playwright session are intentionally NOT run here — this job has neither.
       # They stay local/dev-only checks (front-end E2E: ver docs/FRONTEND_WORKSPACE.md).
+
+  # ANA-223: browser E2E in its OWN job (never blocks or slows the unit matrix above). Ubuntu only: the real PTY
+  # path there is the POSIX one; Chromium comes from Playwright. Runs on every trigger of this workflow (push, PR, manual dispatch);
+  # continue-on-error is intentionally NOT set. NOT verified on a real runner yet (see docs/guides/E2E.md).
+  e2e-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt playwright
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Browser E2E (scripts/e2e_workspace.py)
+        env:
+          ANAMNESIA_E2E: '1'
+          E2E_SERVER_PYTHON: python
+          E2E_PORT: '8123'
+        run: python -m pytest tests/e2e -q
+      - name: Upload E2E evidence
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: e2e-evidence
+          path: ${{ runner.temp }}/pytest-of-runner
+          if-no-files-found: ignore

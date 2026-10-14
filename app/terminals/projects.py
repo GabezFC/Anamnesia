@@ -53,6 +53,17 @@ def _is_within(root: Path, target: Path) -> bool:
     return target == root or root in target.parents
 
 
+def _is_link(path: str) -> bool:
+    """Symlink OR Windows junction / reparse point (os.path.islink is False for junctions)."""
+    try:
+        if os.path.islink(path):
+            return True
+        isj = getattr(os.path, "isjunction", None)
+        return bool(isj and isj(path))
+    except OSError:
+        return True
+
+
 def safe_join(project_path: str | os.PathLike, rel: str | os.PathLike = "") -> Path:
     """Resolve `rel` under `project_path`; raise PathEscapeError if the REAL path leaves it.
 
@@ -115,7 +126,10 @@ def search_names(project_path: str, q: str, rel: str = "", cap: int = SEARCH_CAP
     results, truncated, scanned = [], False, 0
     for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
         dirnames[:] = sorted(n for n in dirnames if n not in SKIP_DIRS)
-        for name in sorted(dirnames) + sorted(filenames):
+        # names inside a link are never listed; the link entry itself is shown but not descended into
+        linked = {n for n in dirnames if _is_link(os.path.join(dirpath, n))}
+        dirnames[:] = [n for n in dirnames if n not in linked]
+        for name in sorted(linked) + sorted(dirnames) + sorted(filenames):
             scanned += 1
             if scanned > SCAN_CAP:
                 truncated = True
@@ -162,7 +176,7 @@ def search_content(project_path: str, q: str, rel: str = "", cap: int = CONTENT_
 
     for dirpath, dirnames, filenames in walk():
         dirnames[:] = sorted(n for n in dirnames if n not in SKIP_DIRS and n.lower() not in SECRET_DIRS
-                             and not os.path.islink(os.path.join(dirpath, n)))
+                             and not _is_link(os.path.join(dirpath, n)))
         for name in sorted(filenames):
             if is_secret_file(name):
                 continue
@@ -171,7 +185,7 @@ def search_content(project_path: str, q: str, rel: str = "", cap: int = CONTENT_
                 break
             full = os.path.join(dirpath, name)
             try:
-                if os.path.islink(full):
+                if _is_link(full):
                     continue
                 size = os.stat(full).st_size
                 if size > max_file_bytes or not _is_within(root, Path(full).resolve()):

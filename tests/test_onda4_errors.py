@@ -17,7 +17,7 @@ from app.adapters.models.providers import AnthropicAdapter, GenerationResult, Op
     (401, "", "auth"), (403, "", "auth"), (429, "", "rate_limit"), (408, "", "timeout"), (504, "", "timeout"),
     (404, "model 'x' not found", "model_not_found"), (404, "", "model_not_found"), (404, "no route", "other"),
     (400, "This model's maximum context length is 8192 tokens", "context_overflow"),
-    (413, "", "context_overflow"), (400, "model does not exist", "model_not_found"), (400, "bad json", "other"),
+    (413, "", "context_overflow"), (400, "model does not exist", "model_not_found"), (400, "openai/x is not a valid model ID", "model_not_found"), (400, "bad json", "other"),
     (500, "", "provider_down"), (502, "", "provider_down"), (503, "", "provider_down"), (200, "", "other"),
 ])
 def test_status_mapping(status, body, kind):

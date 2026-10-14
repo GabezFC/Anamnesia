@@ -16,3 +16,16 @@
 .memory-actions { display: flex; gap: var(--space-2); }
 .memory-context { border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: var(--space-3); background: var(--bg-surface-subtle); }
 .memory-context-pre { margin: var(--space-2) 0 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-primary); }
+
+/* ANA-211 — responsividade da Memória */
+@media (max-width: 900px) {
+  .memory-page { padding: var(--space-4); }
+  .memory-file { max-width: 220px; }
+}
+@media (max-width: 640px) {
+  .memory-page { padding: var(--space-3); }
+  .memory-search { flex-direction: column; align-items: stretch; }
+  .memory-field, .memory-field-sm { min-width: 0; max-width: none; width: 100%; }
+  .memory-section .table { min-width: 480px; }
+  .memory-section, .memory-context { overflow-x: auto; }
+}

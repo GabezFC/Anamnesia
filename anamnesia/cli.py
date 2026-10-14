@@ -1,4 +1,4 @@
-"""`anamnesia` CLI: version | doctor | start.
+"""`anamnesia` CLI: version | doctor | start | mcp | search | index | memory-audit | vault-lint | ... (ANA-197).
 
 `doctor` is offline (no network calls) and never prints secret values: only yes/no.
 `start` reuses `app.main.main` (the same server as `python -m app.main`).
@@ -76,6 +76,10 @@ def collect_checks() -> list[tuple[str, str, bool, bool]]:
     tok = _token_present()
     rows.append(("local token (MG_LOCAL_TOKEN)", _yn(tok) + ("" if tok else " (created on first `start`)"), tok, False))
 
+    if os.environ.get("ANAMNESIA_OFFLINE") or os.environ.get("OFFLINE"):  # ANA-224 (report only; no network)
+        from app.services.offline import offline_enabled
+        rows.append(("OFFLINE", "on: chamadas externas bloqueadas" if offline_enabled() else "off", True, False))
+
     try:
         from config.benchmark import BenchmarkConfig
         db = Path(BenchmarkConfig().db_path)
@@ -100,14 +104,26 @@ def cmd_version(_args) -> int:
     return 0
 
 
-def cmd_doctor(_args) -> int:
+def cmd_doctor(args) -> int:
     rows = collect_checks()
+    from app.services.local_first import assess  # ANA-238: local-first grade (L0-L5), offline, no secret values
+    lf = assess()
+    fatal_fail = any(fatal and not ok for _, _, ok, fatal in rows)
+    if getattr(args, "json", False):
+        import json
+        print(json.dumps({"ok": not fatal_fail, "local_first": lf,
+                          "checks": [{"name": n, "detail": d, "ok": ok, "fatal": f} for n, d, ok, f in rows]},
+                         ensure_ascii=False, indent=2))
+        return 1 if fatal_fail else 0
     w = max(len(r[0]) for r in rows)
     print(f"{'check'.ljust(w)}  status  detail")
     for name, detail, ok, fatal in rows:
         status = "OK" if ok else ("FAIL" if fatal else "warn")
         print(f"{name.ljust(w)}  {status.ljust(6)}  {detail}")
-    return 1 if any(fatal and not ok for _, _, ok, fatal in rows) else 0
+    print(f"\nlocal-first: {lf['label']}  (OFFLINE=1 {'ativo' if lf['offline_enforced'] else 'inativo'})")
+    for cap, v in lf["capabilities"].items():
+        print(f"  {cap.ljust(14)} {v['where'].ljust(8)} {v['detail']}")
+    return 1 if fatal_fail else 0
 
 
 def cmd_start(_args) -> int:
@@ -116,16 +132,53 @@ def cmd_start(_args) -> int:
     return 0
 
 
+# ANA-197: ONE entrypoint. These subcommands delegate verbatim (argv passthrough) to the existing module CLI
+# (`app.cli.main`, a.k.a. `python -m memory_gateway`), which stays the single implementation.
+PASSTHROUGH = ("search", "index", "memory-audit", "vault-lint", "vault-check", "benchmark", "sweep", "stats", "info",
+               "db-maintenance", "db-prune")
+
+
+def cmd_mcp(_args) -> int:
+    """Run the MCP server over stdio (same as `python -m app.mcp.server` / the `anamnesia-mcp` script)."""
+    from app.mcp.server import main as mcp_main
+    mcp_main()
+    return 0
+
+
+def cmd_passthrough(args) -> int:
+    from app.cli.main import main as legacy_main
+    try:
+        legacy_main([args.cmd, *args.rest])
+    except SystemExit as e:           # the legacy CLI exits through sys.exit(code | message)
+        if e.code is None or isinstance(e.code, int):
+            return e.code or 0
+        print(e.code, file=sys.stderr)
+        return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="anamnesia", description="Anamnésia / Memory Gateway")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("version", help="print version").set_defaults(func=cmd_version)
-    sub.add_parser("doctor", help="offline environment checks").set_defaults(func=cmd_doctor)
+    dp = sub.add_parser("doctor", help="offline environment checks + local-first grade (L0-L5)")
+    dp.add_argument("--json", action="store_true", help="machine-readable output")
+    dp.set_defaults(func=cmd_doctor)
     sub.add_parser("start", help="start REST API + dashboard (same as python -m app.main)").set_defaults(func=cmd_start)
+    sub.add_parser("mcp", help="run the MCP server over stdio (same as the anamnesia-mcp script)").set_defaults(func=cmd_mcp)
+    for name in PASSTHROUGH:
+        sp = sub.add_parser(name, add_help=False, help=f"same as `python -m memory_gateway {name}` (extra args are forwarded)")
+        sp.add_argument("rest", nargs="*")
+        sp.set_defaults(func=cmd_passthrough)
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else list(argv)
+    from app.services.offline import install_if_enabled
+    install_if_enabled()  # ANA-224
+    if argv and argv[0] in PASSTHROUGH:       # forwarded verbatim: argparse REMAINDER cannot take a leading --option
+        return cmd_passthrough(argparse.Namespace(cmd=argv[0], rest=argv[1:]))
     args = build_parser().parse_args(argv)
     return args.func(args)
 

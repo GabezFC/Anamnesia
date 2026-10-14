@@ -8,10 +8,11 @@
  */
 import { icon } from '../icons.js';
 import { I18N } from '../i18n.js';
-import { esc, fmtDate } from '../format.js';
+import { esc, fmtDate, fmtNumber } from '../format.js';
 import { searchPreview, lastSearch, isUnavailable } from '../anamnesia-api.js';
 import { skeletonTable, skeletonKpis, loadingBlock } from '../components/skeleton.js';
 import { emptyState } from '../components/empty-state.js';
+import { extrasHtml, mountExtras } from './memory-extras.js';
 
 const st = {
   q: '', scope: '', max: 8,
@@ -20,7 +21,7 @@ const st = {
   showContext: false,
 };
 
-const nf = (v) => (typeof v === 'number' && Number.isFinite(v) ? v.toLocaleString() : '—');
+const nf = (v) => fmtNumber(v);
 const sc = (v) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(3) : '—');
 
 export function renderSourcesTable(sources) {
@@ -113,13 +114,14 @@ export function render() {
       </form>
       <section class="card memory-section" aria-labelledby="mem-src-title">
         <div class="card-header"><div class="card-title" id="mem-src-title">${esc(t.sourcesTitle)}</div></div>
-        <div data-bind="mem-preview">${previewBody()}</div>
+        <div data-bind="mem-preview" aria-live="polite">${previewBody()}</div>
       </section>
       <section class="card memory-section" aria-labelledby="mem-last-title">
         <div class="card-header"><div class="card-title" id="mem-last-title">${esc(t.lastTitle)}</div>
           <button type="button" class="btn btn-ghost btn-sm" data-action="memory-refresh-last">${icon('refresh', '', 13)} ${esc(t.refresh)}</button></div>
         <div data-bind="mem-last">${lastBody()}</div>
       </section>
+      ${extrasHtml()}
     </div>`;
 }
 
@@ -180,7 +182,8 @@ export function mount(root) {
   };
   root.addEventListener('click', onClick);
   root.addEventListener('submit', onSubmit);
-  root._memoryCleanup = () => { root.removeEventListener('click', onClick); root.removeEventListener('submit', onSubmit); };
+  const stopExtras = mountExtras(root);
+  root._memoryCleanup = () => { root.removeEventListener('click', onClick); root.removeEventListener('submit', onSubmit); stopExtras(); };
   loadLast(root);
 }
 

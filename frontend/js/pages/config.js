@@ -9,7 +9,7 @@
 
 import { icon } from '../icons.js';
 import { I18N, getLang, setLang } from '../i18n.js';
-import { esc } from '../format.js';
+import { esc, fmtNumber } from '../format.js';
 import { mockPresets, mockConnections } from '../mock-data.js';
 import { gatewayState } from '../live.js';
 import { call, getSettings, putSettings, costBudget, costByRole, isUnavailable, fmtUsd } from '../anamnesia-api.js';
@@ -238,8 +238,8 @@ const toggleRow = (action, on, title, desc) => `
 
 const sectionHead = (title, desc) => `
   <div>
-    <h2 style="font-size: var(--text-md); font-weight: var(--font-semibold);">${title}</h2>
-    <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">${desc}</p>
+    <h2 class="u-b3753b">${title}</h2>
+    <p class="u-47c8df">${desc}</p>
   </div>`;
 
 export function render() {
@@ -265,7 +265,7 @@ export function render() {
   if (!settings) settings = normalizeSettings({});
 
   const backendNotice = currentState === 'backend-unavailable' ? `
-    <div class="callout-notice" style="margin-bottom: var(--space-4);">
+    <div class="callout-notice u-36fc7e">
       <div class="callout-notice-icon">${icon('info', '', 18)}</div>
       <div class="callout-notice-body">
         <strong>${I18N.app.backendUnavailableTitle}</strong>
@@ -287,8 +287,8 @@ export function render() {
       ${backendNotice}
       <div class="connections-header-bar">
         <div>
-          <h1 style="font-size: var(--text-2xl); font-weight: var(--font-semibold);">${I18N.nav.config}</h1>
-          <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">${t.subtitle}</p>
+          <h1 class="u-23e58e">${I18N.nav.config}</h1>
+          <p class="u-47c8df">${t.subtitle}</p>
         </div>
       </div>
 
@@ -307,7 +307,7 @@ function renderSubagentsTab(t) {
   }
   const sel = selectedPresetId();
   return `
-    <div style="display: flex; flex-direction: column; gap: var(--space-6);">
+    <div class="u-59ee07">
       ${sectionHead(t.presetsTitle, t.subagentsDesc)}
       <div class="presets-grid" role="radiogroup">
         ${mockPresets.map((preset) => {
@@ -318,7 +318,7 @@ function renderSubagentsTab(t) {
               <div class="preset-card-header">
                 <div>
                   <div class="preset-name">${esc(preset.name)}</div>
-                  <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">${esc(preset.description)}</div>
+                  <div class="u-32b9cb">${esc(preset.description)}</div>
                 </div>
                 <span class="preset-tag">${esc(preset.tag)}</span>
               </div>
@@ -377,7 +377,7 @@ function renderGeneralTab(t) {
         ${inlineError && activeTab === 'general' ? `<span class="config-field-error" role="alert">${esc(inlineError)}</span>` : ''}
       </div>
 
-      <div style="display: flex; justify-content: flex-end;">
+      <div class="u-98a939">
         <button class="btn btn-primary" data-action="save-max-tokens">${I18N.app.save}</button>
       </div>
     </div>`;
@@ -425,7 +425,7 @@ function renderBudgetTab(t) {
         ${inlineError && activeTab === 'budget' ? `<span class="config-field-error" role="alert">${esc(inlineError)}</span>` : ''}
       </div>
 
-      <div style="display: flex; justify-content: flex-end;">
+      <div class="u-98a939">
         <button class="btn btn-primary" data-action="save-budget">${t.budgetSave}</button>
       </div>
     </div>`;
@@ -439,7 +439,7 @@ function roleLabel(t, role) {
 function renderByRole(t) {
   const items = byRole && Array.isArray(byRole.items) ? byRole.items : [];
   if (!items.length) return emptyState({ title: t.byRoleEmpty, description: t.byRoleEmptyDesc, variant: 'cost', compact: true });
-  const fmtN = (n) => (typeof n === 'number' ? n.toLocaleString() : '—');
+  const fmtN = (n) => fmtNumber(n);
   return `
     <table class="config-role-table">
       <thead><tr><th>${t.colRole}</th><th>${t.colCalls}</th><th>${t.colTokens}</th><th>${t.colCost}</th></tr></thead>
@@ -462,7 +462,7 @@ function renderEconomyTab(t) {
   const pct = s.budget.alert_pct ?? 80;
   const alertOn = budgetStatus ? !!budgetStatus.alert : null;
   return `
-    <div style="display: flex; flex-direction: column; gap: var(--space-6);">
+    <div class="u-59ee07">
       <div class="gateway-form-card">
         ${sectionHead(t.economyTitle, t.economyDesc)}
         ${toggleRow('toggle-auto-jev-opt', s.auto_graphify_jev_opt, t.ecoJevOpt, t.ecoJevOptDesc)}
@@ -486,7 +486,7 @@ function renderEconomyTab(t) {
 function renderKeysTab(t) {
   const providers = (mockConnections.models || []).filter((m) => m.env_keys && m.env_keys.length);
   return `
-    <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+    <div class="u-a19567">
       ${sectionHead(t.keysTitle, t.keysDesc)}
       ${providers.length ? `<div class="cards-grid">${providers.map((p) => `
         <div class="connection-card" data-connection-id="${p.id}">
@@ -531,7 +531,7 @@ function renderGatewayTab(t) {
       ${toggleRow('toggle-prefilter', gatewayConfig.enablePrefilter, t.gatewayPreFilter, t.gatewayPreFilterDesc)}
       ${toggleRow('toggle-cache', gatewayConfig.enableSemanticCache, t.gwCacheTitle, t.gwCacheDesc)}
 
-      <div style="display: flex; justify-content: flex-end; margin-top: var(--space-2);">
+      <div class="u-b6ea2e">
         <button class="btn btn-primary" data-action="save-gateway-config">${I18N.app.save}</button>
       </div>
     </div>`;
@@ -541,11 +541,11 @@ function renderActiveConfigTab(t) {
   const preset = mockPresets.find((p) => p.id === selectedPresetId());
   const s = settings;
   const kv = (label, value) => `<div class="readonly-kv-item"><span class="readonly-kv-label">${label}</span>${value}</div>`;
-  const val = (v, style = '') => `<span class="readonly-kv-value"${style ? ` style="${style}"` : ''}>${v}</span>`;
+  const val = (v, css = '') => `<span class="readonly-kv-value"${css ? ` data-css="${esc(css)}"` : ''}>${v}</span>`;
   const onOff = (v) => val(v ? t.enabled : t.disabled, `color: ${v ? 'var(--success)' : 'var(--text-tertiary)'};`);
   const cap = (v) => (v == null ? t.noCap : fmtUsd(v));
   return `
-    <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+    <div class="u-a19567">
       ${sectionHead(t.activeTitle, t.activeDesc)}
       <div class="readonly-kv-grid">
         ${kv(t.activePreset, val(esc(preset ? preset.name : selectedPresetId())))}
@@ -554,10 +554,10 @@ function renderActiveConfigTab(t) {
         ${kv(t.activePrune, val(esc(gatewayConfig.pruneThreshold)))}
         ${kv(t.activeVault, val(esc(gatewayConfig.vaultPath), 'font-family: var(--font-mono); font-size: 12px;'))}
         ${kv(t.activePipeline, val(t[PIPELINE_KEY[s.default_pipeline]]))}
-        ${kv(t.activeMaxTokens, val(s.max_tokens_per_query == null ? t.noCap : s.max_tokens_per_query.toLocaleString()))}
+        ${kv(t.activeMaxTokens, val(s.max_tokens_per_query == null ? t.noCap : fmtNumber(s.max_tokens_per_query)))}
         ${kv(t.activeBudget, val(`${cap(s.budget.daily_usd)} / ${cap(s.budget.monthly_usd)}`))}
         ${kv(t.activeLanguage, val(langFromServer(s.language) === 'en' ? 'English' : 'Português (Brasil)'))}
-        ${kv(t.activeDaemon, `<span class="readonly-kv-value" style="color: var(--success); display: flex; align-items: center; gap: 6px;"><span class="dot dot-success"></span> ${t.activeDaemonOn}</span>`)}
+        ${kv(t.activeDaemon, `<span class="readonly-kv-value u-032ebf"><span class="dot dot-success"></span> ${t.activeDaemonOn}</span>`)}
       </div>
     </div>`;
 }

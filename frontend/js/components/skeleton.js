@@ -18,8 +18,8 @@ const dim = (v, fallback) => {
 };
 
 export function skeleton({ width = '100%', height = 14, radius, className = '' } = {}) {
-  const r = radius != null ? `border-radius:${dim(radius, '4px')};` : '';
-  return `<div class="skeleton ${esc(className)}" aria-hidden="true" style="width:${dim(width, '100%')};height:${dim(height, '14px')};${r}"></div>`;
+  const r = radius != null ? `;border-radius:${dim(radius, '4px')}` : '';
+  return `<div class="skeleton ${esc(className)}" aria-hidden="true" data-css="${esc(`width:${dim(width, '100%')};height:${dim(height, '14px')}${r}`)}"></div>`;
 }
 
 export function skeletonLines(n = 3, { widths = ['100%', '92%', '64%'], height = 12 } = {}) {
@@ -35,13 +35,13 @@ export function skeletonKpis(n = 4) {
 }
 
 export function skeletonTable({ rows = 6, cols = 5 } = {}) {
-  const row = `<div class="skeleton-row" style="grid-template-columns:repeat(${cols},1fr)">${Array.from({ length: cols }, () => skeleton({ height: 12 })).join('')}</div>`;
+  const row = `<div class="skeleton-row" data-css="grid-template-columns:repeat(${Number(cols) || 1},1fr)">${Array.from({ length: cols }, () => skeleton({ height: 12 })).join('')}</div>`;
   return `<div class="skeleton-table" aria-hidden="true">${row.repeat(rows)}</div>`;
 }
 
 export function spinner({ size = 18, label = '' } = {}) {
   const s = Number(size) || 18;
-  return `<span class="spinner-wrap" role="status" aria-live="polite"><span class="spinner" style="width:${s}px;height:${s}px" aria-hidden="true"></span>${label ? `<span class="spinner-label">${esc(label)}</span>` : '<span class="sr-only">…</span>'}</span>`;
+  return `<span class="spinner-wrap" role="status" aria-live="polite"><span class="spinner" data-css="width:${s}px;height:${s}px" aria-hidden="true"></span>${label ? `<span class="spinner-label">${esc(label)}</span>` : '<span class="sr-only">…</span>'}</span>`;
 }
 
 /** Wrapper acessível: envolve skeletons e anuncia o carregamento a leitores de tela. */

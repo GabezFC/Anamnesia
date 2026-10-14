@@ -1,0 +1,85 @@
+/* ==========================================================================
+   ONDA 7 — estados honestos, banners, acessibilidade, explorador/inspetor/waterfall
+   Só tokens do tema; sem fontes/URLs externas.
+   ========================================================================== */
+
+/* "indisponível" (ANA-200): nunca 0, nunca mock */
+.lab-na {
+  color: var(--text-tertiary);
+  font-style: italic;
+  font-weight: var(--font-medium);
+}
+.lab-note { font-size: var(--text-xs); color: var(--text-secondary); margin: var(--space-2) 0; line-height: 1.5; }
+.lab-n { font-size: var(--text-2xs); color: var(--text-tertiary); font-family: var(--font-mono); }
+.lab-subtitle { font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-primary); margin: var(--space-4) 0 var(--space-2); }
+.lab-filters { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
+.lab-field { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-xs); color: var(--text-secondary); min-width: 130px; }
+.field-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
+
+/* Banner de modo demonstração (ANA-201) e selo de alertas de regressão (ANA-202) */
+.demo-banner {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--warning-muted); color: var(--warning-text);
+  border-bottom: 1px solid var(--warning-border);
+  font-size: var(--text-xs);
+}
+.badge-alert {
+  background: var(--danger-muted); color: var(--danger-text); border: 1px solid var(--danger-border);
+  text-decoration: none; font-weight: var(--font-semibold);
+}
+.badge-alert:hover { filter: brightness(0.97); }
+
+/* Chips de severidade (saúde dos provedores) */
+.chip-success { background: var(--success-muted); color: var(--success-text); border: 1px solid var(--success-border); }
+.chip-warning { background: var(--warning-muted); color: var(--warning-text); border: 1px solid var(--warning-border); }
+.chip-danger { background: var(--danger-muted); color: var(--danger-text); border: 1px solid var(--danger-border); }
+.chip-neutral { background: var(--bg-surface-subtle); color: var(--text-tertiary); border: 1px solid var(--border-default); }
+
+/* Acessibilidade (ANA-206): skip link, foco visível, redução de movimento */
+.skip-link {
+  position: absolute; left: var(--space-2); top: -48px; z-index: 1000;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-surface); color: var(--text-primary);
+  border: 2px solid var(--primary); border-radius: var(--radius-md);
+}
+.skip-link:focus { top: var(--space-2); }
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.app-content:focus, .lab-tab-content:focus { outline: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* Cores por fonte (inspetor de contexto) — derivadas dos tokens de gráfico */
+.src-c0 { --src: var(--chart-1); } .src-c1 { --src: var(--chart-2); } .src-c2 { --src: var(--chart-3); } .src-c3 { --src: var(--chart-4); }
+.src-c4 { --src: var(--chart-5); } .src-c5 { --src: var(--chart-6); } .src-c6 { --src: var(--chart-7); } .src-c7 { --src: var(--chart-8); }
+.src-chip { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; background: var(--src, var(--chart-1)); }
+.ctx-block { border-left: 4px solid var(--src, var(--chart-1)); padding-left: var(--space-3); margin-bottom: var(--space-3); }
+.ctx-block header { font-size: var(--text-xs); color: var(--text-secondary); }
+.tok-bar { display: block; height: 8px; width: var(--w, 0%); background: var(--chart-2); border-radius: 4px; min-width: 2px; }
+
+/* Explorador A×B */
+.exp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.exp-list { margin: 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: 4px; font-size: var(--text-xs); }
+.exp-list code { font-family: var(--font-mono); word-break: break-all; }
+.ab-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
+.ab-files { margin: 0; padding-left: var(--space-4); font-size: var(--text-xs); word-break: break-all; }
+.ab-better { color: var(--success); font-weight: var(--font-semibold); }
+.ab-worse { color: var(--danger); font-weight: var(--font-semibold); }
+.ab-pick .is-picked { font-weight: var(--font-bold); }
+
+/* Trace waterfall (ANA-209) */
+.wf-svg { width: 100%; max-width: 720px; height: auto; display: block; }
+.wf-svg .chart-axis-text { fill: var(--text-secondary); font-size: 11px; }
+
+/* Lab: abas como navegação por links, com rolagem horizontal em telas estreitas */
+.lab-nav-bar { overflow-x: auto; }
+.table-container { overflow-x: auto; }
+.grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-4); }
+
+@media (max-width: 900px) {
+  .exp-grid, .ab-cols { grid-template-columns: 1fr; }
+}

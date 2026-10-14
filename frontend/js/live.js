@@ -1,21 +1,51 @@
 /**
  * LIVE DATA LAYER — liga o design (que lê os arrays de mock-data.js) ao backend real do Anamnésia.
  * Os arrays/objetos do mock são preenchidos IN PLACE antes do primeiro render. Se uma API estiver
- * indisponível, o mock continua (selo "Dados de demonstração" em window.__liveDemo).
+ * indisponível, o mock continua e o bloco entra em `live.demo` — o shell mostra UM banner global
+ * "Dados de demonstração: <blocos>" (ANA-201) e nunca apresenta número de mock como real.
+ * O Laboratório (#/compare) NÃO usa mock: lê a API em lab-data.js (ANA-200).
  * Terminais: xterm.js real ligado ao PTY local da sessão, dentro de [data-terminal-mount].
  */
 import {
   mockProjects, mockProfiles, mockSessions, mockFiles, mockConnections, mockPresets,
-  mockCostSummary, mockBudget, mockCalls, mockBenchmark,
+  mockCostSummary, mockBudget, mockCalls,
 } from './mock-data.js';
 import * as A from './anamnesia-api.js';
 import { call } from './anamnesia-api.js';
 import { SessionTerminal } from './terminals.js';
+import { fmtTime } from './format.js';
 
-export const live = { demo: new Set(), projects: false, sessions: false };
+export const live = { demo: new Set(), projects: false, sessions: false, health: { state: 'unknown', ms: null, warnings: [] }, alerts: [] };
+
+/** Blocos do shell que estão em modo demonstração (mock mantido porque a API falhou). */
+export const demoBlocks = () => [...live.demo];
+export const isDemo = (block) => live.demo.has(block);
+
+const SLOW_MS = 1500;
+/** Saúde real do servidor local (GET /health). Nunca lança. */
+export async function checkHealth() {
+  const t0 = performance.now();
+  try {
+    const r = await fetch('/health', { cache: 'no-store' });
+    const ms = Math.round(performance.now() - t0);
+    let warnings = [];
+    if (r.ok) { try { const j = await r.json(); warnings = Array.isArray(j?.warnings) ? j.warnings : []; } catch { warnings = []; } }
+    live.health = { state: !r.ok ? 'error' : ms > SLOW_MS ? 'warn' : 'ok', ms, warnings };
+  } catch { live.health = { state: 'error', ms: null }; }
+  return live.health;
+}
+
+/** Alertas de regressão (ANA-202): lista vazia quando a API falha — nunca inventa. */
+export async function refreshAlerts() {
+  try {
+    const r = await call('GET', '/api/alerts');
+    live.alerts = Array.isArray(r?.alerts) ? r.alerts : [];
+  } catch { live.alerts = []; }
+  return live.alerts;
+}
 
 const fmtK = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
-const hhmm = (ts) => new Date(ts * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const hhmm = (ts) => fmtTime(ts);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const replace = (arr, next) => { arr.splice(0, arr.length, ...next); };
 const safe = async (name, fn) => {
@@ -140,7 +170,7 @@ async function loadCosts() {
   const items = page.items || [];
   replace(mockCalls, items.map((c) => ({
     id: esc(c.run_id), ts: c.created_at, when: hhmm(c.created_at), project: esc(c.project || '—'), agent: esc(c.client || c.agent || '—'),
-    pipeline: esc(c.pipeline), context_tokens: A.lvValue(c.context_tokens) ?? 0,
+    pipeline: esc(c.pipeline), context_tokens: A.lvValue(c.context_tokens), // null = indisponível (ANA-200), nunca 0 fabricado
     cost_usd: { value: A.lvValue(c.cost_usd), origin: ORIGIN[A.lvOrigin(c.cost_usd)] || 'unavailable' },
   })));
   const money = A.lvValue(sum.cost_usd);
@@ -154,51 +184,13 @@ async function loadCosts() {
     saved_tokens_est: { value: saved, origin: saved == null ? 'unavailable' : 'estimated', label: saved == null ? 'indisponível' : `${fmtK(saved)} tok` },
   });
   const b = sum.budget || {};
-  const mk = (x, fallback) => ({
-    spent: x?.spent_usd ?? 0, limit: x?.ceiling_usd ?? fallback, currency: 'US$',
-    pct: x?.ratio != null ? x.ratio * 100 : 0, status: x?.status || 'ok', statusLabel: x?.ceiling_usd == null ? 'Sem teto definido' : 'Normal',
+  // ANA-200: sem medição => null (a UI mostra "indisponível"), nunca 0 nem limite inventado.
+  const mk = (x) => ({
+    spent: x?.spent_usd ?? null, limit: x?.ceiling_usd ?? null, currency: 'US$',
+    pct: x?.ratio != null ? x.ratio * 100 : null, status: x?.status || 'unavailable',
+    statusLabel: x?.ceiling_usd == null ? 'Sem teto definido' : 'Normal',
   });
-  Object.assign(mockBudget, { daily: mk(b.day, 2), monthly: mk(b.month, 50) });
-}
-
-/* ------------------------------------------------------------------ benchmark (só #/compare) */
-async function loadBenchmark() {
-  const [stats, runs] = await Promise.all([call('GET', '/benchmark/stats'), call('GET', '/benchmark/runs?limit=500')]);
-  const raw = stats.groups || [];
-  if (!raw.length) throw new Error('sem benchmark');
-  // um grupo por pipeline: agrega (média ponderada pelo nº de execuções) os grupos agente/provedor/modelo
-  const byPipe = new Map();
-  for (const g of raw) { if (!byPipe.has(g.pipeline)) byPipe.set(g.pipeline, []); byPipe.get(g.pipeline).push(g); }
-  const groups = [...byPipe.entries()].map(([pipeline, gs]) => {
-    const n = gs.reduce((a, g) => a + (g.runs || 0), 0) || 1;
-    const out = { pipeline, runs: n };
-    for (const k of Object.keys(gs[0])) {
-      if (gs[0][k] && typeof gs[0][k] === 'object' && 'mean' in gs[0][k]) {
-        out[k] = { mean: gs.reduce((a, g) => a + (g[k]?.mean ?? 0) * (g.runs || 0), 0) / n };
-      }
-    }
-    return out;
-  });
-  const base = groups.find((g) => g.pipeline === 'baseline') || groups[0];
-  const r1 = (v) => Math.round(v * 10) / 10;
-  const m = (g, k) => g?.[k]?.mean ?? 0;
-  const pipelines = groups.map((g) => {
-    const ctx = m(g, 'context_tokens'), cand = m(g, 'candidate_tokens_before_filter');
-    const lat = m(g, 'total_latency_ms');
-    return {
-      id: g.pipeline, name: g.pipeline, description: `Pipeline ${g.pipeline} (${g.runs} execuções reais)`,
-      quality_score: 0, diff_baseline: g === base ? '+0.0%' : '—',
-      context_tokens_avg: Math.round(cand), tokens_wasted_avg: Math.max(0, Math.round(cand - ctx)), total_latency_ms: Math.round(lat),
-      stages_latency: { query: 0, retrieval: r1(m(g, 'retrieval_latency_ms')), graphify: 0, prefilter: 0, jev: 0, filter: r1(m(g, 'filter_latency_ms')), context: 0, model: r1(m(g, 'generation_latency_ms')) },
-      consumer_cost_per_query: 0, judge_cost_per_query: 0, total_cost_per_query: 0, cost_per_1k_tokens: 0,
-      p_value: null, ci_95: '[-]', status: g === base ? 'baseline' : 'measured', seal: 'experimental', seal_label: 'Dados reais',
-    };
-  });
-  mockBenchmark.meta = {
-    total_runs: runs.length, last_benchmark: runs[0] ? hhmm(runs[0].created_at) : '—',
-    dataset_name: 'Execuções reais do gateway', evaluator_model: '—', baseline_pipeline: base.pipeline,
-  };
-  mockBenchmark.pipelines = pipelines;
+  Object.assign(mockBudget, { daily: mk(b.day), monthly: mk(b.month) });
 }
 
 /* ------------------------------------------------------------------ terminais xterm reais */
@@ -237,9 +229,10 @@ export function installTerminalObserver() {
 export async function loadLive() {
   await Promise.all([
     safe('workspace', loadWorkspace), safe('connections', loadConnections), safe('presets', loadPresets),
-    safe('costs', loadCosts), safe('benchmark', loadBenchmark), safe('gateway', loadGatewayConfig),
+    safe('costs', loadCosts), safe('gateway', loadGatewayConfig),
   ]);
   window.__liveDemo = [...live.demo];
+  await Promise.all([checkHealth(), refreshAlerts()]);
 }
 
 export async function testConn(id) { return A.testConnection(id); }

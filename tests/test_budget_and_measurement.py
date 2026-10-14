@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     monkeypatch.delenv(bg.ENV_FLAG, raising=False)
+    monkeypatch.delenv(bg.DEGRADE_FLAG, raising=False)
     monkeypatch.delenv(te.ENV_CALIBRATION, raising=False)
 
 
@@ -138,7 +139,8 @@ def make_gw(tiny_vault, tmp_path, backend):
     return gw
 
 
-def test_gateway_default_unchanged_when_exceeded(tiny_vault, tmp_path):
+def test_gateway_default_unchanged_when_exceeded(tiny_vault, tmp_path, monkeypatch):
+    monkeypatch.setenv(bg.DEGRADE_FLAG, "0")   # T6.4: with a ceiling configured the default is now ON; =0 = warn only
     be = CountingBackend()
     gw = make_gw(tiny_vault, tmp_path, be)
     r = gw.search("Qual o banco escolhido?", "graphify_jev", 5, persist=False)
@@ -151,6 +153,7 @@ def test_gateway_default_unchanged_when_exceeded(tiny_vault, tmp_path):
 
 def test_gateway_warn_off_restores_legacy_metrics(tiny_vault, tmp_path, monkeypatch):
     monkeypatch.setenv(bg.WARN_FLAG, "0")
+    monkeypatch.setenv(bg.DEGRADE_FLAG, "0")   # T6.4: ceiling => degrade default ON; isolate the warn path
     be = CountingBackend()
     gw = make_gw(tiny_vault, tmp_path, be)
     r = gw.search("Qual o banco escolhido?", "graphify_jev", 5, persist=False)

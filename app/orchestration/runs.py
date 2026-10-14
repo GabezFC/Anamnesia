@@ -175,6 +175,37 @@ class Run:
             return None
 
 
+def recover_orphans(project_path, live_run_ids=()) -> list:
+    """ANA-196: runs left in `running`/`planned` by a process that died have no thread and never finish.
+    Mark every such run NOT in `live_run_ids` as failed with reason `orphaned` (event log keeps the trail).
+    Returns the recovered run ids. Idempotent; unreadable runs are skipped; never raises for a bad project."""
+    try:
+        root = runs_root(project_path)
+    except RunError:
+        return []
+    live = set(live_run_ids)
+    out: list = []
+    if not root.is_dir():
+        return out
+    for d in sorted(root.iterdir()):
+        if not RUN_ID_RE.match(d.name) or d.name in live or not (d / "summary.json").is_file():
+            continue
+        try:
+            r = Run.load(project_path, d.name)
+            if r.state not in ("running", "planned"):
+                continue
+            with r._lock:
+                for st in r.summary.get("steps", []):
+                    if st.get("state") in ("running", "pending"):
+                        st["state"] = "failed"
+                        st["error"] = "orphaned"
+                r.transition("failed", "orphaned")
+            out.append(d.name)
+        except (RunError, OSError, ValueError, KeyError):
+            continue
+    return out
+
+
 def list_runs(project_path) -> list:
     """Summaries of every run under the project, newest first. Unreadable entries are skipped."""
     try:

@@ -54,6 +54,8 @@ uv tool install git+https://github.com/GabezFC/Anamnesia.git
 ```bash
 anamnesia doctor     # confere o ambiente, sem rede e sem imprimir segredos
 anamnesia start      # sobe a API + painel em http://127.0.0.1:8000
+anamnesia mcp        # servidor MCP (stdio); também disponível como `anamnesia-mcp` (ANA-197)
+anamnesia search "consulta"   # demais comandos (index, memory-audit, vault-lint...) passam pelo mesmo `anamnesia`
 ```
 ✅ ambos executados. `doctor` mostra uma tabela `OK` / `warn` / `FAIL`:
 

@@ -10,6 +10,7 @@ import re
 import sqlite3
 import threading
 
+from app.retrieval.experiments import bm25_expr
 from app.schemas.models import Candidate
 from app.services.obsidian import ObsidianVault, frontmatter_status, split_sections
 
@@ -62,23 +63,61 @@ class BaselineIndex:
             self.sections_indexed = n
             self.files_indexed = len(files)
 
-    def search(self, query: str, limit: int = 100) -> list[Candidate]:
+    def search(self, query: str, limit: int = 100, exp=None, scope=None) -> list[Candidate]:
+        """`exp`/`scope` are the Onda 9 experiment hooks (app/retrieval/experiments.py). Both None == the
+        legacy query, unchanged (ANA-226: its `bm25(sec, 2.0, 1.0)` weighted the UNINDEXED `file` column)."""
         if self.conn is None:
             self.build()
+        if exp is not None:
+            return self._search_experimental(query, limit, exp, scope)
         terms = query_terms(query)
         if not terms:
             return []
         match = " OR ".join('"' + t.replace('"', "") + '"' for t in terms)
         with self._lock:
             rows = self.conn.execute(
-                # section column weighted 2x body; archived notes are demoted by rank, never hidden.
-                "SELECT file, section, body, status, line, bm25(sec, 2.0, 1.0) AS r FROM sec WHERE sec MATCH ?"
+                # ANA-226: weights are per column in table order (file, section, body, ...). The old
+                # `bm25(sec, 2.0, 1.0)` gave 2.0 to the UNINDEXED `file` column and 1.0 to `section` (no
+                # heading boost at all); bm25_expr() puts the weight on `section`. Archived notes are demoted
+                # by rank, never hidden.
+                f"SELECT file, section, body, status, line, {bm25_expr(None)} AS r FROM sec WHERE sec MATCH ?"
                 " ORDER BY r LIMIT ?",
                 (match, limit),
             ).fetchall()
         out = []
         for i, (file, section, body, status, line, r) in enumerate(rows):
             score = -float(r)  # bm25() is lower-is-better
+            if status == "arquivado":
+                score *= 0.5
+            out.append(Candidate(
+                candidate_id=f"b{i:03d}:{file}#L{line}",
+                source_file=file, section=section, snippet=body, score=score, origin="baseline",
+                meta={"line": line, "status": status},
+            ))
+        out.sort(key=lambda c: -c.score)
+        return out
+
+    def _search_experimental(self, query: str, limit: int, exp, scope) -> list[Candidate]:
+        from app.retrieval.experiments import bm25_expr, fts_match
+        match = fts_match(query, exp, query_terms)
+        if not match:
+            return []
+        sql = (f"SELECT file, section, body, status, line, {bm25_expr(exp)} AS r FROM sec WHERE sec MATCH ?"
+               " ORDER BY r")
+        with self._lock:
+            cur = self.conn.execute(sql, (match,))
+            if scope is not None and not scope.is_global:   # ANA-227: scope BEFORE the top-N cut
+                rows = []
+                for row in cur:
+                    if scope.matches(row[0]):
+                        rows.append(row)
+                        if len(rows) >= limit:
+                            break
+            else:
+                rows = cur.fetchmany(limit)
+        out = []
+        for i, (file, section, body, status, line, r) in enumerate(rows):
+            score = -float(r)
             if status == "arquivado":
                 score *= 0.5
             out.append(Candidate(

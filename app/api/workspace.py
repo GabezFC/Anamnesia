@@ -187,12 +187,16 @@ def create_project_worktree(project_id: str, body: WorktreeIn, reg: ProjectRegis
 
 
 @router.delete("/projects/{project_id}/worktrees/{worktree_id}", dependencies=[Depends(require_local_write)])
-def delete_project_worktree(project_id: str, worktree_id: str, confirm: bool = False, force: bool = False,
-                            reg: ProjectRegistry = Depends(get_registry),
+def delete_project_worktree(project_id: str, worktree_id: str, request: Request, confirm: bool = False,
+                            force: bool = False, reg: ProjectRegistry = Depends(get_registry),
                             mgr: TerminalManager = Depends(get_manager)):
     proj = reg.get(project_id)
     if proj is None:
         return _err(404, "not_found", "projeto não encontrado")
+    from app.services import ui_challenge  # ANA-042: header X-MG-Confirm (MG_SHELL_CONFIRM=enforce => obrigatório)
+    if not ui_challenge.check_confirm_header(request, "worktree remove"):
+        return _err(403, "confirm_required", "remover worktree exige confirmação humana (X-MG-Confirm)",
+                    "obtenha o valor em GET /config/shell-confirm pela UI")
     try:
         wt.delete_worktree(proj.path, worktree_id, confirm=confirm, force=force)
     except wt.WorktreeError as e:

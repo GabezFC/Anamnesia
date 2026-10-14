@@ -29,9 +29,10 @@ DEFAULT_ANSWER_MAX_DIFFICULTY = 0.75                         # mirror of answer.
 
 
 # ------------------------------------------------------------------ scoring
-def score_tasks(tasks: Sequence[Task], policy: RoutingPolicy, context_tokens: int = 0) -> list[float]:
-    """Difficulty score per task (same function the router uses). Query-only: no ground truth is read."""
-    return [difficulty_score(difficulty_features(t.query, context_tokens, policy), policy) for t in tasks]
+def score_tasks(tasks: Sequence[Task], policy: RoutingPolicy, context_tokens: int = 0, vocab=None) -> list[float]:
+    """Difficulty score per task (same function the router uses). Query (+ optional corpus vocab) only: no
+    ground truth, label, risk or answer field is read."""
+    return [difficulty_score(difficulty_features(t.query, context_tokens, policy, vocab), policy) for t in tasks]
 
 
 def level_of(score: float, cutoffs: Sequence[float]) -> int:
@@ -209,3 +210,75 @@ def calibrate(tasks: Sequence[Task], policy: RoutingPolicy, seed: int = 42, cali
                            "no demonstrable gain on the eval split (paired CI95 includes zero or favours defaults); "
                            "defaults unchanged"),
     }
+
+
+# ------------------------------------------------------------------ ANA-190: principled revision helpers
+FIT_FEATURES = ("length", "entities", "multi_hop", "context", "code", "reasoning", "classifier", "ungrounded")
+FIT_GRID = (0.0, 1.0, 2.0, 4.0)          # coarse on purpose: 88 train tasks cannot support finer weights
+FIT_TOLERANCE = 0.01                      # prefer the simplest weight vector within this AUC of the best
+
+
+def auc_pair(tasks: Sequence[Task], scores: Sequence[float], low: str = "easy", high: str = "hard") -> float | None:
+    return auc([s for t, s in zip(tasks, scores) if t.difficulty_label == low],
+               [s for t, s in zip(tasks, scores) if t.difficulty_label == high])
+
+
+def bootstrap_auc_ci(tasks: Sequence[Task], scores: Sequence[float], low: str = "easy", high: str = "hard",
+                     n_boot: int = 2000, seed: int = 20261013) -> dict:
+    """Percentile bootstrap CI95 of AUC(low<high): easy and hard resampled independently (stratified)."""
+    import random
+    lo = [s for t, s in zip(tasks, scores) if t.difficulty_label == low]
+    hi = [s for t, s in zip(tasks, scores) if t.difficulty_label == high]
+    if not lo or not hi:
+        return {"auc": None, "low": None, "high": None, "n_low": len(lo), "n_high": len(hi), "n_boot": 0}
+    rng = random.Random(seed)
+    vals = sorted(auc([rng.choice(lo) for _ in lo], [rng.choice(hi) for _ in hi]) for _ in range(n_boot))
+    return {"auc": auc(lo, hi), "low": vals[int(0.025 * (n_boot - 1))], "high": vals[int(0.975 * (n_boot - 1))],
+            "n_low": len(lo), "n_high": len(hi), "n_boot": n_boot, "seed": seed}
+
+
+def score_from_features(feats_rows: Sequence[dict], weights: dict) -> list[float]:
+    """Same arithmetic as router.difficulty_score, on precomputed feature rows (fast grid search)."""
+    out = []
+    for f in feats_rows:
+        tot = sum(weights.get(k, 0.0) for k in f)
+        out.append(0.0 if tot <= 0 else round(min(1.0, max(0.0, sum(weights.get(k, 0.0) * v for k, v in f.items()) / tot)), 6))
+    return out
+
+
+def fit_weights(tasks: Sequence[Task], policy: RoutingPolicy, vocab=None, grid: Sequence[float] = FIT_GRID,
+                features: Sequence[str] = FIT_FEATURES) -> dict:
+    """Exhaustive grid over the weights of `features` (others keep policy values), maximising AUC(easy<hard) on
+    the GIVEN tasks (pass the TRAIN split only). Among vectors within FIT_TOLERANCE of the best, pick the one with
+    fewest non-zero weights, then the smallest weight sum, then lexicographic: deterministic and parsimonious."""
+    rows = [difficulty_features(t.query, 0, policy, vocab) for t in tasks]
+    present = [f for f in features if rows and f in rows[0]]
+    base = dict(policy.weights)
+    results = []
+    for combo in itertools.product(grid, repeat=len(present)):
+        w = dict(base)
+        w.update(zip(present, combo))
+        a = auc_pair(tasks, score_from_features(rows, w)) or 0.0
+        results.append((a, combo))
+    best = max(a for a, _ in results)
+    cands = [(sum(1 for x in c if x > 0), sum(c), c, a) for a, c in results if a >= best - FIT_TOLERANCE]
+    cands.sort()
+    chosen = cands[0]
+    w = dict(base)
+    w.update(zip(present, chosen[2]))
+    return {"weights": w, "fitted_features": present, "train_auc": chosen[3], "best_train_auc": best,
+            "n_candidates_within_tolerance": len(cands), "grid": list(grid)}
+
+
+def quantile_cutoffs(scores: Sequence[float], quantiles: Sequence[float]) -> tuple:
+    """Tie-aware cut-offs at the given quantiles of the TRAIN score distribution. Scores are discrete (few
+    distinct values), so the cut is placed at the MIDPOINT between the quantile value and the next distinct
+    value above it: tied scores never straddle a cut and no level is degenerate."""
+    s = sorted(scores)
+    distinct = sorted(set(s))
+    out = []
+    for q in quantiles:
+        v = s[min(len(s) - 1, int(q * len(s)))]
+        nxt = next((d for d in distinct if d > v), None)
+        out.append(round((v + nxt) / 2 if nxt is not None else v, 4))
+    return tuple(out)

@@ -182,7 +182,10 @@ def hybrid_search(gw, query: str, limit: int, text_seeds: int = 10,
     index: GraphIndex = gw.graph_index
     index.load()
 
-    bm = gw.baseline.search(query, limit=max(rc.max_candidates, limit))
+    from app.retrieval.experiments import get_flags, hybrid_text_scores, lexical_search
+    frozen = not allow_ppr          # graphify_jev is frozen: no Onda 9 experiment may touch it
+    exp = None if frozen else get_flags(gw)
+    bm = lexical_search(gw, query, max(rc.max_candidates, limit), frozen=frozen)
     seed_files: list[str] = []
     bm_scores: dict[str, float] = {}
     for c in bm:
@@ -212,13 +215,20 @@ def hybrid_search(gw, query: str, limit: int, text_seeds: int = 10,
     order = {f: i for i, f in enumerate(seed_files)}
     n_seeds = max(len(seed_files), 1)
     cands: list[Candidate] = []
+    # ANA-230 (flag): keep the BM25 magnitude / fuse with RRF instead of the fixed rank ladder.
+    fused_text: dict[str, float] = {}
+    fused_graph: dict[str, float] = {}
+    if exp is not None and exp.hybrid_score != "rank":
+        fused_text, fused_graph = hybrid_text_scores(
+            exp.hybrid_score, bm, seed_files, related,
+            index.lexical_seed_files(query, text_seeds) if index.loaded else [], exp)
 
     for c in bm:
         f = c.source_file.replace("\\", "/")
         if f not in order:
             continue
         rank = order[f]
-        c.score = round(1.0 - 0.45 * (rank / n_seeds), 4)
+        c.score = fused_text.get(c.candidate_id, round(1.0 - 0.45 * (rank / n_seeds), 4))
         c.origin = "graphify_hybrid:text"
         c.meta = {**(c.meta or {}), "seed": True, "via": "bm25"}
         cands.append(c)
@@ -244,7 +254,7 @@ def hybrid_search(gw, query: str, limit: int, text_seeds: int = 10,
         cands.append(Candidate(
             candidate_id=f"gx{i:03d}:{f}#L{sec.line}",
             source_file=f, section=sec.heading_path, snippet=body,
-            score=round(0.5 - 0.2 * (i / max(len(related), 1)), 4),
+            score=fused_graph.get(f, round(0.5 - 0.2 * (i / max(len(related), 1)), 4)),
             origin="graphify_hybrid:graph",
             meta={"seed": False, "via": "graph", "node_label": (node or {}).get("label")},
         ))

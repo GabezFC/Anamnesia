@@ -8,7 +8,7 @@
 
 import { icon } from '../icons.js';
 import { I18N, getLang } from '../i18n.js';
-import { esc } from '../format.js';
+import { esc, fmtNumber, fmtDate } from '../format.js';
 import * as A from '../anamnesia-api.js';
 import { createLineChart } from '../charts/chart-kit.js';
 import { createVirtualTable } from '../components/virtual-table.js';
@@ -52,7 +52,7 @@ const originKey = (o) => (o === 'measured' || o === 'estimated' ? o : 'unavailab
 const originText = (o) => I18N.app[originKey(o)] || ORIGIN_PT[originKey(o)];
 const fmtMoney = (v) => (typeof v === 'number' && Number.isFinite(v) ? `US$ ${v.toFixed(v !== 0 && Math.abs(v) < 0.01 ? 4 : 2)}` : '—');
 const fmtTok = (v) => (typeof v === 'number' && Number.isFinite(v) ? (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)) : null);
-const fmtWhen = (ts) => (typeof ts === 'number' ? new Date(ts * 1000).toLocaleString(getLang() === 'en' ? 'en-US' : 'pt-BR') : '—');
+const fmtWhen = (ts) => fmtDate(ts);
 const fill = (tpl, vars) => String(tpl).replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? ''));
 const asNum = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 
@@ -172,7 +172,7 @@ function stopLive() {
 /* ---------------------------------------------------------------- views */
 function liveBadge() {
   const t = I18N.costs;
-  return `<span class="dot ${S.live === 'live' ? 'dot-success' : 'dot-warning'}"></span><span style="font-size: var(--text-xs); color: var(--text-secondary);">${esc(S.live === 'live' ? t.liveOn : t.livePolling)}</span>`;
+  return `<span class="dot ${S.live === 'live' ? 'dot-success' : 'dot-warning'}"></span><span class="u-4d6d16">${esc(S.live === 'live' ? t.liveOn : t.livePolling)}</span>`;
 }
 
 function skeletonView() {
@@ -187,7 +187,7 @@ function skeletonView() {
 }
 
 function kpiCard(label, origin, value, sub, accent = false) {
-  const style = accent ? ' style="color: var(--success);"' : '';
+  const style = accent ? ' data-css="color:var(--success)"' : '';
   return `
     <div class="kpi-card">
       <div class="kpi-label"><span>${esc(label)}</span><span class="badge-origin badge-origin-${origin}">${esc(originText(origin))}</span></div>
@@ -219,7 +219,7 @@ function budgetView() {
   const b = S.budget;
   let banner = '';
   let bars = '';
-  let status = `<span class="dot dot-success"></span><span style="font-size: var(--text-xs); color: var(--text-secondary);">${esc(t.budgetOk)}</span>`;
+  let status = `<span class="dot dot-success"></span><span class="u-4d6d16">${esc(t.budgetOk)}</span>`;
   if (!b) {
     bars = `<p class="kpi-subtext">${esc(t.budgetUnavailable)}</p>`;
     status = '';
@@ -236,7 +236,7 @@ function budgetView() {
           <div class="callout-notice-icon">${icon('alertTriangle', '', 18)}</div>
           <div class="callout-notice-body">${msg}</div>
         </div>`;
-      status = `<span class="dot ${exceeded ? 'dot-danger' : 'dot-warning'}"></span><span style="font-size: var(--text-xs); color: var(--text-secondary);">${esc(exceeded ? t.budgetStatusExceeded : t.budgetStatusAlert)}</span>`;
+      status = `<span class="dot ${exceeded ? 'dot-danger' : 'dot-warning'}"></span><span class="u-4d6d16">${esc(exceeded ? t.budgetStatusExceeded : t.budgetStatusAlert)}</span>`;
     }
     bars = rows.map((r) => {
       const pct = asNum(r.d.percent);
@@ -247,9 +247,9 @@ function budgetView() {
         : `${fmtMoney(asNum(r.d.spent_usd))} ${t.budgetOf} ${fmtMoney(r.d.limit_usd)}${pct != null ? ` (${pct.toFixed(0)}%)` : ''}`;
       return `
         <div class="budget-item" data-budget="${r.key}">
-          <div class="budget-header"><span style="font-weight: 500;">${esc(r.label)}</span><span class="tabular">${esc(text)}</span></div>
+          <div class="budget-header"><span class="u-cf5948">${esc(r.label)}</span><span class="tabular">${esc(text)}</span></div>
           <div class="budget-track" role="progressbar" aria-label="${esc(r.label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(pct ?? 0, 100).toFixed(0)}">
-            <div class="budget-fill budget-fill-${cls}" style="width: ${Math.min(pct ?? 0, 100)}%;"></div>
+            <div class="budget-fill budget-fill-${cls}" data-css="width:${Math.min(pct ?? 0, 100)}%"></div>
           </div>
         </div>`;
     }).join('');
@@ -271,8 +271,8 @@ function budgetView() {
   return `
     ${banner}
     <div class="budget-panel">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);">
-        <h2 style="font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-primary);">${esc(t.budgetTitle)}</h2>
+      <div class="u-dd70a6">
+        <h2 class="u-ae978d">${esc(t.budgetTitle)}</h2>
         <span class="status-indicator">${status}</span>
       </div>
       <div class="budget-bars-grid">${bars}</div>
@@ -290,11 +290,11 @@ function rolesView() {
         const cost = asNum(r.cost_usd);
         const st = originKey(r.cost_status);
         return `<tr>
-          <td><span class="badge" style="font-family: var(--font-mono); font-size: 11px;">${esc(r.role || '—')}</span></td>
+          <td><span class="badge u-d28f36">${esc(r.role || '—')}</span></td>
           <td class="num-col tabular font-mono">${esc(r.calls ?? '—')}</td>
           <td class="num-col tabular font-mono">${esc(r.runs ?? '—')}</td>
-          <td class="num-col tabular font-mono">${esc(asNum(r.total_tokens_spent)?.toLocaleString() ?? '—')}</td>
-          <td class="num-col tabular font-mono" style="font-weight: 600;">${esc(cost == null ? t.unavailable : fmtMoney(cost))}</td>
+          <td class="num-col tabular font-mono">${esc(fmtNumber(asNum(r.total_tokens_spent)))}</td>
+          <td class="num-col tabular font-mono u-93d1d3">${esc(cost == null ? t.unavailable : fmtMoney(cost))}</td>
           <td><span class="badge-origin badge-origin-${st}">${esc(originText(st))}</span></td>
         </tr>`;
       }).join('')}</tbody></table>`
@@ -302,22 +302,22 @@ function rolesView() {
   return `
     <div class="chart-card" data-bind="roles-card">
       <div class="chart-header"><div>
-        <h2 style="font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-primary);">${esc(t.rolesTitle)}</h2>
-        <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">${esc(t.rolesSubtitle)}</p>
+        <h2 class="u-ae978d">${esc(t.rolesTitle)}</h2>
+        <p class="u-47c8df">${esc(t.rolesSubtitle)}</p>
       </div></div>
-      <div class="table-container" style="margin-top: var(--space-3);">${body}</div>
+      <div class="table-container u-dd9991">${body}</div>
     </div>`;
 }
 
 function callsView() {
   const t = I18N.costs;
   const more = S.nextCursor
-    ? `<div style="text-align: center; margin-top: var(--space-4);"><button class="btn btn-secondary btn-sm" data-action="load-more-calls" ${S.loadingMore ? 'disabled' : ''}>${esc(S.loadingMore ? t.callsLoadingMore : t.callsMore)}</button></div>`
+    ? `<div class="u-aa69d1"><button class="btn btn-secondary btn-sm" data-action="load-more-calls" ${S.loadingMore ? 'disabled' : ''}>${esc(S.loadingMore ? t.callsLoadingMore : t.callsMore)}</button></div>`
     : '';
   return `
     <div class="calls-section">
       <div class="calls-table-toolbar">
-        <h2 style="font-size: var(--text-md); font-weight: var(--font-semibold); color: var(--text-primary);">${esc(t.callsTableTitle)}</h2>
+        <h2 class="u-b41b77">${esc(t.callsTableTitle)}</h2>
         <span class="section-count tabular">${esc(fill(t.callsShowing, { n: S.calls.length }))}</span>
       </div>
       <div id="costs-calls-mount" data-bind="calls-table"></div>
@@ -341,10 +341,10 @@ function drawerView() {
         ${kv(t.detailProject, c.project)}
         ${kv(t.detailAgent, c.agent)}
         ${kv(t.detailPipeline, c.pipeline, 'font-mono')}
-        ${kv(t.detailContext, c.context_tokens == null ? t.unavailable : `${c.context_tokens.toLocaleString()} ${t.tokensUnit}`, 'tabular')}
+        ${kv(t.detailContext, c.context_tokens == null ? t.unavailable : `${fmtNumber(c.context_tokens)} ${t.tokensUnit}`, 'tabular')}
         <div class="readonly-kv-item"><span class="readonly-kv-label">${esc(t.detailCost)}</span>
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
-            <span class="readonly-kv-value tabular" style="font-size: 16px;">${esc(c.cost == null ? t.unavailable : fmtMoney(c.cost))}</span>
+          <div class="u-a631c9">
+            <span class="readonly-kv-value tabular u-4e0dc0">${esc(c.cost == null ? t.unavailable : fmtMoney(c.cost))}</span>
             <span class="badge-origin badge-origin-${c.origin}">${esc(originText(c.origin))}</span>
           </div>
         </div>` : ''}
@@ -379,10 +379,10 @@ export function render() {
   const header = `
     <div class="costs-filter-bar">
       <div>
-        <h1 style="font-size: var(--text-2xl); font-weight: var(--font-semibold); color: var(--text-primary);">${esc(t.ledgerTitle)}</h1>
-        <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">${esc(t.ledgerSubtitle)}</p>
+        <h1 class="u-5a2a94">${esc(t.ledgerTitle)}</h1>
+        <p class="u-47c8df">${esc(t.ledgerSubtitle)}</p>
       </div>
-      <div style="display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
+      <div class="u-966338">
         <span class="status-indicator" data-bind="costs-live">${liveBadge()}</span>
         <div class="tab-list" role="tablist" aria-label="${esc(t.rangeAria)}">${tabs}</div>
         <button class="btn btn-secondary btn-sm" data-action="export-csv">${icon('download', '', 13)} ${esc(t.exportCsv)}</button>
@@ -405,12 +405,12 @@ export function render() {
         <div class="chart-card">
           <div class="chart-header">
             <div>
-              <h2 style="font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-primary);">${esc(t.chartTitle)}</h2>
-              <p style="font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px;">${esc(t.chartSubtitle)}</p>
+              <h2 class="u-ae978d">${esc(t.chartTitle)}</h2>
+              <p class="u-47c8df">${esc(t.chartSubtitle)}</p>
             </div>
             <span class="badge-origin badge-origin-measured">${esc(originText('measured'))}</span>
           </div>
-          <div id="cost-line-chart-mount" style="min-height: 220px; width: 100%; margin-top: var(--space-3);"></div>
+          <div id="cost-line-chart-mount" class="u-02afda"></div>
         </div>
         ${rolesView()}
       </div>
@@ -465,12 +465,12 @@ function mountWidgets(root) {
       rowKey: (r) => r.id,
       emptyHtml: emptyState({ title: I18N.app.noCallsTitle, description: I18N.app.noCallsDesc, variant: 'data', compact: true }),
       columns: [
-        { key: 'ts', label: t.colWhen, width: '150px', render: (r) => `<span class="tabular font-mono" style="color: var(--text-secondary); font-size: 11px;">${esc(fmtWhen(r.ts))}</span>` },
-        { key: 'project', label: t.colProject, width: '1fr', render: (r) => `<span style="font-weight: 500;">${esc(r.project)}</span>` },
-        { key: 'agent', label: t.colAgent, width: '1fr', render: (r) => `<span class="badge" style="font-family: var(--font-mono); font-size: 11px;">${esc(r.agent)}</span>` },
-        { key: 'pipeline', label: t.colPipeline, width: '1fr', render: (r) => `<span class="font-mono text-tertiary" style="font-size: 11px;">${esc(r.pipeline)}</span>` },
-        { key: 'context_tokens', label: t.colContext, width: '110px', align: 'right', render: (r) => `<span class="tabular font-mono">${esc(r.context_tokens == null ? '—' : `${r.context_tokens.toLocaleString()} ${t.tokensUnit}`)}</span>` },
-        { key: 'cost', label: t.colCost, width: '120px', align: 'right', render: (r) => `<span class="tabular font-mono" style="font-weight: 600;">${esc(r.cost == null ? t.unavailable : fmtMoney(r.cost))}</span>` },
+        { key: 'ts', label: t.colWhen, width: '150px', render: (r) => `<span class="tabular font-mono u-bdff7b">${esc(fmtWhen(r.ts))}</span>` },
+        { key: 'project', label: t.colProject, width: '1fr', render: (r) => `<span class="u-cf5948">${esc(r.project)}</span>` },
+        { key: 'agent', label: t.colAgent, width: '1fr', render: (r) => `<span class="badge u-d28f36">${esc(r.agent)}</span>` },
+        { key: 'pipeline', label: t.colPipeline, width: '1fr', render: (r) => `<span class="font-mono text-tertiary u-15b680">${esc(r.pipeline)}</span>` },
+        { key: 'context_tokens', label: t.colContext, width: '110px', align: 'right', render: (r) => `<span class="tabular font-mono">${esc(r.context_tokens == null ? '—' : `${fmtNumber(r.context_tokens)} ${t.tokensUnit}`)}</span>` },
+        { key: 'cost', label: t.colCost, width: '120px', align: 'right', render: (r) => `<span class="tabular font-mono u-93d1d3">${esc(r.cost == null ? t.unavailable : fmtMoney(r.cost))}</span>` },
         { key: 'origin', label: t.colOrigin, width: '110px', render: (r) => `<span class="badge-origin badge-origin-${r.origin}">${esc(originText(r.origin))}</span>` },
         { key: 'id', label: t.colActions, width: '110px', align: 'right', render: (r) => `<button class="btn btn-ghost btn-sm" data-action="view-call-detail" data-call-id="${esc(r.id)}">${icon('fileText', '', 12)} ${esc(t.detailsBtn)}</button>` },
       ],

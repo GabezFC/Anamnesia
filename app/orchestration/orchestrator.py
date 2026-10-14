@@ -6,6 +6,7 @@ Cost is computed only from verified registry prices; otherwise it is null with s
 """
 from __future__ import annotations
 
+import os
 import re
 import threading
 import time
@@ -13,10 +14,12 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from app.orchestration.config import OrchestrationConfig, load_config
-from app.orchestration.enforcement import enforcement_level
+import app.orchestration.diff_gate as diff_gate
+import app.orchestration.handoff as handoff
+from app.orchestration.enforcement import enforce, enforce_roles_enabled, enforcement_level
 from app.orchestration.launchers import SessionLauncher
-from app.orchestration.roles import contract, role_prompt
-from app.orchestration.runs import TERMINAL, InvalidTransition, Run, RunError, list_runs, project_root
+from app.orchestration.roles import PermissionDenied, contract, role_prompt
+from app.orchestration.runs import TERMINAL, InvalidTransition, Run, RunError, list_runs, project_root, recover_orphans
 from app.routing.escalation import next_model
 from app.routing.policy import preset as routing_preset
 from app.routing.registry import Registry, load_registry
@@ -96,6 +99,7 @@ class Orchestrator:
         self._runs: dict[str, Run] = {}
         self._threads: dict[str, threading.Thread] = {}
         self._sessions: dict[str, set] = {}
+        self._recovered: set[str] = set()
         self._lock = threading.RLock()
 
     # ------------------------------------------------------------ registry / model choice
@@ -159,6 +163,36 @@ class Orchestrator:
         decision.max_escalations = min(len(chain), self.config.limits.max_escalations_per_step)
         return {"decision": decision, "class": cls, "effective_class": eff, "warnings": warnings, "chain": chain}
 
+    # ------------------------------------------------------------ orphan recovery (ANA-196) / capabilities (ANA-199)
+    def recover(self, project_path) -> list:
+        """Once per project per process: runs left `running`/`planned` on disk with no live thread here -> failed:orphaned."""
+        try:
+            key = str(project_root(project_path))
+        except RunError:
+            return []
+        with self._lock:
+            if key in self._recovered:
+                return []
+            self._recovered.add(key)
+            live = set(self._runs)
+        return recover_orphans(key, live)
+
+    def check_capabilities(self, steps: list) -> None:
+        """ANA-199: when the profile is an agent of config/agents.yaml, refuse a plan holding a role the agent has no
+        verified capability for (e.g. `implementer` without `readonly_sandbox`). Non-agent profiles are not judged here
+        (ANA-195 handles them); a broken catalog never blocks (the error surfaces where the catalog is used)."""
+        if not self.profile_id:
+            return
+        from app.connections.agents import AgentCatalogError, check_role, get_agent
+        try:
+            spec = get_agent(self.profile_id)
+        except AgentCatalogError:
+            return
+        if spec is None:
+            return
+        for s in steps:
+            check_role(spec, s.role)
+
     # ------------------------------------------------------------ public API
     def plan(self, task: str) -> list:
         return plan(task)
@@ -168,6 +202,8 @@ class Orchestrator:
         """Create the run directory and start it (background thread, or inline when sync=True). Returns run_id."""
         pr = self.config.preset(preset)            # validates the preset before touching the disk
         steps = plan(task)
+        self.check_capabilities(steps)             # ANA-199: before touching the disk or spending anything
+        self.recover(project_path)                 # ANA-196
         limits = self.config.limits
         budget = limits.budget_usd if budget_usd is None else budget_usd
         if budget is not None and (isinstance(budget, bool) or not isinstance(budget, (int, float)) or budget < 0):
@@ -220,6 +256,7 @@ class Orchestrator:
     def list(self, project_path=None) -> list:
         seen = {s["run_id"]: s for s in self.known_runs()}
         if project_path is not None:
+            self.recover(project_path)
             for s in list_runs(project_path):
                 seen.setdefault(s["run_id"], s)
         return sorted(seen.values(), key=lambda s: s.get("created_at", 0), reverse=True)
@@ -317,6 +354,10 @@ class Orchestrator:
             res = run.read_result(d)
             if res:
                 parts.append(f"### {d}\n{res[:PRIOR_CHARS]}")
+            if handoff.handoff_enabled():           # ANA-182 (opt-in): structured handoff of the previous step
+                h = handoff.summarize_for_next(handoff.read(run.step_dir(d)), run.step_dir(d))
+                if h:
+                    parts.append(f"### {d} handoff\n{h[:PRIOR_CHARS]}")
         return "\n\n".join(parts)
 
     def _run_step(self, run: Run, step: Step, ctx: dict, lock: threading.Lock) -> None:
@@ -398,9 +439,75 @@ class Orchestrator:
                     entry_sum["escalated_from"] = escalated_from
                     run.write_summary()
 
+    # ------------------------------------------------------------ opt-in gates (ANA-173/174/176), all OFF by default
+    def _precheck(self, run: Run, step: Step, model) -> None:
+        """Side-effect gates before a launch. No-op unless ANAMNESIA_POLICY is audit|enforce (ANA-176).
+        Raises PolicyDenied; _attempt turns that into a failed attempt (`launcher_error:PolicyDenied`)."""
+        from app.policy import engine as pe
+        if pe.mode() == "off":
+            return
+        ctx = {"actor": "orchestrator", "run_id": run.run_id, "step": step.step_id, "source": "orchestrator",
+               "cwd": run.summary.get("project_path")}
+        agent = type(self.launcher).__name__ == "AgentCliLauncher"
+        pe.require("exec", f"agent:{self.profile_id}" if agent else f"launcher:{type(self.launcher).__name__}", ctx)
+        pe.require("pay", f"model:{model.id}", ctx)
+
+    def _gate_plan(self, run: Run, step: Step):
+        """-> (kind, scope, cwd, baseline) or None. kind 'readonly' (ENFORCE_ROLES, researcher/reviewer: nothing may
+        change in the project) or 'diff' (DIFF_GATE, implementer: only inside ANAMNESIA_DIFF_GATE_SCOPE)."""
+        kind, scope = None, []
+        if enforce_roles_enabled() and contract(step.role).read_only:
+            kind = "readonly"
+        elif diff_gate.diff_gate_enabled() and step.role == "implementer":
+            kind = "diff"
+            scope = [s.strip() for s in os.environ.get("ANAMNESIA_DIFF_GATE_SCOPE", "").split(",") if s.strip()]
+            if not scope:
+                self._warn(run, "diff_gate_skipped:no_scope")
+                return None
+        if kind is None:
+            return None
+        cwd = run.summary["project_path"]
+        try:
+            if not diff_gate.is_git_worktree(cwd):
+                self._warn(run, f"{kind}_gate_skipped:not_a_git_repo")
+                return None
+            return kind, scope, cwd, diff_gate.snapshot(cwd)
+        except (RuntimeError, OSError) as e:
+            self._warn(run, f"{kind}_gate_skipped:{type(e).__name__}")
+            return None
+
+    @staticmethod
+    def _warn(run: Run, msg: str) -> None:
+        with run._lock:
+            if msg not in run.summary["warnings"]:
+                run.summary["warnings"].append(msg)
+                run.write_summary()
+
+    def _gate_check(self, run: Run, step: Step, gate) -> str | None:
+        """Judge (and revert) what the step changed in the project. Returns an error code or None."""
+        kind, scope, cwd, base = gate
+        try:
+            res = diff_gate.gate_since(cwd, scope, base)
+        except (RuntimeError, OSError):
+            return None
+        if res["ok"]:
+            return None
+        run.event("diff_gate_violation" if kind == "diff" else "role_violation", step=step.step_id,
+                  violations=res["violations"][:20], reverted=res["reverted"])
+        if kind == "readonly":
+            try:
+                enforce(step.role, "write_files", res["violations"][0], cwd, run_id=run.run_id, step=step.step_id)
+            except PermissionDenied:
+                pass                                      # audited by enforce(); the denial is the error below
+            return "role_violation:write_in_read_only_role"
+        from app.policy.engine import audit
+        audit("policy_denied", {"actor": step.role, "action": "write", "target": f"{len(res['violations'])} file(s)",
+                                "rule": "diff_gate", "mode": "enforce", "run_id": run.run_id, "step": step.step_id})
+        return "diff_gate_violation"
+
     def _attempt(self, run: Run, step: Step, model, sdir, prior: str, n: int) -> dict:
         limits = self.config.limits
-        for name in ("result.md", "status.json"):
+        for name in ("result.md", "status.json", "handoff.json"):
             f = sdir / name
             if f.exists():
                 f.unlink()
@@ -413,13 +520,19 @@ class Orchestrator:
         }
         hint = (f"Write your answer to {sdir / 'result.md'} and a status.json "
                 f"({{\"ok\":true,\"input_tokens\":null,\"output_tokens\":null}}) next to it.")
+        if handoff.handoff_enabled():
+            hint += (f" Optionally also write {sdir / 'handoff.json'} with keys findings, files_touched, "
+                     f"open_questions, artifacts (lists of short strings) and confidence (0..1 or null).")
         text = role_prompt(step.role, step.text, prior, hint)
         run.event("attempt_start", step=step.step_id, model_id=model.id, attempt=n)
         t0 = time.perf_counter()
         sid = None
         st = None
         err = None
+        gate = None
         try:
+            self._precheck(run, step, model)
+            gate = self._gate_plan(run, step)
             sid = self.launcher.launch(run.summary.get("project_id"), self.profile_id, env,
                                        run.summary["project_path"])
             with self._lock:
@@ -452,6 +565,8 @@ class Orchestrator:
                     pass
                 with self._lock:
                     self._sessions.get(run.run_id, set()).discard(sid)
+        if gate is not None:
+            err = self._gate_check(run, step, gate) or err
         wall = (time.perf_counter() - t0) * 1000
         st = st or {}
         ok = bool(st.get("ok")) and run.read_result(step.step_id) is not None and err is None

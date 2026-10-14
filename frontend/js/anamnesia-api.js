@@ -161,9 +161,10 @@ export const costByRole = (range = 'today') => call('GET', `/api/costs/by-role?$
 export const getSettings = () => call('GET', '/api/settings');
 export const putSettings = (patch) => call('PUT', '/api/settings', patch);
 export const lastSearch = () => call('GET', '/api/memory/last-search');
-export const searchPreview = ({ q, maxResults = 8, scope = '' } = {}) => {
+export const searchPreview = ({ q, maxResults = 8, scope = '', pipeline = '' } = {}) => {
   const p = new URLSearchParams({ q: String(q ?? ''), max_results: String(maxResults) });
   if (scope) p.set('scope', scope);
+  if (pipeline) p.set('pipeline', pipeline); // ANA-208: baseline|graphify (gratuitos, nunca gravam run)
   return call('GET', `/api/memory/search-preview?${p.toString()}`);
 };
 /** Sessão com opções: worktree (bool|id), subagent_role (orchestrator|researcher|implementer|reviewer), mcp (bool|undefined). */
@@ -174,4 +175,10 @@ export const createSessionOpts = ({ project, profile, worktree, role, mcp }) => 
   if (typeof mcp === 'boolean') body.mcp = mcp;
   return call('POST', '/api/sessions', body);
 };
+// ---- Onda 7 (somente leitura) ----
+export const recentRuns = (limit = 30) => call('GET', `/benchmark/runs?limit=${Number(limit) || 30}`).then((x) => asList(x));
+export const runDetail = (id) => call('GET', `/benchmark/runs/${encodeURIComponent(id)}`);
+export const getAlerts = () => call('GET', '/api/alerts');
+export const providersHealth = (lastN = 100) => call('GET', `/api/providers/health?last_n=${Number(lastN) || 100}`);
+export const memoryLineage = () => call('GET', '/api/memory/lineage');
 export const benchmarkReportUrl = (fmt = 'md') => `/api/benchmark/report.${fmt === 'json' ? 'json' : 'md'}`;

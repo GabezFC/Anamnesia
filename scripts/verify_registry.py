@@ -12,8 +12,10 @@ Rules applied by --write (in place; comments and line endings preserved):
   * id in list AND context_window set -> verified: true
   * id in list but context_window null -> verified: false (ANA-179: the window must be confirmed too)
   * list present, id absent            -> verified: false
-Prices are never written here: a price needs source_url + checked_at (the registry loader enforces it);
-this script only REPORTS the % of priced models.
+Prices are never written by --write. ANA-172/179: `--fill-openrouter URL` (e.g. https://openrouter.ai/api/v1/models,
+public, NO credential) additionally copies `context_length` and `pricing` of each `provider: openrouter` entry found
+in that list into the registry (price per 1M tokens, source_url + checked_at = today), then `verified` follows the
+rules above. Other providers are never touched: the OpenRouter list says nothing about their own price pages.
 """
 from __future__ import annotations
 
@@ -60,6 +62,65 @@ def fetch_list(provider: str, url: str, timeout: float = 3.0) -> list[str]:
     r = httpx.get(f"{base}/models", timeout=timeout)             # no Authorization header, ever
     r.raise_for_status()
     return [m["id"] for m in r.json().get("data", [])]
+
+
+def fetch_openrouter_models(url: str, timeout: float = 20.0) -> list[dict]:
+    """Full model objects (id, context_length, pricing) from the PUBLIC OpenRouter /models. No credential sent."""
+    host = (urlparse(url).hostname or "").lower()
+    if host not in LOOPBACK and not network_allowed():
+        raise PermissionError(f"{host}: non-loopback needs ANAMNESIA_ALLOW_NETWORK_TEST=1")
+    import httpx
+    r = httpx.get(url.rstrip("/"), timeout=timeout)
+    r.raise_for_status()
+    return list(r.json().get("data", []))
+
+
+def _per_mtok(v) -> float | None:
+    try:
+        return round(float(v) * 1_000_000, 6)
+    except (TypeError, ValueError):
+        return None
+
+
+def fill_openrouter(text: str, registry, models: list[dict], source_url: str, checked_at: str) -> tuple[str, list[dict]]:
+    """Rewrite `context_window:` and `price:` of openrouter entries from `models`. Only entries whose id is in the
+    list, whose context_length is a positive int and whose prompt/completion price are numbers are filled.
+    Returns (new_text, report). Everything else (comments, other entries, line endings) is preserved."""
+    by = {m.get("id"): m for m in models if isinstance(m, dict)}
+    wanted = {e.id: by[e.model] for e in registry.models if e.provider == "openrouter" and e.model in by}
+    lines = text.splitlines(keepends=True)
+    out, report, cur, i = [], [], None, 0
+    while i < len(lines):
+        ln = lines[i]
+        eol = "\r\n" if ln.endswith("\r\n") else ("\n" if ln.endswith("\n") else "")
+        m = re.match(r"^\s*-\s+id:\s*(\S+)", ln)
+        if m:
+            cur = m.group(1)
+        src = wanted.get(cur)
+        if src is not None:
+            mc = re.match(r"^(\s+)context_window:\s*(null)\s*(#.*)?$", ln.rstrip("\r\n"))
+            mp = re.match(r"^(\s+)price:\s*(null)\s*(#.*)?$", ln.rstrip("\r\n"))
+            cl = src.get("context_length")
+            pr = src.get("pricing") or {}
+            pin, pout = _per_mtok(pr.get("prompt")), _per_mtok(pr.get("completion"))
+            if mc and isinstance(cl, int) and not isinstance(cl, bool) and cl > 0:
+                out.append(f"{mc.group(1)}context_window: {cl}   # openrouter /models context_length ({checked_at}){eol}")
+                report.append({"id": cur, "field": "context_window", "value": cl})
+                i += 1
+                continue
+            if mp is not None and pin is not None and pout is not None:
+                ind = mp.group(1)
+                out.append(f"{ind}price:{eol}")
+                out.append(f"{ind}  input: {pin}{eol}{ind}  output: {pout}{eol}")
+                out.append(f"{ind}  source_url: {source_url}{eol}{ind}  checked_at: {checked_at}{eol}")
+                report.append({"id": cur, "field": "price", "input_per_mtok": pin, "output_per_mtok": pout})
+                i += 1
+                while i < len(lines) and re.match(rf"^{ind}\s+\S", lines[i]):     # drop an old multi-line price block
+                    i += 1
+                continue
+        out.append(ln)
+        i += 1
+    return "".join(out), report
 
 
 def verify(registry, lists: dict) -> dict:
@@ -114,11 +175,22 @@ def summarize(result: dict, registry) -> dict:
     }
 
 
+def _tmp_registry(text: str) -> Path:
+    import tempfile
+    f = tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False, encoding="utf-8", newline="")
+    f.write(text)
+    f.close()
+    return Path(f.name)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="ANA-172 registry verification (list_models only)")
     ap.add_argument("--registry", default=str(DEFAULT_PATH))
     ap.add_argument("--offline", help="JSON file {provider: [model ids]}")
     ap.add_argument("--base-url", action="append", default=[], metavar="PROV=URL")
+    ap.add_argument("--fill-openrouter", metavar="URL", help="ANA-172/179: copy context_length + pricing of openrouter "
+                    "entries from the public OpenRouter /models (needs ANAMNESIA_ALLOW_NETWORK_TEST=1; with --write)")
+    ap.add_argument("--checked-at", default=None, help="YYYY-MM-DD for filled prices (default: today)")
     ap.add_argument("--write", action="store_true", help="persist `verified` into the registry file")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
@@ -136,8 +208,30 @@ def main(argv=None) -> int:
             lists[prov] = fetch_list(prov, url)
         except Exception as exc:  # noqa: BLE001 — a dead server just means "unknown"
             errors[prov] = f"{type(exc).__name__}: {str(exc)[:120]}"
+    filled: list[dict] = []
+    if a.fill_openrouter:
+        import datetime
+        try:
+            models = fetch_openrouter_models(a.fill_openrouter)
+            lists["openrouter"] = [m.get("id") for m in models]
+            when = a.checked_at or datetime.date.today().isoformat()
+            old = reg_path.read_bytes().decode("utf-8")
+            new, filled = fill_openrouter(old, registry, models, a.fill_openrouter.rstrip("/"), when)
+            if a.write and new != old:
+                reg_path.write_bytes(new.encode("utf-8"))
+                try:
+                    registry = load_registry(reg_path)
+                except Exception:
+                    reg_path.write_bytes(old.encode("utf-8"))
+                    raise
+            elif new != old:
+                import tempfile
+                registry = load_registry(_tmp_registry(new))      # dry run: evaluate on the would-be text
+        except Exception as exc:  # noqa: BLE001
+            errors["openrouter"] = f"{type(exc).__name__}: {str(exc)[:120]}"
     result = verify(registry, lists)
     summ = summarize(result, registry)
+    summ["filled"] = filled
     summ["lists_used"] = {p: len(v) for p, v in lists.items()}
     summ["list_errors"] = errors
     if a.write:

@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 
 from app.core.tokens import estimate_tokens
+from app.retrieval.experiments import dedup_limit, post_dedup
 from app.retrieval.graphify_hybrid import hybrid_search
 from app.schemas.models import Candidate
 from app.services.dedup import deduplicate, preprocess
@@ -55,7 +56,8 @@ def _graphify_candidates(gw, query: str, allow_ppr: bool = True):
     raw, out_of_scope = _apply_scope(gw, raw)
     cands = preprocess(raw, rc.snippet_max_tokens)
     cand_tokens = _tokens(cands)
-    uniq, removed = deduplicate(cands, rc.dedup_max_per_note)
+    uniq, removed = deduplicate(cands, dedup_limit(gw, query, rc.dedup_max_per_note, frozen=not allow_ppr))
+    uniq = post_dedup(gw, query, uniq, frozen=not allow_ppr)
     t2 = time.perf_counter()
     scores = [c.score for c in raw]
     metrics = {

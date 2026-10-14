@@ -1,4 +1,6 @@
 // format.js — formatting, safe metric access, aggregation. All metric keys are optional.
+import { getLang } from './i18n.js';
+
 // NOTHING here invents a value: every function returns null when the source metric is absent,
 // and the UI layer turns null into an explicit "Não medido" state.
 
@@ -63,15 +65,22 @@ export function safePath(value) {
   return `…/${parts.slice(-3).join('/')}`;
 }
 
-/* ---- number formatting ------------------------------------------------- */
+/* ---- number / date formatting (ANA-212) ---------------------------------
+ * The ONLY place allowed to call toLocale-family: the locale follows the UI language (pt -> pt-BR,
+ * en -> en-US) instead of being fixed or implicit. tests/test_frontend_onda7.py lints the rest. */
+export const localeTag = () => (getLang() === 'en' ? 'en-US' : 'pt-BR');
+export function fmtNumber(v, opts) {
+  const n = num(v);
+  return n === null ? '—' : n.toLocaleString(localeTag(), opts);
+}
 export function fmtNum(v, digits) {
   const n = num(v);
   if (n === null) return '—';
-  if (digits !== undefined) return n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-  if (Number.isInteger(n)) return n.toLocaleString('en-US');
-  if (Math.abs(n) >= 100) return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  if (Math.abs(n) >= 1) return n.toLocaleString('en-US', { maximumFractionDigits: 1 });
-  return n.toPrecision(3);
+  if (digits !== undefined) return fmtNumber(n, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  if (Number.isInteger(n)) return fmtNumber(n);
+  if (Math.abs(n) >= 100) return fmtNumber(n, { maximumFractionDigits: 0 });
+  if (Math.abs(n) >= 1) return fmtNumber(n, { maximumFractionDigits: 1 });
+  return Number(n.toPrecision(3)).toLocaleString(localeTag());
 }
 export function fmtCompact(v) {
   const n = num(v);
@@ -103,12 +112,17 @@ export function fmtPct(v, digits = 1) {
 export function fmtDate(epochSeconds) {
   const n = num(epochSeconds);
   if (n === null) return '—';
-  return new Date(n * 1000).toLocaleString();
+  return new Date(n * 1000).toLocaleString(localeTag());
 }
 export function fmtDateShort(epochSeconds) {
   const n = num(epochSeconds);
   if (n === null) return '—';
-  return new Date(n * 1000).toLocaleDateString(undefined, { month: 'short', day: '2-digit' });
+  return new Date(n * 1000).toLocaleDateString(localeTag(), { month: 'short', day: '2-digit' });
+}
+export function fmtTime(epochSeconds) {
+  const n = num(epochSeconds);
+  if (n === null) return '—';
+  return new Date(n * 1000).toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 /** Amplification formatted as "43.2×". */
 export const fmtAmp = (v) => (num(v) === null ? '—' : `${num(v).toFixed(num(v) >= 10 ? 1 : 2)}×`);

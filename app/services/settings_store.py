@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 KV_KEY = "app_settings"
 DEFAULT_ALERT_PCT = 80.0
@@ -36,6 +36,8 @@ class Settings(BaseModel):
     default_pipeline: Literal[PIPELINE_CHOICES] = "auto"  # type: ignore[valid-type]
     auto_graphify_jev_opt: bool = False
     reduce_max_results_by_question_type: bool = False
+    # ANA-202: limiares (% de piora) dos alertas de regressão; chaves de app.services.dashboard_insights
+    regression_thresholds: dict[str, float] = Field(default_factory=dict)
 
 
 class SettingsPatch(BaseModel):
@@ -50,6 +52,18 @@ class SettingsPatch(BaseModel):
     default_pipeline: Literal[PIPELINE_CHOICES] | None = None  # type: ignore[valid-type]
     auto_graphify_jev_opt: bool | None = None
     reduce_max_results_by_question_type: bool | None = None
+    regression_thresholds: dict[str, float] | None = None
+
+    @field_validator("regression_thresholds")
+    @classmethod
+    def _known_thresholds(cls, v):
+        if v is None:
+            return v
+        from app.services.dashboard_insights import DEFAULT_THRESHOLDS
+        bad = sorted(set(v) - set(DEFAULT_THRESHOLDS))
+        if bad or any(x < 0 or x > 1000 for x in v.values()):
+            raise ValueError(f"limiares inválidos: use {sorted(DEFAULT_THRESHOLDS)} com valores 0..1000 (chaves ruins: {bad})")
+        return v
 
 
 def _stored(db) -> dict:

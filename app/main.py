@@ -57,6 +57,15 @@ async def lifespan(_app: FastAPI):
     # Probe agents/models off the request path: the first /system/info would otherwise block
     # ~9 s on network probes, exactly when the dashboard is being opened.
     warm_detection()
+    try:  # ANA-196: a run left `running` by a previous process has no thread any more -> failed:orphaned
+        from app.api.workspace import get_registry
+        from app.orchestration.runs import recover_orphans
+        for _p in get_registry().list():
+            _n = recover_orphans(_p.path)
+            if _n:
+                g.log.info("orchestration: %s orphaned run(s) marked failed in project %s", len(_n), _p.id)
+    except Exception as exc:  # noqa: BLE001 - recovery must never block startup
+        g.log.warning("orphan recovery failed: %s", type(exc).__name__)
     yield
     try:  # never leave PTY child processes behind when the server stops
         from app.api.workspace import get_manager
@@ -65,7 +74,7 @@ async def lifespan(_app: FastAPI):
         pass
 
 
-_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+_CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; "
         "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
         "frame-ancestors 'none'")
 _CSP_EXEMPT = {"/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"}
@@ -116,7 +125,7 @@ def create_app() -> FastAPI:
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "no-referrer")
         # S6: no inline/external script can run, so XSS from note content cannot steal the write
-        # token. style-src keeps 'unsafe-inline' because the UI uses style="" attributes (CSS-only).
+        # token. style-src has no 'unsafe-inline': the UI uses utility classes + CSSOM (data-css).
         # /docs, /redoc load Swagger/ReDoc from a CDN and need inline script: exempt them.
         if request.url.path not in _CSP_EXEMPT:
             resp.headers.setdefault("Content-Security-Policy", _CSP)
@@ -138,6 +147,8 @@ def create_app() -> FastAPI:
     app.include_router(memory_context_api.router)
     from app.api import memory_store as memory_store_api  # ANA-078: /api/memory/notes* (Fase 7 + Onda 3)
     app.include_router(memory_store_api.router)
+    from app.api import dashboard_insights as dashboard_insights_api  # Onda 7: alerts / providers health / lineage (GET)
+    app.include_router(dashboard_insights_api.router)
     from app.api import context_pack as context_pack_api  # ANA-147/152/153
     app.include_router(context_pack_api.router)
     app.include_router(connections_api.router)
@@ -160,6 +171,8 @@ app = create_app()
 
 
 def main():
+    from app.services.offline import install_if_enabled
+    install_if_enabled()  # ANA-224: OFFLINE=1 -> no outbound socket leaves this process
     from config.benchmark import BenchmarkConfig
     cfg = BenchmarkConfig()
     print(f"Memory Gateway\n  Local: http://127.0.0.1:{cfg.port}  (bind: {cfg.host}:{cfg.port})")

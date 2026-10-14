@@ -398,3 +398,16 @@ def test_cli_real_aborts_exit3_when_real_spend_exceeds_ceiling(monkeypatch, caps
     cap = capsys.readouterr()
     assert rc == 3 and "ABORTED" in cap.err
     assert _PaidFakeRunner.calls == 1                      # only the call that crossed the line was made
+
+
+def test_save_run_attaches_cost_schema_ana175(tmp_path, monkeypatch):
+    import json as _json
+    from app.database.db import Database
+    monkeypatch.setenv("ANAMNESIA_COST_SCHEMA", "1")  # opt-in, default OFF
+    db = Database(str(tmp_path / "b.db"))
+    db.save_run({"run_id": "r1", "session_id": "s", "created_at": "2026-01-01T00:00:00",
+                 "pipeline": "baseline", "metrics_json": {"a": 1}})
+    with db._tx() as cx:
+        mj = _json.loads(cx.execute("select metrics_json from runs where run_id='r1'").fetchone()[0])
+    assert mj["cost_schema"]["spent_total"]["value"] is None          # unmeasured, never 0
+    assert mj["cost_schema"]["parcels"]["router_tokens"]["origin"] == "unavailable"

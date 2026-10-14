@@ -54,3 +54,16 @@ def check_shell_confirm(request, profile_id: str) -> bool:
         return True
     _log.warning("shell session without confirm (mode=%s)", m)
     return m != "enforce"
+
+
+def check_confirm_header(request, action: str = "") -> bool:
+    """True if a destructive action (e.g. worktree removal) may proceed: valid X-MG-Confirm, or the
+    MG_SHELL_CONFIRM mode is not `enforce`."""
+    m = mode("MG_SHELL_CONFIRM")
+    if m == "off":
+        return True
+    got = request.headers.get(CONFIRM_HEADER, "")
+    if got and hmac.compare_digest(got, _UI_SECRET):
+        return True
+    _log.warning("%s without confirm (mode=%s)", action or "action", m)
+    return m != "enforce"

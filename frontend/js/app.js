@@ -7,6 +7,7 @@
  * Controla modais, paleta de comandos Ctrl+K, toasts e troca de temas.
  */
 
+import './dynamic-style.js';
 import { icon } from './icons.js';
 import { I18N, getLang, setLang } from './i18n.js';
 import { mockProjects, mockCostSummary, mockSessions } from './mock-data.js';
@@ -17,8 +18,8 @@ import * as configPage from './pages/config.js';
 import * as costsPage from './pages/costs.js';
 import * as memoryPage from './pages/memory.js';
 import * as compareLab from './pages/compare/index.js';
-import { esc } from './format.js';
-import { loadLive, installTerminalObserver, registerProject } from './live.js';
+import { esc, fmtNumber } from './format.js';
+import { loadLive, installTerminalObserver, registerProject, live, demoBlocks, isDemo, checkHealth, refreshAlerts } from './live.js';
 
 // `title` é getter: lê I18N no momento do render para acompanhar a troca de idioma.
 const ROUTES = {
@@ -80,6 +81,10 @@ export async function init() {
     renderShell();
   });
   window.addEventListener('keydown', handleKeyboardShortcuts);
+  // ANA-201/202: cabeçalho do Lab (nº de runs/alertas) depende de dados reais carregados sob demanda
+  window.addEventListener('anamnesia:lab-ready', () => { if (currentRoute.startsWith('#/compare')) renderShell(); });
+  // Saúde real e alertas: atualizados em segundo plano; só os indicadores são repintados (sem re-render de página)
+  setInterval(() => { Promise.all([checkHealth(), refreshAlerts()]).then(paintLiveIndicators); }, 30000);
   window.addEventListener('anamnesia:toast', (e) => showToast(e.detail));
   window.addEventListener('anamnesia:modal:add-project', () => openModal({ type: 'add-project' }));
   window.addEventListener('anamnesia:modal:snippet', (e) => openModal({ type: 'snippet', ...e.detail }));
@@ -90,6 +95,44 @@ export async function init() {
 
   // Initial routing
   handleRoute();
+}
+
+/** Repinta só os indicadores de saúde/alertas do shell (não toca no conteúdo da página). */
+function paintLiveIndicators() {
+  if (!appRoot) return;
+  const h = healthView();
+  appRoot.querySelectorAll('[data-bind="health"]').forEach((el) => {
+    const dot = el.querySelector('.dot'); const txt = el.querySelector('[data-bind="health-text"]');
+    if (dot) dot.className = `dot ${h.dot}`;
+    if (txt) txt.textContent = h.text;
+    const ws = live.health.warnings || [];            // E1: avisos do /health (estágios opcionais ausentes)
+    el.title = ws.map((w) => `${w.component}: ${w.message}`).join('\n');
+    if (ws.length && txt && live.health.state === 'ok') { txt.textContent = `${h.text} · ${ws.length} aviso(s)`; if (dot) dot.className = 'dot dot-warning'; }
+  });
+  const slot = appRoot.querySelector('[data-bind="alerts-slot"]');
+  if (slot) slot.innerHTML = alertsBadge();
+}
+
+function healthView() {
+  const st = live.health.state;
+  if (st === 'ok') return { dot: 'dot-success', text: I18N.app.localHealthOk };
+  if (st === 'warn') return { dot: 'dot-warning', text: I18N.app.localHealthWarn };
+  if (st === 'error') return { dot: 'dot-danger', text: I18N.app.localHealthError };
+  return { dot: 'dot-neutral', text: I18N.app.unavailable };
+}
+
+function alertsBadge() {
+  const n = live.alerts.length;
+  if (!n) return '';
+  return `<a href="#/compare/overview" class="badge-origin badge-alert" aria-label="${esc(I18N.lab.alertsAria.replace('{n}', String(n)))}">${esc(I18N.lab.alertsBadge.replace('{n}', String(n)))}</a>`;
+}
+
+/** Banner ÚNICO de modo demonstração (ANA-201): lista os blocos que ainda mostram mock por falha da API. */
+function demoBanner() {
+  const blocks = demoBlocks();
+  if (!blocks.length) return '';
+  const names = blocks.map((b) => (I18N.app.demoBlocks && I18N.app.demoBlocks[b]) || b).join(', ');
+  return `<div class="demo-banner" role="status" data-bind="demo-banner">${icon('alertTriangle', '', 14)}<span><strong>${esc(I18N.app.demoBanner)}:</strong> ${esc(names)}</span></div>`;
 }
 
 function handleRoute() {
@@ -118,7 +161,7 @@ function renderShell() {
   // REGRA DE OURO: Se estiver na rota #/compare, a casca do app some completamente
   // e entra o Laboratório de Comparação com header próprio
   if (isLab) {
-    const subRoute = currentRoute.replace('#/compare/', '').replace('#/compare', '') || 'overview';
+    const subRoute = currentRoute.split('?')[0].replace('#/compare/', '').replace('#/compare', '') || 'overview';
     appRoot.innerHTML = `
       ${compareLab.render(subRoute, { langSwitch: renderLangSwitch() })}
       ${renderGlobalToasts()}
@@ -134,13 +177,20 @@ function renderShell() {
   const routeObj = ROUTES[currentRoute] || ROUTES['#/workspace'];
   activePageModule = routeObj.module;
 
-  const activeProject = mockProjects[0] || { name: 'sem projeto' };
-  const activeSession = mockSessions[0] || { profileId: '—' };
+  // ANA-201: valores do shell só vêm do backend; com a API do bloco indisponível o mock NÃO é exibido ("—").
+  const wsDemo = isDemo('workspace');
+  const activeProject = (!wsDemo && mockProjects[0]) || { name: '—' };
+  const activeSession = (!wsDemo && mockSessions[0]) || { profileId: '—' };
+  const activeSessions = wsDemo ? null : mockSessions.filter((s) => s.status === 'active').length;
+  const costVal = isDemo('costs') ? null : mockCostSummary.total_usd.value;
+  const hv = healthView();
+  const debugOn = /[?&]debug=1/.test(window.location.hash) || localStorage.getItem('anamnesia_debug') === '1';
 
   appRoot.innerHTML = `
     <div class="shell-container" data-bind="app-shell">
       <!-- SIDEBAR ESQUERDA (Exatamente 4 itens de navegação + Rodapé) -->
-      <aside class="app-sidebar" aria-label="Navegação principal">
+      <a class="skip-link" href="#main-content" data-action="skip-to-content">${esc(I18N.app.skipToContent)}</a>
+      <aside class="app-sidebar" aria-label="${esc(I18N.app.mainNav)}">
         <div>
           <!-- Header da Sidebar -->
           <div class="sidebar-header">
@@ -151,7 +201,7 @@ function renderShell() {
           </div>
 
           <!-- Navegação: Apenas Workspace, Conexões, Config, Custos -->
-          <nav class="sidebar-nav" role="navigation">
+          <nav class="sidebar-nav" aria-label="${esc(I18N.app.mainNav)}">
             <a href="#/workspace" class="nav-item ${routeObj.id === 'workspace' ? 'is-active' : ''}" aria-current="${routeObj.id === 'workspace' ? 'page' : 'false'}">
               <span class="nav-item-icon">${icon('terminal', '', 18)}</span>
               <span>${I18N.nav.workspace}</span>
@@ -178,21 +228,21 @@ function renderShell() {
         <!-- Rodapé da Sidebar: Saúde local, tema e versão -->
         <div class="sidebar-footer">
           <!-- Mini seletor de depuração de estados (Section 6) -->
-          <div class="debug-state-bar" title="Simulador de estados para teste e avaliação">
-            <span style="font-weight: 600;">Estado:</span>
-            <select class="select-control" data-action="switch-debug-state" style="padding: 2px 18px 2px 6px; font-size: 10px;">
+          ${debugOn ? `<div class="debug-state-bar" title="Simulador de estados para teste e avaliação">
+            <span class="u-93d1d3">Estado:</span>
+            <select class="select-control u-92c95c" data-action="switch-debug-state">
               <option value="loaded" ${currentDebugState === 'loaded' ? 'selected' : ''}>Normal (Carregado)</option>
               <option value="loading" ${currentDebugState === 'loading' ? 'selected' : ''}>Carregando (Skeleton)</option>
               <option value="empty" ${currentDebugState === 'empty' ? 'selected' : ''}>Vazio (Empty State)</option>
               <option value="error" ${currentDebugState === 'error' ? 'selected' : ''}>Erro (Falha)</option>
               <option value="backend-unavailable" ${currentDebugState === 'backend-unavailable' ? 'selected' : ''}>Backend Indisponível</option>
             </select>
-          </div>
+          </div>` : ''}
 
           <div class="sidebar-health-row">
-            <span class="status-indicator">
-              <span class="dot dot-success"></span>
-              <span>${I18N.app.localHealthOk}</span>
+            <span class="status-indicator" data-bind="health" role="status">
+              <span class="dot ${hv.dot}" aria-hidden="true"></span>
+              <span data-bind="health-text">${esc(hv.text)}</span>
             </span>
             <span class="sidebar-version tabular">${I18N.app.version}</span>
           </div>
@@ -224,13 +274,13 @@ function renderShell() {
               <span aria-hidden="true">/</span>
               <span class="breadcrumb-active">${esc(routeObj.title)}</span>
               <span aria-hidden="true">·</span>
-              <span style="color: var(--text-tertiary); font-family: var(--font-mono);">${activeProject.name}</span>
+              <span class="u-ebaf11">${activeProject.name}</span>
             </div>
           </div>
 
           <div class="topbar-center">
-            <button class="command-trigger-btn" data-action="open-command-palette" aria-label="Abrir busca e paleta de comandos">
-              <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="command-trigger-btn" data-action="open-command-palette" aria-haspopup="dialog" aria-label="${esc(I18N.app.openPalette)}">
+              <div class="u-598951">
                 ${icon('search', '', 13)}
                 <span>${I18N.app.searchPlaceholder}</span>
               </div>
@@ -240,6 +290,7 @@ function renderShell() {
 
           <!-- Botão "Comparar Modelos" (destacado no canto direito) -->
           <div class="topbar-right">
+            <span data-bind="alerts-slot">${alertsBadge()}</span>
             <a href="#/compare/overview" class="btn btn-secondary-highlight" data-action="nav-compare" aria-label="${I18N.app.compareModelsBtn}">
               ${icon('scale', '', 14)}
               <span>${I18N.app.compareModelsBtn}</span>
@@ -248,38 +299,39 @@ function renderShell() {
         </header>
 
         <!-- ÁREA DE CONTEÚDO DA PÁGINA ATIVA -->
-        <div class="app-content" data-bind="content-slot">
+        ${demoBanner()}
+        <main class="app-content" id="main-content" tabindex="-1" data-bind="content-slot">
           ${activePageModule ? activePageModule.render() : ''}
-        </div>
+        </main>
 
         <!-- STATUS BAR INFERIOR (Alta densidade, nativa do app) -->
-        <footer class="app-statusbar" aria-label="Barra de status">
+        <footer class="app-statusbar" aria-label="${esc(I18N.app.statusBar)}">
           <div class="statusbar-section">
-            <div class="statusbar-item">
-              <span class="dot dot-success"></span>
-              <span>${I18N.app.localHealthOk}</span>
+            <div class="statusbar-item" data-bind="health">
+              <span class="dot ${hv.dot}" aria-hidden="true"></span>
+              <span data-bind="health-text">${esc(hv.text)}</span>
             </div>
             <span aria-hidden="true">|</span>
             <div class="statusbar-item">
-              <span>Projeto:</span>
-              <span style="color: var(--text-primary); font-weight: 500;">${activeProject.name}</span>
+              <span>${esc(I18N.app.statusProject)}:</span>
+              <span class="u-3171f9">${activeProject.name}</span>
             </div>
             <span aria-hidden="true">|</span>
             <div class="statusbar-item">
-              <span>Perfil ativo:</span>
-              <span style="color: var(--text-primary); font-weight: 500;">${activeSession.profileId}</span>
+              <span>${esc(I18N.app.statusProfile)}:</span>
+              <span class="u-3171f9">${activeSession.profileId}</span>
             </div>
           </div>
 
           <div class="statusbar-section">
             <div class="statusbar-item tabular">
               <span>Memory Gateway:</span>
-              <span style="color: var(--text-primary); font-weight: 600;">${mockCostSummary.total_usd.value == null ? 'custo indisponível' : 'US$ ' + mockCostSummary.total_usd.value.toFixed(2) + ' hoje'}</span>
-              <span class="badge-origin badge-origin-measured" style="margin-left: 4px;">medido</span>
+              <span class="u-2bbabc">${costVal == null ? esc(I18N.app.statusCostUnavailable) : esc('US$ ' + fmtNumber(costVal, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + I18N.app.statusToday)}</span>
+              ${costVal == null ? '' : `<span class="badge-origin badge-origin-measured u-eb7604">${esc(I18N.app.measured)}</span>`}
             </div>
             <span aria-hidden="true">|</span>
             <div class="statusbar-item tabular">
-              <span>${mockSessions.length} sessões ativas</span>
+              <span>${activeSessions == null ? esc(I18N.app.unavailable) : esc(fmtNumber(activeSessions))} ${esc(I18N.app.statusSessions)}</span>
             </div>
           </div>
         </footer>
@@ -371,7 +423,7 @@ function renderCommandPalette() {
 
   return `
     <div class="command-palette-backdrop is-active" data-action="close-command-palette">
-      <div class="command-palette-dialog" role="dialog" aria-modal="true">
+      <div class="command-palette-dialog" role="dialog" aria-modal="true" aria-label="${esc(I18N.app.openPalette)}">
         <div class="command-palette-input-wrap">
           ${icon('search', '', 16)}
           <input 
@@ -379,6 +431,7 @@ function renderCommandPalette() {
             class="command-palette-input" 
             placeholder="Digite para buscar páginas, projetos ou ações..." 
             data-action="filter-palette" 
+            aria-label="${esc(I18N.app.searchPlaceholder)}"
             autofocus 
           />
           <kbd>Esc</kbd>
@@ -414,7 +467,7 @@ function renderCommandPalette() {
             <kbd>#4</kbd>
           </div>
           <div class="command-palette-item" data-action="palette-navigate" data-target="#/compare/overview">
-            <div class="command-palette-item-left" style="color: var(--lab-accent);">
+            <div class="command-palette-item-left u-088d7f">
               ${icon('scale', '', 14)}
               <span>Abrir Laboratório de Comparação de Modelos</span>
             </div>
@@ -448,7 +501,7 @@ function renderCommandPalette() {
 }
 
 function renderGlobalToasts() {
-  return `<div class="toast-container" id="toast-container"></div>`;
+  return `<div class="toast-container" id="toast-container" role="status" aria-live="polite" aria-atomic="false"></div>`;
 }
 
 function showToast({ type = 'info', message = '' }) {
@@ -458,10 +511,10 @@ function showToast({ type = 'info', message = '' }) {
   const toast = document.createElement('div');
   toast.className = 'toast';
   toast.innerHTML = `
-    <span style="color: ${type === 'success' ? 'var(--success)' : type === 'warning' ? 'var(--warning)' : type === 'error' ? 'var(--danger)' : 'var(--primary)'};">
+    <span class="toast-icon toast-icon-${['success', 'warning', 'error'].includes(type) ? type : 'info'}">
       ${icon(type === 'success' ? 'check' : type === 'warning' ? 'alertTriangle' : 'info', '', 16)}
     </span>
-    <span style="flex: 1;">${esc(message)}</span>
+    <span class="u-d2dc0a">${esc(message)}</span>
   `;
 
   container.appendChild(toast);
@@ -520,6 +573,11 @@ function attachShellHandlers() {
           isCommandPaletteOpen = false;
           renderShell();
         }
+        break;
+      }
+      case 'skip-to-content': {
+        e.preventDefault();
+        appRoot.querySelector('#main-content')?.focus();
         break;
       }
       case 'set-lang': {

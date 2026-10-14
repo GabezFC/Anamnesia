@@ -93,6 +93,15 @@ def cmd_benchmark(a):
         print(json.dumps({"session_id": res["session_id"], "runs": res["runs"]}, ensure_ascii=False))
         from app.benchmark.report import render_session
         print(render_session(g.db, res["session_id"]))
+    if a.fail_on_regression:  # ANA-202: CI gate -- exit 1 when recent runs regressed against the previous ones
+        from app.services import dashboard_insights, settings_store
+        rep = dashboard_insights.regression_alerts(
+            g.db.list_runs(limit=400), thresholds=settings_store.load_settings(g.db).regression_thresholds)
+        for al in rep["alerts"]:
+            print(f"REGRESSÃO {al['pipeline']} {al['metric']}: {al['baseline']} -> {al['current']} "
+                  f"(+{al['change_pct']}% > {al['threshold_pct']}%)", file=sys.stderr)
+        if rep["alerts"]:
+            sys.exit(1)
 
 
 def cmd_sweep(a):
@@ -311,6 +320,8 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--repetitions", type=int, default=1, choices=[1, 3, 5, 10])
     b.add_argument("--jev-mode", choices=["performance", "strict"])
     b.add_argument("--no-warmup", action="store_true")
+    b.add_argument("--fail-on-regression", action="store_true",
+                   help="exit 1 se as runs recentes regrediram (tokens/latência p95/custo) contra as anteriores (ANA-202)")
     b.add_argument("--dry-run", action="store_true")
     b.add_argument("--json", action="store_true")
     b.set_defaults(fn=cmd_benchmark)

@@ -184,3 +184,15 @@
   line-height: var(--leading-relaxed);
   overflow-x: auto;
 }
+
+/* ANA-211 — responsividade das Conexões */
+@media (max-width: 900px) {
+  .connections-page { padding: var(--space-4); }
+  .cards-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .connections-page { padding: var(--space-3); }
+  .cards-grid { grid-template-columns: 1fr; }
+  .connection-card-actions { flex-wrap: wrap; }
+  .connections-section .table { min-width: 560px; }
+}

@@ -2,168 +2,84 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * COMPARE LAB: VISÃO GERAL (#/compare/overview)
- * Resumo sintético das execuções de benchmark e ganhos globais do pipeline.
- * Todas as porcentagens e métricas calculadas estritamente em tempo de execução via mock-data.
+ * Dados REAIS de /benchmark/stats e /benchmark/runs (ANA-200/203). Métrica ausente = "indisponível".
  */
-
-import { icon } from '../../icons.js';
 import { I18N } from '../../i18n.js';
-import { mockBenchmark } from '../../mock-data.js';
+import { esc, fmtNum, fmtDate, fmtPct } from '../../format.js';
 import { createBarChart } from '../../charts/chart-kit.js';
+import { lab, pipelineRows, recallByPipeline } from '../../lab-data.js';
+import { makeTab, na, vTok, vMs, vCost, originBadge, pipeName, table } from './_shared.js';
 
-let chartInstance = null;
+let chart = null;
+const rows = () => pipelineRows(lab.stats);
 
-export function render() {
-  const meta = mockBenchmark.meta;
-  const pipelines = mockBenchmark.pipelines;
-  const baseline = pipelines.find(p => p.id === 'baseline') || pipelines[0];
-  const bestPipeline = pipelines.find(p => p.id === 'graphify_jev_opt') || pipelines[pipelines.length - 1];
+/** ANA-202: regressões (runs recentes vs. anteriores, por pipeline). API indisponível = "indisponível", não "ok". */
+function alertsCard() {
+  const t = I18N.lab;
+  const a = lab.alerts;
+  const head = `<div class="card-header"><div><h3 class="card-title">${esc(t.alertsTitle)}</h3></div></div>`;
+  if (!a) return `<div class="card u-4eaf8e" role="region" aria-label="${esc(t.alertsTitle)}">${head}<p class="lab-note">${na()}</p></div>`;
+  const body = a.alerts.length ? table({
+    caption: t.alertsTitle,
+    cols: [
+      { label: t.colPipeline, html: (r) => esc(pipeName(r.pipeline)) },
+      { label: t.colMetric, html: (r) => esc(t.alertMetrics[r.metric] || r.metric) },
+      { label: t.colBaseline, num: true, html: (r) => esc(fmtNum(r.baseline)) },
+      { label: t.colCurrent, num: true, html: (r) => esc(fmtNum(r.current)) },
+      { label: t.colChange, num: true, html: (r) => esc(`+${fmtNum(r.change_pct, 1)}%`) },
+      { label: t.colThreshold, num: true, html: (r) => esc(`${fmtNum(r.threshold_pct, 0)}%`) },
+      { label: t.colSeverity, html: (r) => `<span class="chip chip-${r.severity === 'critical' ? 'danger' : 'warning'}">${esc(t.severity[r.severity] || r.severity)}</span>` },
+    ], rows: a.alerts })
+    : `<p class="lab-note">${esc(t.alertsNone)}</p>`;
+  const insuff = (a.insufficient || []).length ? `<p class="lab-note">${esc(t.alertsInsufficient)}: ${esc(a.insufficient.map((i) => `${pipeName(i.pipeline)} (${i.runs}/${i.needed})`).join(', '))}</p>` : '';
+  return `<div class="card u-4eaf8e" role="region" aria-label="${esc(t.alertsTitle)}">${head}${body}${insuff}<p class="lab-note">${esc(t.alertsRecallNote)}</p></div>`;
+}
 
-  // Cálculos dinâmicos
-  const pct = (a, b) => (b > 0 && Number.isFinite(a) ? (((a - b) / b) * 100).toFixed(1) : null);
-  const qualityDiffPct = pct(bestPipeline.quality_score, baseline.quality_score);
-  const wasteReductionPct = pct(bestPipeline.tokens_wasted_avg, baseline.tokens_wasted_avg);
-  const latencyDiffPct = pct(bestPipeline.total_latency_ms, baseline.total_latency_ms);
-
+function body() {
+  const t = I18N.lab;
+  const rs = rows();
+  const base = rs.find((r) => r.pipeline === 'baseline') || null;
+  const best = [...rs].filter((r) => r.ctx !== null).sort((a, b) => a.ctx - b.ctx)[0] || null;
+  const red = base && best && base.ctx && best.pipeline !== base.pipeline ? 1 - best.ctx / base.ctx : null;
+  const recall = recallByPipeline(lab.runs);
+  const last = lab.runs[0]?.created_at ?? null;
+  const kpi = (label, v, html, sub) => `<div class="kpi-card"><div class="kpi-label"><span>${esc(label)}</span>${originBadge(v)}</div>
+    <div class="kpi-value-row"><span class="kpi-value">${html}</span></div><span class="kpi-subtext">${sub}</span></div>`;
   return `
-    <div class="lab-view-container">
-      <div class="lab-section-header">
-        <div>
-          <h2 class="lab-section-title">Visão Geral dos Benchmarks</h2>
-          <p class="lab-section-desc">Desempenho consolidado nos testes automatizados em ${meta.dataset_name}.</p>
-        </div>
-      </div>
-
-      <!-- KPI Grid do Laboratório (Todos os valores calculados) -->
-      <div class="costs-kpi-grid">
-        <div class="kpi-card" style="border-color: var(--lab-accent-border);">
-          <div class="kpi-label">
-            <span>Runs Executados</span>
-            <span class="badge-origin badge-origin-measured">Dataset Lite</span>
-          </div>
-          <div class="kpi-value-row">
-            <span class="kpi-value" style="color: var(--lab-accent);">${meta.total_runs}</span>
-          </div>
-          <span class="kpi-subtext">Última execução: ${meta.last_benchmark}</span>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">
-            <span>Melhoria de Qualidade</span>
-            <span class="badge-origin badge-origin-measured">vs Baseline</span>
-          </div>
-          <div class="kpi-value-row">
-            <span class="kpi-value" style="color: var(--success);">${qualityDiffPct == null ? '—' : '+' + qualityDiffPct + '%'}</span>
-          </div>
-          <span class="kpi-subtext">${bestPipeline.name} (${bestPipeline.quality_score} pts)</span>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">
-            <span>Redução de Desperdício</span>
-            <span class="badge-origin badge-origin-measured">Tokens Espúrios</span>
-          </div>
-          <div class="kpi-value-row">
-            <span class="kpi-value" style="color: var(--primary);">${wasteReductionPct == null ? '—' : wasteReductionPct + '%'}</span>
-          </div>
-          <span class="kpi-subtext">De ${baseline.tokens_wasted_avg} para ${bestPipeline.tokens_wasted_avg} tokens</span>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">
-            <span>Impacto em Latência</span>
-            <span class="badge-origin badge-origin-measured">Tempo Total</span>
-          </div>
-          <div class="kpi-value-row">
-            <span class="kpi-value" style="color: ${parseFloat(latencyDiffPct) <= 0 ? 'var(--success)' : 'var(--warning)'};">${latencyDiffPct == null ? '—' : (latencyDiffPct > 0 ? '+' : '') + latencyDiffPct + '%'}</span>
-          </div>
-          <span class="kpi-subtext">${bestPipeline.total_latency_ms} ms vs ${baseline.total_latency_ms} ms</span>
-        </div>
-      </div>
-
-      <!-- Gráfico Comparativo de Quality Score dos Pipelines -->
-      <div class="card" style="padding: var(--space-5); margin-top: var(--space-4);">
-        <div class="card-header" style="margin-bottom: var(--space-4);">
-          <div>
-            <h3 class="card-title">Score de Qualidade por Pipeline (0 a 100)</h3>
-            <p class="card-subtitle">Avaliação cega baseada em taxa de resolução de patches corretos no dataset.</p>
-          </div>
-        </div>
-
-        <div id="overview-score-chart-mount" style="min-height: 230px; width: 100%;"></div>
-      </div>
-
-      <!-- Tabela sintética de pipelines -->
-      <div class="card" style="margin-top: var(--space-4);">
-        <div class="table-container">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Pipeline</th>
-                <th class="num-col">Score (Qualidade)</th>
-                <th class="num-col">Δ Baseline</th>
-                <th class="num-col">Tokens / Execução</th>
-                <th class="num-col">Latência Média</th>
-                <th>Selo de Procedência</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${pipelines.map(p => {
-                const diff = pct(p.quality_score, baseline.quality_score);
-                const diffLabel = p.id === 'baseline' ? 'Ref.' : (diff == null ? '—' : `+${diff}%`);
-                const sealClass = p.seal === 'verified' ? 'badge-verified' : 'badge-experimental';
-                return `
-                  <tr>
-                    <td>
-                      <div style="font-weight: 600; color: var(--text-primary);">${p.name}</div>
-                      <div style="font-size: 11px; color: var(--text-tertiary);">${p.description}</div>
-                    </td>
-                    <td class="num-col tabular font-mono" style="font-size: 14px; font-weight: 700;">${p.quality_score > 0 ? p.quality_score.toFixed(1) : '—'}</td>
-                    <td class="num-col tabular font-mono" style="color: ${p.id === 'baseline' ? 'var(--text-tertiary)' : 'var(--success)'}; font-weight: 600;">
-                      ${diffLabel}
-                    </td>
-                    <td class="num-col tabular font-mono">${p.context_tokens_avg.toLocaleString()} tok</td>
-                    <td class="num-col tabular font-mono">${p.total_latency_ms} ms</td>
-                    <td>
-                      <span class="${sealClass}">${p.seal_label}</span>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <div class="costs-kpi-grid">
+      ${kpi(t.kpiRuns, lab.stats.total_runs, esc(fmtNum(lab.stats.total_runs)), esc(t.kpiRunsSub))}
+      ${kpi(t.kpiLast, last, last === null ? na() : esc(fmtDate(last)), esc(t.sourceLocal))}
+      ${kpi(t.kpiReduction, red, red === null ? na() : esc(fmtPct(red, 1)), best ? esc(`${pipeName(best.pipeline)} ${t.vsBaseline}`) : esc(t.needsBaseline))}
+      ${kpi(t.kpiRecall, recall.size ? 1 : null, recall.size ? esc([...recall].map(([p, r]) => `${pipeName(p)} ${fmtPct(r.mean, 0)}`).join(' · ')) : na(), esc(t.recallSub))}
     </div>
-  `;
-}
-
-export function mount(root) {
-  cleanupChart();
-
-  const mountElem = root.querySelector('#overview-score-chart-mount');
-  if (mountElem) {
-    const pipelines = mockBenchmark.pipelines;
-    const categories = pipelines.map(p => p.name);
-
-    chartInstance = createBarChart(mountElem, {
-      categories,
-      series: [
-        { label: 'Score de Qualidade', color: 'var(--chart-2)', values: pipelines.map(p => p.quality_score) }
+    ${alertsCard()}
+    <div class="card u-4eaf8e">
+      <div class="card-header"><div><h3 class="card-title">${esc(t.chartCtxTitle)}</h3><p class="card-subtitle">${esc(t.chartCtxSub)}</p></div></div>
+      <div id="overview-ctx-chart" class="u-ef46fd"></div>
+    </div>
+    <div class="card u-b38a50">${table({
+      caption: t.ovTableCaption,
+      cols: [
+        { label: t.colPipeline, html: (r) => `<strong>${esc(pipeName(r.pipeline))}</strong>` },
+        { label: t.colRuns, num: true, html: (r) => esc(fmtNum(r.runs)) },
+        { label: t.colCtx, num: true, html: (r) => vTok(r.ctx) },
+        { label: t.colCand, num: true, html: (r) => vTok(r.cand) },
+        { label: t.colLatMean, num: true, html: (r) => vMs(r.latMean) },
+        { label: t.colLatP95, num: true, html: (r) => vMs(r.latP95) },
+        { label: t.colCost, num: true, html: (r) => vCost(r.cost) },
       ],
-      yFormatter: (v) => `${v.toFixed(0)} pts`,
-      height: 230
-    });
-  }
+      rows: rs })}</div>`;
 }
 
-function cleanupChart() {
-  if (chartInstance && chartInstance.destroy) {
-    chartInstance.destroy();
-    chartInstance = null;
-  }
+function after(root) {
+  const el = root.querySelector('#overview-ctx-chart');
+  const rs = rows().filter((r) => r.ctx !== null);
+  if (!el || !rs.length) return;
+  chart = createBarChart(el, {
+    categories: rs.map((r) => pipeName(r.pipeline)),
+    series: [{ label: I18N.lab.colCtx, color: 'var(--chart-2)', values: rs.map((r) => r.ctx) }],
+    yFormatter: (v) => fmtNum(v, 0), height: 230, ariaLabel: I18N.lab.chartCtxTitle,
+  });
 }
-
-export function unmount(root) {
-  cleanupChart();
-}
+const tab = makeTab({ title: 'ovTitle', desc: 'ovDesc', body, after, cleanup: () => { chart?.destroy?.(); chart = null; } });
+export const { render, mount, unmount } = tab;

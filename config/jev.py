@@ -28,12 +28,18 @@ class JevConfig:
     max_concurrent_requests: int = field(default_factory=lambda: env_int("JEV_MAX_CONCURRENT_REQUESTS", 2))
     max_retries: int = field(default_factory=lambda: env_int("JEV_MAX_RETRIES", 2))
     timeout_s: float = field(default_factory=lambda: env_float("JEV_TIMEOUT_S", 30.0))
+    # ANA-225: `typesafe` (paid SDK, default) | `ollama` (local, loopback-only). See app/services/jev_ollama.py.
+    backend: str = field(default_factory=lambda: env_str("JEV_BACKEND", "typesafe"))
+    local_model: str = field(default_factory=lambda: env_str("JEV_LOCAL_MODEL", "qwen3:8b"))
+    local_host: str = field(default_factory=lambda: env_str("JEV_LOCAL_HOST", "http://127.0.0.1:11434"))
     prompt_version: str = JEV_PROMPT_VERSION
     config_version: str = JEV_CONFIG_VERSION
 
     def validate(self) -> None:
         if self.mode not in {"performance", "strict"}:
             raise ValueError(f"JEV_MODE inválido: {self.mode}")
+        if self.backend not in {"typesafe", "ollama"}:
+            raise ValueError(f"JEV_BACKEND inválido: {self.backend}")
         if self.review_action not in {"keep", "drop"}:
             raise ValueError(f"JEV_REVIEW_ACTION inválido: {self.review_action}")
         if self.failure_mode not in {"fail_open", "fail_closed"}:

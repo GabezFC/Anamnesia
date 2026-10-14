@@ -271,7 +271,8 @@ def _delegate(result, extras: dict) -> dict:
     try:
         info = dg.run_delegate(result.query, scope, None, path)
     except Exception as exc:  # noqa: BLE001 - never break the search response
-        extras["fallback_reason"] = f"delegate_error:{type(exc).__name__}"
+        code = getattr(exc, "reason_code", None)      # ANA-195/199: refusals carry a machine-readable code
+        extras["fallback_reason"] = f"delegate_error:{code or type(exc).__name__}"
         return extras
     extras["mode_used"] = "delegate"
     extras["delegate"] = {"run_id": info["run_id"], "state": info["state"], "preset": info["preset"]}
