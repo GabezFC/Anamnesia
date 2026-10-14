@@ -1,0 +1,3 @@
+# Byte-exact fixtures (corpus hash do golden set): sempre LF, inclusive no checkout do Windows
+data/synthetic_vault/** text eol=lf
+benchmark/golden/** text eol=lf
