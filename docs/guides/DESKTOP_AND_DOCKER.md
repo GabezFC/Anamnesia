@@ -1,7 +1,7 @@
 # Executável (Windows) e Docker
 
 ## Executável sem terminal
-    .venv/Scripts/python.exe -m pip install pyinstaller
+    .venv/Scripts/python.exe -m pip install pyinstaller pillow   # pillow: só para gerar o .ico a partir de assets/icon.png
     .venv/Scripts/python.exe packaging/build_exe.py          # -> dist/Anamnesia/Anamnesia.exe (--onefile opcional)
 Dê dois cliques em `Anamnesia.exe`: sobe o servidor local (só loopback), espera `/health` e abre o navegador. Se já
 houver uma instância na porta (`PORT`, padrão 8000), apenas abre o navegador. Dados e `.env` ficam em
