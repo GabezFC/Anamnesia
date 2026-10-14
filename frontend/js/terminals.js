@@ -97,7 +97,7 @@ export class SessionTerminal {
     if (this.disposed) return;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     this.term = new window.Terminal({
-      fontFamily: 'Consolas, "Cascadia Mono", monospace', fontSize: 14, cursorBlink: !reduce,
+      fontFamily: 'Consolas, "Cascadia Mono", "Cascadia Code", "Courier New", monospace', fontSize: 14, cursorBlink: !reduce,
       allowProposedApi: true, theme: readTerminalTheme(), scrollback: 5000,
     });
     liveTerminals.add(this);

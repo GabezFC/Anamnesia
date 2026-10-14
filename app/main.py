@@ -124,6 +124,9 @@ def create_app() -> FastAPI:
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            # ES modules are otherwise heuristically cached by the browser: a UI update would not show up.
+            resp.headers.setdefault("Cache-Control", "no-cache, no-store, must-revalidate")  # sempre busca a versão atual (UI local)
         # S6: no inline/external script can run, so XSS from note content cannot steal the write
         # token. style-src has no 'unsafe-inline': the UI uses utility classes + CSSOM (data-css).
         # /docs, /redoc load Swagger/ReDoc from a CDN and need inline script: exempt them.
