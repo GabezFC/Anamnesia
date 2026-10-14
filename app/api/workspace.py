@@ -29,8 +29,8 @@ from app.services import project_guard
 from app.terminals import worktrees as wt
 from app.terminals.manager import SessionLimitError, SessionNotFound, TerminalManager
 from app.terminals.profiles import Profile, ProfileError, ProfileUnavailable, load_profiles
-from app.terminals.projects import (PathEscapeError, ProjectError, ProjectRegistry, list_dir,
-                                    search_content, search_names)
+from app.terminals.projects import (PathEscapeError, ProjectError, ProjectRegistry, SecretFileError,
+                                    list_dir, read_file, search_content, search_names)
 
 router = APIRouter(prefix="/api")
 audit = logging.getLogger("anamnesia.terminals.audit")
@@ -149,6 +149,23 @@ def project_files(project_id: str, path: str = "", q: str = "", content: int = 0
         return _err(403, "path_escape", "caminho fora do projeto")
     except (ProjectError, OSError):
         return _err(404, "not_found", "diretório não encontrado")
+
+
+@router.get("/projects/{project_id}/file", dependencies=[Depends(require_local_write)])
+def project_file(project_id: str, path: str,
+                 reg: ProjectRegistry = Depends(get_registry)):
+    """Pré-visualização somente leitura de um arquivo de texto (<= 200 KB; segredos bloqueados)."""
+    proj = reg.get(project_id)
+    if proj is None:
+        return _err(404, "not_found", "projeto não encontrado")
+    try:
+        return read_file(proj.path, path)
+    except PathEscapeError:
+        return _err(403, "path_escape", "caminho fora do projeto")
+    except SecretFileError as e:
+        return _err(403, "secret_file", str(e))
+    except (ProjectError, OSError):
+        return _err(404, "not_found", "arquivo não encontrado")
 
 
 # ------------------------------------------------------------------ worktrees (T10.7)

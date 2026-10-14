@@ -67,6 +67,8 @@ export const listFiles = (projectId, path = '', q = '') => {
   return call('GET', `/api/projects/${encodeURIComponent(projectId)}/files?${p.toString()}`)
     .then((x) => asList(x, 'files', 'entries'));
 };
+export const getFileContent = (projectId, path) =>
+  call('GET', `/api/projects/${encodeURIComponent(projectId)}/file?path=${encodeURIComponent(path)}`);
 export const listProfiles = () => call('GET', '/api/profiles').then((x) => asList(x, 'profiles'));
 export const listSessions = () => call('GET', '/api/sessions').then((x) => asList(x, 'sessions'));
 export const createSession = (project, profile) => call('POST', '/api/sessions', { project, profile });

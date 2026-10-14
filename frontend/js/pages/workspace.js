@@ -9,7 +9,8 @@ import { icon } from '../icons.js';
 import { I18N } from '../i18n.js';
 import { mockProjects, mockProfiles, mockSessions, mockFiles } from '../mock-data.js';
 import { renderTerminalFrame } from '../components/terminal-view.js';
-import { launchSession, closeSession, loadFiles } from '../live.js';
+import { launchSession, closeSession, loadFiles, toggleDir, fileContent } from '../live.js';
+import { openFileViewer } from '../components/file-viewer.js';
 import { esc, fmtNumber, fmtDate } from '../format.js';
 import { getSettings, putSettings, lastSearch, isUnavailable } from '../anamnesia-api.js';
 import { skeletonLines, loadingBlock } from '../components/skeleton.js';
@@ -24,6 +25,7 @@ let isFilesOpen = true;
 let isContextDrawerOpen = false;
 let isProfileMenuOpen = false;
 let searchFilter = '';
+let selectedFilePath = '';
 
 // ---- layout persistente (PUT /api/settings terminal_layout) ----
 const ROLES = ['orchestrator', 'researcher', 'implementer', 'reviewer'];
@@ -413,18 +415,8 @@ export function render() {
           </div>
         </div>
 
-        <div class="file-tree-container" data-bind="files-tree">
-          ${filteredFiles.map(file => {
-            const isDir = file.type === 'dir';
-            const indentClass = file.indent === 1 ? 'file-indent-1' : file.indent === 2 ? 'file-indent-2' : '';
-            return `
-              <div class="file-tree-item ${indentClass}" title="${file.name}">
-                ${icon(isDir ? 'folder' : 'file', '', 13)}
-                <span class="u-e488bc">${file.name}</span>
-                ${file.size ? `<span class="u-038f65">${file.size}</span>` : ''}
-              </div>
-            `;
-          }).join('')}
+        <div class="file-tree-container" data-bind="files-tree" role="tree" aria-label="${t.filesTitle}">
+          ${fileItemsHtml(filteredFiles)}
         </div>
       </aside>
 
@@ -450,9 +442,67 @@ export function render() {
   `;
 }
 
+/** Itens do painel de arquivos: pastas expandem/recolhem, arquivos abrem o visualizador. */
+function fileItemsHtml(list) {
+  return list.map((file) => {
+    const isDir = file.type === 'dir';
+    const indentClass = file.indent > 0 ? `file-indent-${Math.min(file.indent, 6)}` : '';
+    const sel = !isDir && file.path && file.path === selectedFilePath;
+    const aria = isDir ? ` aria-expanded="${file.expanded ? 'true' : 'false'}"` : '';
+    return `
+      <div class="file-tree-item ${indentClass} ${sel ? 'is-selected' : ''}" title="${file.name}" role="treeitem" tabindex="0"
+           data-file-path="${esc(file.path || '')}" data-file-type="${isDir ? 'dir' : 'file'}"${aria} aria-selected="${sel ? 'true' : 'false'}">
+        ${icon(isDir ? 'folder' : 'file', '', 13)}
+        <span class="u-e488bc">${file.name}</span>
+        ${file.size ? `<span class="u-038f65">${file.size}</span>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function filteredFileList() {
+  return searchFilter ? mockFiles.filter((f) => f.name.toLowerCase().includes(searchFilter.toLowerCase())) : mockFiles;
+}
+
+function viewerStrings() {
+  const t = I18N.workspace;
+  return { copy: t.fileCopy, copied: t.fileCopied, close: t.fileClose, wrap: t.fileWrap, loading: t.fileLoading,
+    error: t.fileError, truncated: t.fileTruncated, unavailable: t.filePreviewUnavailable };
+}
+
+async function activateFile(root, item) {
+  const path = item.getAttribute('data-file-path');
+  if (!path) return;
+  const file = mockFiles.find((f) => f.path === path);
+  if (!file) return;
+  if (file.type === 'dir') {
+    try { await toggleDir(file); } catch { /* sem acesso: mantém a pasta fechada */ }
+    updateFileTree(root, path);
+    return;
+  }
+  selectedFilePath = path;
+  updateFileTree(root, path);
+  openFileViewer(path, () => fileContent(path), viewerStrings());
+}
+
+function updateFileTree(root, focusPath) {
+  const tree = root.querySelector('[data-bind="files-tree"]');
+  if (!tree) return;
+  const list = filteredFileList();
+  tree.innerHTML = fileItemsHtml(list);
+  const count = root.querySelector('.workspace-right-col .section-count');
+  if (count) count.textContent = String(list.length);
+  if (focusPath) {
+    const again = [...tree.querySelectorAll('[data-file-path]')].find((n) => n.getAttribute('data-file-path') === focusPath);
+    if (again) again.focus();
+  }
+}
+
 export function mount(root) {
   // Click actions handler
   const handleClick = (e) => {
+    const fileItem = e.target.closest('.file-tree-item[data-file-path]');
+    if (fileItem) { activateFile(root, fileItem); return; }
     const target = e.target.closest('[data-action]');
     if (!target) {
       if (isProfileMenuOpen && !e.target.closest('.profile-menu')) {
@@ -571,23 +621,7 @@ export function mount(root) {
   const handleInput = (e) => {
     if (e.target.matches('[data-action="filter-files"]')) {
       searchFilter = e.target.value;
-      const tree = root.querySelector('[data-bind="files-tree"]');
-      if (tree) {
-        const filtered = searchFilter
-          ? mockFiles.filter(f => f.name.toLowerCase().includes(searchFilter.toLowerCase()))
-          : mockFiles;
-        tree.innerHTML = filtered.map(file => {
-          const isDir = file.type === 'dir';
-          const indentClass = file.indent === 1 ? 'file-indent-1' : file.indent === 2 ? 'file-indent-2' : '';
-          return `
-            <div class="file-tree-item ${indentClass}" title="${file.name}">
-              ${icon(isDir ? 'folder' : 'file', '', 13)}
-              <span class="u-e488bc">${file.name}</span>
-              ${file.size ? `<span class="u-038f65">${file.size}</span>` : ''}
-            </div>
-          `;
-        }).join('');
-      }
+      updateFileTree(root);
     }
   };
 
@@ -667,6 +701,21 @@ export function mount(root) {
     dragTabId = null;
   };
 
+  const handleTreeKey = (e) => {
+    const item = e.target.closest && e.target.closest('.file-tree-item[data-file-path]');
+    if (!item) return;
+    const items = [...root.querySelectorAll('.file-tree-item[data-file-path]')];
+    const idx = items.indexOf(item);
+    const isDir = item.getAttribute('data-file-type') === 'dir';
+    const open = item.getAttribute('aria-expanded') === 'true';
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activateFile(root, item); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); items[Math.min(idx + 1, items.length - 1)]?.focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); items[Math.max(idx - 1, 0)]?.focus(); }
+    else if (e.key === 'ArrowRight' && isDir && !open) { e.preventDefault(); activateFile(root, item); }
+    else if (e.key === 'ArrowLeft' && isDir && open) { e.preventDefault(); activateFile(root, item); }
+  };
+
+  root.addEventListener('keydown', handleTreeKey);
   root.addEventListener('click', handleClick);
   root.addEventListener('input', handleInput);
   root.addEventListener('change', handleChange);
@@ -677,6 +726,7 @@ export function mount(root) {
 
   root._workspaceCleanup = () => {
     root.removeEventListener('click', handleClick);
+    root.removeEventListener('keydown', handleTreeKey);
     root.removeEventListener('input', handleInput);
     root.removeEventListener('change', handleChange);
     root.removeEventListener('pointerdown', handleDown);

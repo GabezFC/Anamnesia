@@ -118,6 +118,34 @@ def list_dir(project_path: str, rel: str = "", cap: int = LIST_CAP) -> dict:
             "truncated": truncated}
 
 
+VIEW_MAX_BYTES = 200 * 1024
+
+
+class SecretFileError(ProjectError):
+    """The file looks like a credential store: never served by the viewer."""
+
+
+def read_file(project_path: str, rel: str, max_bytes: int = VIEW_MAX_BYTES) -> dict:
+    """Read-only preview of one text file (<= max_bytes), confined to the project (safe_join)."""
+    root = Path(project_path).resolve()
+    f = safe_join(root, rel)
+    if not f.is_file():
+        raise ProjectError("não é um arquivo")
+    if is_secret_file(f.name) or any(part in SECRET_DIRS for part in f.relative_to(root).parts):
+        raise SecretFileError("arquivo sensível: pré-visualização bloqueada")
+    size = f.stat().st_size
+    with open(f, "rb") as fh:
+        raw = fh.read(max_bytes + 1)
+    truncated = len(raw) > max_bytes
+    raw = raw[:max_bytes]
+    binary = b"\x00" in raw[:8192]
+    content = ""
+    if not binary:
+        content = raw.decode("utf-8", errors="replace")
+    return {"path": f.relative_to(root).as_posix(), "size": size, "truncated": truncated,
+            "binary": binary, "content": content}
+
+
 def search_names(project_path: str, q: str, rel: str = "", cap: int = SEARCH_CAP) -> dict:
     """Case-insensitive substring search on file/dir names. Never follows symlinks."""
     root = Path(project_path).resolve()

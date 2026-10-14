@@ -76,6 +76,8 @@ export class SessionTerminal {
     this.ended = false;
     this.timer = null;
     this.ro = null;
+    this.lastRows = 0;
+    this.lastCols = 0;
   }
 
   setState(s) {
@@ -111,6 +113,8 @@ export class SessionTerminal {
     this.term.onResize(({ rows, cols }) => this.send({ t: 'rs', rows, cols }));
     this.ro = new ResizeObserver(() => this.refit());
     this.ro.observe(this.el);
+    this.refitSoon();
+    document.fonts?.ready?.then(() => { if (!this.disposed) this.refit(); });
     if (this.pendingFocus) { this.pendingFocus = false; this.term.focus(); }
     this.connect();
   }
@@ -129,8 +133,19 @@ export class SessionTerminal {
     if (!this.fit || !this.el.isConnected || !this.el.offsetWidth || !this.el.offsetHeight) return;
     try {
       this.fit.fit();
-      if (this.term) this.send({ t: 'rs', rows: this.term.rows, cols: this.term.cols });
+      if (this.term) {
+        const { rows, cols } = this.term;
+        if (rows !== this.lastRows || cols !== this.lastCols) {   // só avisa o PTY quando o tamanho muda de fato
+          this.lastRows = rows; this.lastCols = cols;
+          this.send({ t: 'rs', rows, cols });
+        }
+      }
     } catch { /* fit throws if the element is not laid out yet */ }
+  }
+
+  /** Fit depois do layout final: rAF duplo (o container pode ainda estar sendo dimensionado). */
+  refitSoon() {
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (!this.disposed) this.refit(); }));
   }
 
   focus() { if (this.term) this.term.focus(); else this.pendingFocus = true; }
@@ -145,7 +160,8 @@ export class SessionTerminal {
     ws.onopen = () => {
       this.retries = 0;
       this.setState('live');
-      this.refit();
+      this.lastRows = 0; this.lastCols = 0;   // PTY novo/reconectado: reenvia o tamanho
+      this.refitSoon();
     };
     ws.onmessage = (ev) => {
       if (!this.term) return;

@@ -72,21 +72,41 @@ export async function refreshSessions() {
   mockProjects.forEach((p) => { p.active_sessions = mockSessions.filter((s) => s.projectId === p.id && s.status === 'active').length; });
 }
 
-export async function loadFiles(projectId) {
-  const dirs = [''];
-  const out = [];
-  const walk = async (path, indent) => {
-    const r = await call('GET', `/api/projects/${encodeURIComponent(projectId)}/files${path ? `?path=${encodeURIComponent(path)}` : ''}`);
-    const entries = (r.entries || []).filter((e) => !['.git', '.venv', 'node_modules', '__pycache__', '.pytest_cache'].includes(e.name));
-    entries.sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
-    for (const e of entries) {
-      out.push({ name: esc(e.name), type: e.type === 'dir' ? 'dir' : 'file', indent, size: e.size != null ? `${(e.size / 1024).toFixed(1)} KB` : undefined });
-    }
-  };
-  void dirs;
-  await walk('', 0);
-  replace(mockFiles, out);
+export const filesState = { projectId: '' };
+const HIDDEN_DIRS = ['.git', '.venv', 'node_modules', '__pycache__', '.pytest_cache'];
+
+async function listEntries(projectId, path, indent) {
+  const r = await call('GET', `/api/projects/${encodeURIComponent(projectId)}/files${path ? `?path=${encodeURIComponent(path)}` : ''}`);
+  const entries = (r.entries || []).filter((e) => !HIDDEN_DIRS.includes(e.name));
+  entries.sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
+  return entries.map((e) => ({
+    name: esc(e.name), type: e.type === 'dir' ? 'dir' : 'file', indent, path: e.path || e.name, expanded: false,
+    size: e.size != null ? `${(e.size / 1024).toFixed(1)} KB` : undefined,
+  }));
 }
+
+export async function loadFiles(projectId) {
+  filesState.projectId = projectId;
+  replace(mockFiles, await listEntries(projectId, '', 0));
+}
+
+/** Expande/recolhe uma pasta (carrega os filhos sob demanda e os insere logo abaixo dela). */
+export async function toggleDir(file) {
+  const i = mockFiles.indexOf(file);
+  if (i < 0 || file.type !== 'dir') return;
+  if (file.expanded) {
+    let j = i + 1;
+    while (j < mockFiles.length && mockFiles[j].indent > file.indent) j += 1;
+    mockFiles.splice(i + 1, j - i - 1);
+    file.expanded = false;
+    return;
+  }
+  const kids = await listEntries(filesState.projectId, file.path, file.indent + 1);
+  mockFiles.splice(i + 1, 0, ...kids);
+  file.expanded = true;
+}
+
+export const fileContent = (path) => A.getFileContent(filesState.projectId, path);
 
 async function loadWorkspace() {
   const [projects, profiles] = await Promise.all([A.listProjects(), A.listProfiles()]);
