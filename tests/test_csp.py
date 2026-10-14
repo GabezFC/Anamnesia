@@ -81,3 +81,12 @@ def test_frontend_has_no_inline_style_attribute():
             if re.search(r"""(?<![\w.-])style\s*=\s*["'`]""", line) or "setAttribute('style'" in line:
                 bad.append(f"{p.relative_to(FRONTEND)}:{n}")
     assert not bad, bad
+
+
+def test_static_and_index_revalidate_not_heuristic_cache():
+    """A UI update must show up without a hard refresh: /static and / carry Cache-Control: no-cache (+ no-store)."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    assert c.get("/static/js/pages/config.js").headers["cache-control"].startswith("no-cache")
+    assert c.get("/").headers["cache-control"].startswith("no-cache")
