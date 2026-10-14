@@ -30,6 +30,9 @@ DEFAULT_JANITOR_SECONDS = 60.0
 ENV_ALLOWLIST = ("PATH", "HOME", "USERPROFILE", "LANG", "TERM", "SystemRoot", "COMSPEC", "TEMP",
                  "TMP", "PATHEXT")
 
+# Cores: o front-end renderiza truecolor; NO_COLOR nunca é repassado (fora da allowlist).
+COLOR_ENV = {"COLORTERM": "truecolor", "FORCE_COLOR": "3"}
+
 ENV_NEVER = frozenset({"MG_LOCAL_TOKEN", "MG_API_TOKEN", "MG_SESSION_TOKEN", "GITHUB_TOKEN", "GH_TOKEN",
                        "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AZURE_CLIENT_SECRET"})
 
@@ -60,6 +63,10 @@ def build_env(env_keys=(), environ=None, extra: dict[str, str] | None = None) ->
     if os.environ.get("MG_PTY_NO_HOME", "").strip().lower() in {"1", "true", "yes", "on"}:
         for k in [k for k in out if k.upper() in {"HOME", "USERPROFILE"}]:
             out.pop(k, None)
+    # O terminal é xterm.js (24-bit): sem isto CLIs (Claude Code, Hermes, ...) caem em preto e branco.
+    for k, v in COLOR_ENV.items():
+        if not any(x.upper() == k for x in out):
+            out[k] = v
     out.update(extra or {})
     return out
 

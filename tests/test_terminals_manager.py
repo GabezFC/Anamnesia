@@ -96,6 +96,7 @@ def test_env_allowlist_and_profile_keys(fake, proj, prof):
     extra = {k for k in set(env) - {k for k in ENV_ALLOWLIST} - {"FAKE_PROFILE_KEY", "MG_SCOPE"}}
     assert env["MG_SESSION_TOKEN"].startswith("mgs_")  # ANA-032: server-side scope token
     extra.discard("MG_SESSION_TOKEN")
+    extra -= {"COLORTERM", "FORCE_COLOR"}  # cores 24-bit para o xterm.js
     assert all(k.startswith("MG_MCP_") or k == "MEMORY_GATEWAY_URL" for k in extra)
 
 
@@ -205,3 +206,10 @@ def test_close_all(fake, proj, prof):
         m.create(proj, prof)
     m.close_all()
     assert all(h.terminated == 1 for h in fake.spawned) and m.list() == []
+
+
+def test_env_forces_truecolor_for_agent_clis():
+    from app.terminals.manager import build_env
+    env = build_env(environ={"PATH": "/bin", "NO_COLOR": "1"})
+    assert env["COLORTERM"] == "truecolor" and env["FORCE_COLOR"] == "3"
+    assert "NO_COLOR" not in env

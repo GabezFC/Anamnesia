@@ -171,25 +171,25 @@
    DARK THEME (Optional toggle, identically polished)
    -------------------------------------------------------------------------- */
 [data-theme="dark"] {
-  --bg-app: #04070B;
-  --bg-canvas: #080C12;
-  --bg-surface: #0F1621;
-  --bg-surface-elevated: #172131;
-  --bg-surface-subtle: #1E2A3D;
-  --bg-surface-hover: #243349;
-  --bg-surface-active: #2B3C56;
-  --bg-sidebar: #070B10;
+  --bg-app: #05080D;
+  --bg-canvas: #0A0F17;
+  --bg-surface: #1A2536;
+  --bg-surface-elevated: #223049;
+  --bg-surface-subtle: #2B3B55;
+  --bg-surface-hover: #344863;
+  --bg-surface-active: #3D5375;
+  --bg-sidebar: #080C13;
   --bg-topbar: rgba(8, 12, 18, 0.96);
 
-  --border-subtle: rgba(255, 255, 255, 0.12);
-  --border-default: rgba(255, 255, 255, 0.20);
-  --border-strong: rgba(255, 255, 255, 0.32);
+  --border-subtle: rgba(255, 255, 255, 0.16);
+  --border-default: rgba(255, 255, 255, 0.28);
+  --border-strong: rgba(255, 255, 255, 0.42);
   --border-focus: #6CB0FF;
 
   --text-primary: #F8FAFC;
   --text-secondary: #CBD5E1;
-  --text-tertiary: #A9B6CA;
-  --text-muted: #8F9DB3;
+  --text-tertiary: #B4C0D2;
+  --text-muted: #9DABC1;
   --text-inverse: #070A0E;
 
   --primary: #60A5FA;
@@ -230,7 +230,7 @@
   --shadow-modal: 0 20px 48px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.12);
 
   --term-bg: #03060A;
-  --term-header-bg: #0F1621;
+  --term-header-bg: #1A2536;
   --term-fg: #EEF2F7;
   --term-selection: rgba(79, 156, 249, 0.35);
   --term-cursor: #4F9CF9;
