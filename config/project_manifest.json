@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "description": "Fonte única do que um projeto precisa ter para usar o Anamnésia/Memory Gateway. Lido por app/services/project_initializer.py (botão 'Inicializar Anamnésia' do Workspace). Para exigir algo novo, acrescente uma entrada aqui (e o template em config/project_templates/); nenhum código muda.",
+  "vault": {
+    "description": "Arquivos criados na RAIZ do vault configurado (só se ausentes; nunca sobrescreve). Mesmo formato de 'files'.",
+    "files": [
+      {"path": "AGENTS.md", "template": "vault-AGENTS.md.tmpl", "description": "Regras do vault para qualquer agente de IA", "required": true},
+      {"path": "CLAUDE.md", "template": "vault-CLAUDE.md.tmpl", "description": "Regras do vault para Claude Code (gêmeo de AGENTS.md)", "required": true},
+      {"path": "HOME.md", "template": "vault-HOME.md.tmpl", "description": "Porta de entrada/índice do vault", "required": true},
+      {"path": "Sem título.base", "template": "vault.base.tmpl", "description": "Visão em tabela (Obsidian Bases)", "required": false}
+    ]
+  },
+  "directories": [
+    {"path": ".anamnesia", "description": "Referências do projeto ao Anamnésia (sem cópia do vault)"}
+  ],
+  "files": [
+    {
+      "path": ".anamnesia/gateway.json",
+      "template": "gateway.json.tmpl",
+      "description": "Referência ao Memory Gateway e ao vault configurados no Anamnésia",
+      "required": true
+    },
+    {
+      "path": ".mcp.json",
+      "template": "mcp.json.tmpl",
+      "description": "Servidor MCP do Memory Gateway para Claude Code",
+      "required": true
+    },
+    {
+      "path": "AGENTS.md",
+      "template": "AGENTS.md.tmpl",
+      "description": "Instruções para qualquer agente de IA (Hermes, Codex, OpenCode, Cursor, ...)",
+      "required": true
+    },
+    {
+      "path": "CLAUDE.md",
+      "template": "CLAUDE.md.tmpl",
+      "description": "Instruções para Claude Code (gêmeo de AGENTS.md)",
+      "required": true
+    }
+  ]
+}

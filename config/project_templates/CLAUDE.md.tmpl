@@ -1,0 +1,21 @@
+# CLAUDE.md — {{project_name}}
+
+Instruções para o **Claude Code** neste projeto. Gêmeo de `AGENTS.md`: ao alterar um, altere o outro.
+Arquivo criado pelo Anamnésia; edite à vontade, ele não será sobrescrito.
+
+## Memória de longo prazo (Anamnésia / Memory Gateway)
+
+- A memória do usuário é um vault Obsidian configurado no Anamnésia (variável `{{vault_env}}`).
+  A referência deste projeto está em `.anamnesia/gateway.json`. **O vault não fica dentro deste projeto.**
+- Para contexto histórico ou decisões anteriores, use a ferramenta MCP `memory_search`
+  (servidor `{{mcp_server_name}}`, configurado em `.mcp.json`; gateway em {{gateway_url}}).
+  Busque por termo específico, 3–5 notas no máximo. Não achou? Diga; não invente.
+- A ferramenta `memory_search` só lê. Para gravar no vault, siga as regras do `AGENTS.md`/`CLAUDE.md` da raiz dele
+  (notas atômicas, frontmatter, pasta certa); nunca apague nem reescreva notas existentes por conta própria.
+
+## Regras
+
+1. Crie e modifique arquivos somente dentro deste projeto.
+2. Não invente APIs, comandos ou parâmetros; verifique a documentação antes de integrar.
+3. Não substitua uma decisão documentada por suposição.
+4. Não grave segredos (chaves, tokens) em arquivos do projeto.

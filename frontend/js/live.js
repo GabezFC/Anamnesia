@@ -135,6 +135,10 @@ export async function closeSession(id) {
   await A.deleteSession(id).catch(() => {});
   await refreshSessions();
 }
+export const initializeProject = (id) => A.initializeProject(id);
+export const jevStatus = () => A.jevStatus();
+export const jevSaveConfig = (s, k) => A.jevSaveConfig(s, k);
+export const jevTestConnection = () => A.jevTestConnection();
 export async function registerProject(name, path) {
   const p = await A.addProject(name, path);
   await loadWorkspace();

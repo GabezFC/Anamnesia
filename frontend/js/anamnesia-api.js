@@ -12,14 +12,16 @@ export const isUnavailable = (e) =>
 async function errorFrom(r, path) {
   let msg = null;
   let hint = null;
+  let code = null;
   try {
     const j = await r.json();
-    if (j && j.error && typeof j.error === 'object') { msg = j.error.message; hint = j.error.hint; }
+    if (j && j.error && typeof j.error === 'object') { msg = j.error.message; hint = j.error.hint; code = j.error.code; }
     else if (typeof j?.detail === 'string') msg = j.detail;
     else if (j?.detail) msg = JSON.stringify(j.detail);
   } catch { /* not JSON */ }
   const err = new ApiError(r.status, r.statusText, path, msg);
   err.hint = hint || null;
+  err.code = code || null;
   return err;
 }
 
@@ -59,6 +61,7 @@ export function asList(x, ...keys) {
 /* ---- workspace ---------------------------------------------------------- */
 export const listProjects = () => call('GET', '/api/projects').then((x) => asList(x, 'projects'));
 export const addProject = (name, path) => call('POST', '/api/projects', { name, path });
+export const initializeProject = (id, dryRun = false) => call('POST', `/api/projects/${encodeURIComponent(id)}/initialize`, { dry_run: dryRun });
 export const removeProject = (id) => call('DELETE', `/api/projects/${encodeURIComponent(id)}`);
 export const listFiles = (projectId, path = '', q = '') => {
   const p = new URLSearchParams();
@@ -184,3 +187,6 @@ export const getAlerts = () => call('GET', '/api/alerts');
 export const providersHealth = (lastN = 100) => call('GET', `/api/providers/health?last_n=${Number(lastN) || 100}`);
 export const memoryLineage = () => call('GET', '/api/memory/lineage');
 export const benchmarkReportUrl = (fmt = 'md') => `/api/benchmark/report.${fmt === 'json' ? 'json' : 'md'}`;
+export const jevStatus = () => call('GET', '/api/jev/status');
+export const jevSaveConfig = (settings, apiKey) => call('POST', '/api/jev/config', { settings, api_key: apiKey || null });
+export const jevTestConnection = () => call('POST', '/api/jev/test', {});

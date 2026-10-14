@@ -660,3 +660,51 @@ body.ws-resizing { cursor: col-resize; user-select: none; }
   text-align: center;
   text-wrap: balance;
 }
+
+/* --- Inicializar Anamnésia no projeto --- */
+.init-project-section {
+  flex-shrink: 0;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  user-select: text;
+  max-height: 60%;
+  overflow-y: auto;
+}
+.init-btn { width: 100%; justify-content: center; font-weight: var(--font-bold); padding: 8px 12px; }
+.init-sub { font-size: var(--text-2xs); color: var(--text-secondary); overflow-wrap: anywhere; }
+.init-report {
+  border: 1px solid var(--border-default);
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+.init-report.is-ok { border-left-color: #22c55e; }
+.init-report.is-error { border-left-color: #ef4444; }
+.init-title { font-weight: var(--font-bold); }
+.init-detail { color: var(--text-secondary); }
+.init-hint { color: var(--text-primary); }
+.init-list { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
+.init-list code { font-family: var(--font-mono); font-size: 11px; }
+.init-reason { display: block; color: #fca5a5; font-size: 11px; }
+
+/* --- JEV: configuração guiada --- */
+.jev-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 2px; }
+.jev-field { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-xs); }
+.jev-field input.input, .jev-field select.input { width: 100%; }
+.jev-check { flex-direction: row; align-items: center; gap: 6px; }
+.jev-adv { display: flex; flex-direction: column; gap: var(--space-2); }
+.jev-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.jev-dot.is-ok { background: var(--success); }
+.jev-dot.is-warn { background: var(--warning); }
+.jev-dot.is-idle { background: var(--text-muted); }
+.jev-dot.is-bad { background: var(--danger); }
+.jev-help { margin: 0 0 var(--space-2); line-height: 1.4; }
+.jev-link { color: var(--accent, inherit); text-decoration: underline; white-space: nowrap; }

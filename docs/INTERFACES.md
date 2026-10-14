@@ -5,7 +5,7 @@
 
 Contrato único de REST, CLI e MCP. Contexto e semântica: [README](../README.md) · [MEMORY_SEARCH_MODES](guides/MEMORY_SEARCH_MODES.md) · [SECURITY](guides/SECURITY.md).
 
-## REST (OpenAPI 3.1.0, 106 operações)
+## REST (OpenAPI 3.1.0, 112 operações)
 
 Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`. `?` = parâmetro opcional.
 
@@ -31,6 +31,9 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | GET | `/api/costs/routing/summary` | — | — | Routing Summary |
 | GET | `/api/costs/stream` | max_seconds?, max_events?, poll_interval?, after_rowid? | — | Stream |
 | GET | `/api/costs/summary` | range?, project? | — | Summary |
+| POST | `/api/jev/config` | — | sim | Jev Save Config |
+| GET | `/api/jev/status` | — | — | Jev Status |
+| POST | `/api/jev/test` | — | — | Jev Test Connection |
 | GET | `/api/memory/audit` | — | — | Audit |
 | POST | `/api/memory/consolidate` | — | sim | Consolidate |
 | GET | `/api/memory/contradictions` | — | — | Contradictions |
@@ -59,7 +62,7 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | POST | `/api/memory/reap` | — | sim | Reap |
 | GET | `/api/memory/runs/{run_id}/evidence` | run_id | — | Run Evidence |
 | GET | `/api/memory/runs/{run_id}/quality` | run_id | — | Run Quality |
-| GET | `/api/memory/search-preview` | q, max_results?, scope? | — | Search Preview |
+| GET | `/api/memory/search-preview` | q, max_results?, scope?, pipeline? | — | Search Preview |
 | GET | `/api/memory/trash` | — | — | Trash |
 | POST | `/api/memory/trash/{trash_id}/restore` | trash_id | — | Trash Restore |
 | GET | `/api/memory/usefulness` | — | — | Usefulness |
@@ -72,7 +75,9 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | GET | `/api/projects` | — | — | List Projects |
 | POST | `/api/projects` | — | sim | Add Project |
 | DELETE | `/api/projects/{project_id}` | project_id | — | Remove Project |
+| GET | `/api/projects/{project_id}/file` | project_id, path | — | Project File |
 | GET | `/api/projects/{project_id}/files` | project_id, path?, q?, content? | — | Project Files |
+| POST | `/api/projects/{project_id}/initialize` | project_id | sim | Initialize Project |
 | GET | `/api/projects/{project_id}/worktrees` | project_id | — | List Project Worktrees |
 | POST | `/api/projects/{project_id}/worktrees` | project_id | sim | Create Project Worktree |
 | DELETE | `/api/projects/{project_id}/worktrees/{worktree_id}` | project_id, worktree_id, confirm?, force? | — | Delete Project Worktree |
@@ -101,6 +106,7 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | GET | `/config/shell-confirm` | — | — | Config Shell Confirm |
 | GET | `/config/token` | — | — | Config Token |
 | POST | `/config/vault-path` | — | sim | Set Vault Path |
+| POST | `/config/vault-scaffold` | — | sim | Vault Scaffold |
 | GET | `/config/verdict` | — | — | Get Verdict Flag |
 | POST | `/config/verdict` | — | sim | Set Verdict Flag |
 | POST | `/feedback/evaluation` | — | sim | Add Evaluation |
@@ -150,6 +156,7 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | `--repetitions` |  | choices: 1/3/5/10; default: 1 |
 | `--jev-mode` |  | choices: performance/strict |
 | `--no-warmup` |  | — |
+| `--fail-on-regression` | exit 1 se as runs recentes regrediram (tokens/latência p95/custo) contra as anteriores (ANA-202) | — |
 | `--dry-run` |  | — |
 | `--json` |  | — |
 

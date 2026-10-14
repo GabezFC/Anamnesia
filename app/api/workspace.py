@@ -168,6 +168,33 @@ def project_file(project_id: str, path: str,
         return _err(404, "not_found", "arquivo não encontrado")
 
 
+# ------------------------------------------------------------------ initialize project (Anamnésia no projeto)
+class InitializeIn(BaseModel):
+    dry_run: bool = False
+
+
+@router.post("/projects/{project_id}/initialize", dependencies=[Depends(require_local_write)])
+def initialize_project(project_id: str, body: InitializeIn | None = None,
+                       reg: ProjectRegistry = Depends(get_registry)):
+    """Cria só os arquivos ausentes que ligam o projeto ao Anamnésia/Memory Gateway (manifesto em config/)."""
+    from app.services import project_initializer as pi
+    proj = reg.get(project_id)
+    if proj is None:
+        return _err(404, "not_found", "projeto não encontrado")
+    try:
+        rep = pi.initialize(proj.path, proj.name, dry_run=bool(body and body.dry_run))
+    except pi.InitError as e:
+        status = {"gateway_not_configured": 409, "project_not_writable": 403, "project_invalid": 404}.get(e.code, 500)
+        return _err(status, e.code, e.message, e.hint)
+    except Exception as e:  # nunca devolver o 500 genérico: a UI precisa de um motivo
+        audit.warning("project_initialize_failed project=%s error=%s", proj.id, type(e).__name__)
+        return _err(500, "initialize_failed", f"Falha inesperada ao inicializar: {type(e).__name__}: {e}",
+                    "Veja os logs do Anamnésia (anamnesia.terminals.audit).")
+    audit.info("project_initialize project=%s created=%d existing=%d failed=%d", proj.id, len(rep.created),
+               len(rep.existing), len(rep.failed))
+    return rep.to_dict()
+
+
 # ------------------------------------------------------------------ worktrees (T10.7)
 class WorktreeIn(BaseModel):
     branch: str = Field(min_length=1, max_length=200)
@@ -404,3 +431,45 @@ async def session_ws(ws: WebSocket, session_id: str, mgr: TerminalManager = Depe
         if ws.application_state != WebSocketState.DISCONNECTED:
             with contextlib.suppress(RuntimeError, WebSocketDisconnect):
                 await ws.close()
+
+
+# ------------------------------------------------------------------ JEV (configuração guiada; lógica em app/services/jev_setup.py)
+class JevConfigIn(BaseModel):
+    api_key: str | None = Field(None, max_length=2000)
+    settings: dict = Field(default_factory=dict)
+
+
+def _jev_gateway():
+    from app.core.state import STATE
+    return getattr(STATE, "gateway", None)
+
+
+@router.get("/jev/status", dependencies=[Depends(require_local_write)])
+def jev_status():
+    from app.services import jev_setup
+    gw = _jev_gateway()
+    out = jev_setup.status(gw.db if gw else None)
+    out["gateway_ready"] = gw is not None
+    return out
+
+
+@router.post("/jev/config", dependencies=[Depends(require_local_write)])
+def jev_save_config(body: JevConfigIn):
+    from app.services import jev_setup
+    gw = _jev_gateway()
+    try:
+        res = jev_setup.save(body.settings, api_key=body.api_key, db=gw.db if gw else None)
+        jev_setup.apply_to_gateway(gw)
+    except jev_setup.JevSetupError as e:
+        return _err(422, e.code, e.message, e.field or "")
+    except ValueError as e:  # JevConfig.validate()
+        return _err(422, "invalid_field", str(e))
+    res["status"]["gateway_ready"] = gw is not None
+    return res
+
+
+@router.post("/jev/test", dependencies=[Depends(require_local_write)])
+def jev_test_connection():
+    from app.services import jev_setup
+    gw = _jev_gateway()
+    return jev_setup.test_connection(gw.db if gw else None)

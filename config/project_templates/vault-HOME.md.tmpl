@@ -1,0 +1,42 @@
+---
+id: 00000000-0000
+title: HOME
+area: Inbox
+type: nota
+tags: [ indice ]
+status: ativo
+created: 2026-01-01 00:00
+updated: 2026-01-01 00:00
+---
+
+# HOME
+
+Porta de entrada do vault. Um link por pasta, uma linha do que vive nela.
+
+| Pasta                         | O que vive aqui                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| [00-Inbox](00-Inbox/)         | Captura rápida. Tudo que chega sem destino nasce aqui com `status: inbox` e espera triagem. |
+| [10-Trabalho](10-Trabalho/)   | Trabalho: clientes, reuniões, entregas, prazos, 1:1s, contexto de empresa.                  |
+| [20-Dev-IA](20-Dev-IA/)       | Dev e IA: stack, arquitetura, prompts, agentes, automações, snippets, debugging.            |
+| [30-Projetos](30-Projetos/)   | Projetos próprios: escopo, roadmap, backlog, decisões de produto.                           |
+| [40-Estudos](40-Estudos/)     | O que estou aprendendo: cursos, livros, papers, resumos e fichamentos.                      |
+| [50-Pessoal](50-Pessoal/)     | Vida fora do trabalho: saúde, treino, finanças, casa, família, viagens.                     |
+| [70-Daily](70-Daily/)         | Log diário, um arquivo por dia (`YYYY-MM-DD.md`). Foco, feito, aberto.                      |
+| [99-Templates](99-Templates/) | Modelos de nota: `_nota`, `_daily`, `_decisao`.                                             |
+
+## Regras do vault
+- [CLAUDE.md](CLAUDE.md) — roteamento, leitura, escrita e frontmatter (Claude Code).
+- [AGENTS.md](AGENTS.md) — as mesmas regras para Codex, OpenCode e outros agentes.
+
+## Como isso funciona
+- **Roteamento por palavra-chave:** falou a palavra, o agente vai direto na pasta,
+  sem busca.
+- **Notas atômicas:** 1 conceito = 1 arquivo, nome em kebab-case sem acento.
+- **Frontmatter é o filtro:** `area`, `type`, `status` e `tags` decidem o que o
+  agente lê antes de gastar contexto com o corpo.
+- **Wikilinks `[[assim]]`** conectam as notas; link para nota inexistente marca o
+  que ainda falta escrever.
+
+## Cérebros de projeto
+- Registro de projetos e protocolo de memória em camadas: `CLAUDE.md` / `AGENTS.md` (seção Protocolo multiprojeto).
+

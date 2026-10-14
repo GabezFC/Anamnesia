@@ -9,7 +9,7 @@ import { icon } from '../icons.js';
 import { I18N } from '../i18n.js';
 import { mockProjects, mockProfiles, mockSessions, mockFiles } from '../mock-data.js';
 import { renderTerminalFrame } from '../components/terminal-view.js';
-import { launchSession, closeSession, loadFiles, toggleDir, fileContent } from '../live.js';
+import { launchSession, closeSession, loadFiles, toggleDir, fileContent, initializeProject, jevStatus, jevSaveConfig, jevTestConnection } from '../live.js';
 import { openFileViewer } from '../components/file-viewer.js';
 import { esc, fmtNumber, fmtDate } from '../format.js';
 import { getSettings, putSettings, lastSearch, isUnavailable } from '../anamnesia-api.js';
@@ -39,12 +39,161 @@ let layoutReady = false;
 let layoutRestoring = false;
 let saveTimer = null;
 // ---- painel "Contexto do agente" (GET /api/memory/last-search) ----
+let initState = { busy: false, report: null, error: null, projectId: null }; // botão 'Inicializar Anamnésia'
 let ctx = { status: 'idle', data: null, error: '' }; // idle | loading | ok | empty | error
 
 const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 const isLiveSession = (s) => !s.real || s.status === 'active';
 
 /** Sessões na ordem salva; ids novos entram no fim. */
+
+/** Traduz uma falha da API em título/explicação/o que fazer (nunca mostra "404 Not Found" cru). */
+function initErrorInfo(t, err) {
+  const known = t.initErrors || {};
+  const code = err.code || (err.status === 404 || err.status === 405 ? 'route_missing'
+    : err.status === 0 ? 'network' : err.status === 403 ? 'forbidden' : 'unknown');
+  const base = known[code] || known.unknown;
+  return { title: base.title, why: err.code ? (err.detail || '') : '', hint: err.hint || base.hint, code };
+}
+
+// ---- JEV: configuração guiada (a lógica vive no backend: app/services/jev_setup.py) ----------------------------
+let jev = { loaded: false, loading: false, open: false, adv: false, status: null, draft: {}, key: '', busy: '', msg: null, err: null, test: null };
+const JEV_NUM = ['relevance_threshold', 'review_threshold', 'injection_threshold', 'timeout_s', 'max_retries'];
+const JEV_BOOL = ['second_pass', 'contradiction_check'];
+const JEV_LINKS = {
+  api_key: 'https://console.typesafe.ai/',
+  base_url: 'https://docs.typesafe.ai/api',
+  model: 'https://docs.typesafe.ai/models',
+  relevance_threshold: 'https://docs.typesafe.ai/confidence',
+  review_threshold: 'https://docs.typesafe.ai/confidence',
+  timeout_s: 'https://docs.typesafe.ai/sdk/python/usage#retries',
+  max_retries: 'https://docs.typesafe.ai/sdk/python/usage#retries',
+};
+
+function jevEffective(f) {
+  if (f in jev.draft) return jev.draft[f];
+  return jev.status ? jev.status.settings[f] : '';
+}
+
+async function jevLoad(root) {
+  if (jev.loading) return;
+  jev.loading = true;
+  try { jev.status = await jevStatus(); jev.err = null; } catch (e) { jev.err = e.message || String(e); }
+  jev.loaded = true; jev.loading = false;
+  if (root && root.isConnected) refresh(root);
+}
+
+function jevPanel(t) {
+  const st = jev.status ? jev.status.state : (jev.loaded ? 'unavailable' : 'loading');
+  const label = (t.jevStates && t.jevStates[st]) || st;
+  const dot = { connected: 'ok', configured: 'warn', not_configured: 'idle', loading: 'idle' }[st] || 'bad';
+  const head = `<div class="init-title">${esc(t.jevTitle)}</div>
+    <div class="init-sub jev-status" data-state="${esc(st)}"><span class="jev-dot is-${dot}"></span> ${esc(label)}${jev.status && jev.status.key_masked ? ` · <code>${esc(jev.status.key_masked)}</code>` : ''}</div>`;
+  const toggle = `<button class="btn btn-secondary btn-sm init-btn" data-action="jev-toggle">${icon('config', '', 14)} ${esc(jev.status && jev.status.key_present ? t.jevEdit : t.jevConfigure)}</button>`;
+  if (!jev.open) return `<div class="init-project-section jev-section" data-bind="jev-panel">${head}${jev.err ? `<div class="init-detail">${esc(jev.err)}</div>` : ''}${toggle}</div>`;
+  const S = jev.status || { settings: {}, defaults: {}, customized: [] };
+  const mark = (f) => (S.customized.includes(f) ? ` <span class="init-sub">(${esc(t.jevCustom)})</span>` : '');
+  const help = (f) => {
+    const h = (t.jevHelp || {})[f];
+    if (!h) return '';
+    const link = JEV_LINKS[f]
+      ? ` <a class="jev-link" href="${JEV_LINKS[f]}" target="_blank" rel="noopener noreferrer">${esc(t.jevLinkLabel)}</a>` : '';
+    return `<div class="init-sub jev-help">${esc(h)}${link}</div>`;
+  };
+  const text = (f, lab, ph) => `<label class="jev-field"><span>${esc(lab)}${mark(f)}</span><input class="input" type="text" data-jev="${f}" value="${esc(String(jevEffective(f) ?? ''))}" placeholder="${esc(ph || '')}" autocomplete="off" spellcheck="false"></label>${help(f)}`;
+  const num = (f, lab) => `<label class="jev-field"><span>${esc(lab)}${mark(f)}</span><input class="input" type="number" step="any" data-jev="${f}" value="${esc(String(jevEffective(f) ?? ''))}"></label>${help(f)}`;
+  const sel = (f, lab, opts) => `<label class="jev-field"><span>${esc(lab)}${mark(f)}</span><select class="input" data-jev="${f}">${opts.map((o) => `<option value="${o}" ${String(jevEffective(f)) === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>${help(f)}`;
+  const chk = (f, lab) => `<label class="jev-field jev-check"><input type="checkbox" data-jev="${f}" ${jevEffective(f) ? 'checked' : ''}> <span>${esc(lab)}${mark(f)}</span></label>${help(f)}`;
+  const keyPh = S.key_present ? t.jevKeyKeep : 'sk-…';
+  const adv = jev.adv ? `<div class="jev-adv">
+      ${sel('mode', t.jevMode, ['performance', 'strict'])}${num('relevance_threshold', t.jevRel)}${num('review_threshold', t.jevRev)}${num('injection_threshold', t.jevInj)}
+      ${sel('review_action', t.jevReviewAction, ['keep', 'drop'])}${sel('failure_mode', t.jevFailure, ['fail_open', 'fail_closed'])}
+      ${chk('second_pass', t.jevSecond)}${chk('contradiction_check', t.jevContra)}${num('timeout_s', t.jevTimeout)}${num('max_retries', t.jevRetries)}</div>` : '';
+  let result = '';
+  if (jev.err) result = `<div class="init-report is-error" role="alert"><div class="init-title">✗ ${esc(jev.err)}</div></div>`;
+  else if (jev.test) {
+    const r = jev.test;
+    const steps = (r.checks || []).map((c) => `<li>${c.ok ? '✓' : '✗'} ${esc((t.jevSteps && t.jevSteps[c.step]) || c.step)}</li>`).join('');
+    result = `<div class="init-report ${r.ok ? 'is-ok' : 'is-error'}" role="${r.ok ? 'status' : 'alert'}">
+      <div class="init-title">${r.ok ? '✓ ' + esc(t.jevOk) + (r.model ? ' (' + esc(r.model) + ')' : '') : '✗ ' + esc(t.jevFail)}</div>
+      ${r.ok ? '' : `<div class="init-detail">${r.http_status ? 'HTTP ' + esc(String(r.http_status)) + ' — ' : ''}${esc(r.message)}</div>`}
+      ${steps ? `<ul class="init-list">${steps}</ul>` : ''}</div>`;
+  } else if (jev.msg) result = `<div class="init-report is-ok" role="status"><div class="init-title">✓ ${esc(jev.msg)}</div></div>`;
+  return `<div class="init-project-section jev-section" data-bind="jev-panel">${head}
+    <div class="init-sub">${esc(t.jevHint)}</div>
+    <label class="jev-field"><span>${esc(t.jevApiKey)}</span><input class="input" type="password" data-jev-key value="${esc(jev.key)}" placeholder="${esc(keyPh)}" autocomplete="off" spellcheck="false"></label>
+    ${help('api_key')}
+    ${S.key_present ? `<div class="init-sub">${esc(t.jevKeySet)} <code>${esc(S.key_masked || '')}</code></div>` : ''}
+    ${text('base_url', t.jevEndpoint, S.defaults.base_url)}${text('model', t.jevModel, S.defaults.model)}
+    <button class="btn btn-ghost btn-sm" data-action="jev-adv">${esc(t.jevAdvanced)} ${jev.adv ? '▲' : '▼'}</button>${adv}
+    <div class="jev-actions">
+      <button class="btn btn-primary btn-sm" data-action="jev-save" ${jev.busy ? 'disabled' : ''}>${esc(jev.busy === 'save' ? t.jevBusySave : t.jevSave)}</button>
+      <button class="btn btn-secondary btn-sm" data-action="jev-test" ${jev.busy ? 'disabled' : ''}>${esc(jev.busy === 'test' ? t.jevBusyTest : t.jevTest)}</button>
+      <button class="btn btn-ghost btn-sm" data-action="jev-toggle">${esc(t.jevClose)}</button>
+    </div>${result}</div>`;
+}
+
+/** Só o que o usuário alterou é enviado (o servidor também ignora valores iguais). */
+function jevPatch() {
+  const patch = {};
+  for (const [f, v] of Object.entries(jev.draft)) {
+    if (JEV_NUM.includes(f)) { const n = Number(v); if (v === '' || Number.isNaN(n)) continue; patch[f] = f === 'max_retries' ? Math.trunc(n) : n; }
+    else if (JEV_BOOL.includes(f)) patch[f] = !!v;
+    else if (String(v).trim() !== '') patch[f] = String(v).trim();
+  }
+  return patch;
+}
+
+async function jevRun(root, kind) {
+  if (jev.busy) return;
+  const t = I18N.workspace;
+  jev.busy = kind; jev.err = null; jev.msg = null; if (kind !== 'test') jev.test = null;
+  refresh(root);
+  try {
+    const patch = jevPatch();
+    if (Object.keys(patch).length || jev.key) {
+      const res = await jevSaveConfig(patch, jev.key);
+      jev.status = res.status; jev.draft = {}; jev.key = '';
+      jev.msg = (res.changed && res.changed.length) ? t.jevSaved : t.jevNothing;
+    }
+    if (kind === 'test') { jev.test = await jevTestConnection(); jev.msg = null; jev.status = await jevStatus(); }
+  } catch (e) { jev.err = (e.detail || e.message || String(e)) + (e.hint ? ' — ' + e.hint : ''); }
+  jev.busy = '';
+  if (root.isConnected) refresh(root);
+}
+
+/** Botão + relatório de "Inicializar Anamnésia no projeto" (a lógica vive no backend: app/services/project_initializer.py). */
+function initPanel(t, projectId) {
+  if (!projectId || !mockProjects.some((p) => p.id === projectId)) return '';
+  const own = initState.projectId === projectId;
+  const list = (title, items, cls) => (items && items.length
+    ? `<div class="init-sub">${esc(title)}</div><ul class="init-list ${cls || ''}">${items.map((x) => (typeof x === 'string'
+      ? `<li><code>${esc(x)}</code></li>`
+      : `<li><code>${esc(x.path)}</code><span class="init-reason">${esc(x.reason)}</span></li>`)).join('')}</ul>` : '');
+  let body = '';
+  let tone = '';
+  if (own && initState.error) {
+    const e = initErrorInfo(t, initState.error);
+    tone = 'is-error';
+    body = `<div class="init-title">✗ ${esc(e.title)}</div>
+      ${e.why ? `<div class="init-detail">${esc(e.why)}</div>` : ''}
+      ${e.hint ? `<div class="init-hint"><b>${esc(t.initWhatToDo)}</b> ${esc(e.hint)}</div>` : ''}`;
+  } else if (own && initState.report) {
+    const r = initState.report;
+    tone = r.failed.length ? 'is-error' : 'is-ok';
+    const head = r.failed.length ? t.initPartial : (r.created.length ? t.initDone : t.initAlready);
+    body = `<div class="init-title">${r.failed.length ? '✗' : '✓'} ${esc(head)}</div>${list(t.initCreated, r.created)}${list(t.initExisting, r.existing)}${list(t.initFailed, r.failed, 'is-fail')}`;
+  }
+  return `
+    <div class="init-project-section" data-bind="init-project">
+      <button class="btn btn-primary init-btn" data-action="init-project" title="${esc(t.initHint)}" ${initState.busy ? 'disabled' : ''}>
+        ${icon('download', '', 14)} ${esc(initState.busy ? t.initBusy : t.initBtn)}
+      </button>
+      <div class="init-sub">${esc(t.initHint)}</div>
+      ${body ? `<div class="init-report ${tone}" role="${tone === 'is-error' ? 'alert' : 'status'}">${body}
+        <button class="btn btn-ghost btn-sm" data-action="init-dismiss">${esc(t.initClose)}</button></div>` : ''}
+    </div>`;
+}
 function orderedSessions() {
   const idx = (s) => { const i = sessionOrder.indexOf(s.id); return i < 0 ? 1e9 : i; };
   return mockSessions.map((s, n) => [s, n]).sort((a, b) => idx(a[0]) - idx(b[0]) || a[1] - b[1]).map((x) => x[0]);
@@ -279,6 +428,9 @@ export function render() {
             ${icon('plus', '', 14)}
           </button>
         </div>
+
+        ${initPanel(t, activeProjectId)}
+        ${jevPanel(t)}
 
         <div class="projects-list-container" data-bind="projects-list" role="list">
           ${mockProjects.map(proj => {
@@ -601,6 +753,31 @@ export function mount(root) {
         loadContext(root);
         break;
       }
+      case 'init-project': {
+        if (initState.busy || !activeProjectId) break;
+        initState = { busy: true, report: null, error: null, projectId: activeProjectId };
+        refresh(root);
+        const pid = activeProjectId;
+        initializeProject(pid).then((rep) => { initState = { busy: false, report: rep, error: null, projectId: pid }; })
+          .catch((err) => { initState = { busy: false, report: null, projectId: pid,
+            error: { message: err.message || String(err), hint: err.hint || '' } }; })
+          .finally(() => { loadFiles(pid).catch(() => {}).finally(() => refresh(root)); });
+        break;
+      }
+      case 'jev-toggle': {
+        jev.open = !jev.open; jev.test = null; jev.msg = null; jev.err = null; jev.draft = {}; jev.key = '';
+        refresh(root);
+        if (jev.open) jevLoad(root);
+        break;
+      }
+      case 'jev-adv': { jev.adv = !jev.adv; refresh(root); break; }
+      case 'jev-save': { jevRun(root, 'save'); break; }
+      case 'jev-test': { jevRun(root, 'test'); break; }
+      case 'init-dismiss': {
+        initState = { busy: false, report: null, error: null, projectId: null };
+        refresh(root);
+        break;
+      }
       case 'open-add-project': {
         window.dispatchEvent(new CustomEvent('anamnesia:modal:add-project'));
         break;
@@ -619,6 +796,9 @@ export function mount(root) {
   };
 
   const handleInput = (e) => {
+    if (e.target.matches && e.target.matches('[data-jev-key]')) { jev.key = e.target.value; return; }
+    const jf = e.target.getAttribute && e.target.getAttribute('data-jev');
+    if (jf && e.target.type !== 'checkbox') { jev.draft[jf] = e.target.value; return; }
     if (e.target.matches('[data-action="filter-files"]')) {
       searchFilter = e.target.value;
       updateFileTree(root);
@@ -627,6 +807,8 @@ export function mount(root) {
 
   // Opções do lançador (worktree / papel / MCP): só estado, sem re-render (o menu continua aberto).
   const handleChange = (e) => {
+    const jf = e.target.getAttribute && e.target.getAttribute('data-jev');
+    if (jf) { jev.draft[jf] = e.target.type === 'checkbox' ? !!e.target.checked : e.target.value; return; }
     const k = e.target.getAttribute && e.target.getAttribute('data-launch-opt');
     if (!k) return;
     if (k === 'worktree') launchOpts.worktree = !!e.target.checked;
@@ -738,6 +920,7 @@ export function mount(root) {
   };
 
   restoreLayout(root);
+  jevLoad(root);
 }
 
 function refresh(root) {

@@ -1,0 +1,242 @@
+<!-- Criado pelo Anamnésia ao inicializar o vault. Edite à vontade: o Anamnésia nunca sobrescreve este arquivo. -->
+# AGENTS.md — Vault de memória
+
+Instruções para qualquer agente que leia `AGENTS.md` (Codex, OpenCode, Cursor,
+Aider, Gemini CLI e afins). Este arquivo é **autossuficiente**: não é preciso ler
+mais nada para operar o vault.
+
+Este diretório é um vault Obsidian usado como **memória de longo prazo** de um
+humano. Não é um repositório de código: não há build, não há teste, não há
+dependência para instalar. O trabalho aqui é ler e escrever arquivos Markdown
+com frontmatter YAML, seguindo as regras abaixo.
+
+> `CLAUDE.md` (mesma pasta) contém estas mesmas regras para o Claude Code.
+> Os dois arquivos são gêmeos: **ao alterar um, altere o outro.**
+
+---
+
+## 1. Tabela de roteamento (palavra-chave → caminho direto)
+
+Quando o usuário usar uma das palavras-chave abaixo, vá **DIRETO no caminho**.
+Não faça busca exploratória, não liste o vault, não tente descobrir onde a nota
+"provavelmente está". A palavra-chave já é o endereço.
+
+| Palavra-chave (gatilho) | Caminho direto |
+| --- | --- |
+| inbox, rascunho, anota aí, joga no inbox, solto, depois eu organizo | `00-Inbox/` |
+| trabalho, empresa, cliente, reunião, meeting, chefe, time, entrega, prazo, 1:1 | `10-Trabalho/` |
+| dev, código, codigo, stack, arquitetura, prompt, IA, LLM, agente, automação, snippet, bug | `20-Dev-IA/` |
+| projeto, projetos, side project, produto, roadmap, backlog, MVP, lançamento | `30-Projetos/` |
+| estudo, estudos, curso, aula, livro, artigo, paper, aprendendo, resumo, fichamento | `40-Estudos/` |
+| pessoal, vida, saúde, treino, finanças, casa, família, viagem, hobby | `50-Pessoal/` |
+| daily, hoje, diário, log do dia, retrospectiva do dia, o que eu fiz hoje | `70-Daily/` |
+| template, modelo, estrutura de nota, formato padrão | `99-Templates/` |
+
+**Como usar a tabela:**
+- Gatilho reconhecido → abra/escreva direto no caminho. Um gatilho que bate
+  substitui qualquer busca.
+- Dois gatilhos na mesma frase → o mais específico vence
+  (ex.: "reunião do projeto X" → `30-Projetos/` se o assunto é o projeto,
+  `10-Trabalho/` se o assunto é a reunião em si).
+- Nenhum gatilho bate → aí sim busque (seção 2); se for nota nova, `00-Inbox/`.
+- A tabela cresce com o tempo. Ao adicionar linhas, mantenha uma linha por pasta.
+
+---
+
+## 2. Regras de leitura
+
+1. **Nunca leia o vault inteiro.** Sem varredura de todas as pastas, sem leitura
+   em massa, sem "carregar tudo para ter contexto".
+2. **Sempre busque antes de ler.** Busca por termo específico (nome próprio,
+   tecnologia, cliente, projeto). `grep -ril "<termo>" .` ou o search da sua
+   ferramenta. Termo genérico ("notas", "projeto", "ideia") não é busca, é
+   varredura disfarçada.
+3. **Leia o frontmatter antes do corpo.** Use `area`, `type`, `status` e `tags`
+   para descartar resultados **antes** de gastar contexto com o corpo.
+   Exemplo: pergunta sobre trabalho em andamento → descarte `status: arquivado`.
+4. **No máximo 3–5 resultados.** Ranqueie por relevância, leia só o topo. Se 5
+   notas não responderam, refine o termo — não amplie a leitura.
+5. **Siga wikilinks com parcimônia.** Um salto a partir de uma nota lida, quando
+   claramente necessário. Não percorra o grafo em profundidade.
+6. **Se não achou, diga que não achou.** Nunca invente conteúdo de nota nem
+   preencha lacuna com suposição. Memória inventada é pior que memória ausente.
+
+---
+
+## 3. Regras de escrita
+
+1. **Notas atômicas: 1 conceito = 1 arquivo.** Se a nota precisa de "e também",
+   são duas notas. Prefira notas curtas e bem ligadas a notas longas e isoladas.
+2. **Nome de arquivo em kebab-case, sem acento.** Minúsculas, hífen no lugar do
+   espaço, sem `ç`/`ã`/`é`, sem underscore, sem data no nome (a data mora no
+   frontmatter).
+   - ✅ `decisao-stack-backend.md`, `reuniao-cliente-acme.md`
+   - ❌ `Decisão Stack Backend.md`, `nota_2026_09_12.md`
+   - Exceções: `99-Templates/` usa prefixo `_` (`_nota.md`); `70-Daily/` usa a
+     data como nome (`2026-09-12.md`).
+3. **Sem destino explícito → `00-Inbox/` com `status: inbox`.** Na dúvida sobre a
+   pasta, não adivinhe: crie no Inbox. Triagem é decisão do usuário.
+4. **Conecte com wikilinks `[[assim]]`.** Toda nota nova aponta para pelo menos
+   uma nota relacionada quando ela existir. Link para nota inexistente é
+   aceitável e desejável: marca o que ainda falta escrever.
+5. **Ao modificar uma nota, atualize o campo `updated`.** Sempre, mesmo em
+   correção pequena. `created` nunca muda.
+6. **Não reescreva nota do usuário por conta própria.** Editar conteúdo
+   existente: só quando pedido. Acrescentar seção nova: pode, e sinalize onde.
+7. **Nada fora da estrutura.** Sem pastas novas (exceção: um cérebro por projeto em
+   `30-Projetos/<Projeto>_Cerebro/` com as subpastas fixas do §7.3, registrado no §7.1; e as subpastas
+   `50-Pessoal/preferencias/` e `50-Pessoal/perfil/`), sem anexos soltos, sem
+   `.md` na raiz além de `CLAUDE.md`, `AGENTS.md` e `HOME.md`.
+8. **Não instale nada.** Sem `npm`, sem `pip`, sem plugin. O vault é texto puro.
+9. **Registro de execução (obrigatório, vale para qualquer agente e qualquer projeto).**
+   Toda alteração feita numa execução (código, documentação, configuração, decisão) gera nota
+   no cérebro do projeto, **usando os templates de `99-Templates/`**, em `Notes/` do cérebro:
+   - `Notes/Notas/` ← `_nota.md` — o que foi feito e como foi verificado (1 conceito por nota).
+   - `Notes/Decisões/` ← `_decisao.md` — toda escolha com alternativas (decisão sem nota não existe).
+   - `Notes/Daily/` ← `_daily.md` — um resumo por dia de trabalho; nome `AAAA-MM-DD.md`.
+   Escreva conforme cada alteração é concluída, não só no fim. Preencha `projeto:` e os
+   wikilinks; marque verificado × estimado × não testado. Nome de arquivo em kebab-case, sem
+   acento (as pastas `Notes/Daily`, `Notes/Decisões`, `Notes/Notas` mantêm o nome fixo).
+   Projeto sem `Notes/` no cérebro: crie as 3 subpastas na primeira execução e registre no
+   hub.
+
+---
+
+## 4. Frontmatter padrão (toda nota)
+
+```yaml
+---
+id: 20260912-1443          # YYYYMMDD-HHMM, imutável, identidade da nota
+title: Título legível      # com acento e maiúscula, diferente do nome do arquivo
+area: Trabalho             # a pasta a que pertence (Inbox|Trabalho|Dev-IA|Projetos|Estudos|Pessoal|Daily)
+type: nota                 # nota | meeting | decisao | estudo | ideia | daily
+tags: [cliente-acme, api]  # kebab-case, sem acento, sem "#"
+status: ativo              # inbox | ativo | arquivado
+created: 2026-09-12 14:43  # YYYY-MM-DD HH:MM
+updated: 2026-09-12 14:43  # YYYY-MM-DD HH:MM
+---
+```
+
+**Regras dos campos:**
+- `id` — carimbo de criação `YYYYMMDD-HHMM`. Nunca muda, nem em rename.
+- `title` — como o humano chama a nota. Pode ter acento e espaço.
+- `area` — espelha a pasta. Mudou de pasta, mude `area` junto.
+- `type` — define a estrutura de seções esperada; use o template correspondente
+  em `99-Templates/` quando existir.
+- `tags` — o que a busca vai usar. Poucas e específicas > muitas e vagas.
+- `status` — `inbox` = não triado; `ativo` = em uso; `arquivado` = histórico,
+  ignore em buscas sobre o presente.
+- `created` / `updated` — `created` fixo; `updated` muda a cada edição.
+
+---
+
+## 5. Estrutura do vault
+
+```
+00-Inbox/       captura rápida, nada triado
+10-Trabalho/    trabalho, clientes, reuniões, entregas
+20-Dev-IA/      código, stack, arquitetura, prompts, automações, snippets
+30-Projetos/    projetos próprios, roadmap, decisões de produto
+40-Estudos/     cursos, livros, papers, resumos
+50-Pessoal/     vida, saúde, finanças, casa
+  preferencias/   como o usuário quer que os agentes trabalhem (declarado)
+  perfil/         modo de agir, decidir e aprender do usuário (observado)
+70-Daily/       log diário (um arquivo por dia: YYYY-MM-DD.md)
+99-Templates/   modelos de nota (_nota, _daily, _decisao)
+```
+
+---
+
+## 6. Fluxo padrão de um pedido
+
+1. Bateu palavra-chave da tabela? → vá direto no caminho.
+2. Não bateu? → busque com termo específico, filtre por frontmatter, leia 3–5.
+3. Vai escrever? → decida a pasta pela tabela; sem certeza, `00-Inbox/`.
+4. Nota nova → frontmatter completo + template do `type` + wikilinks.
+5. Nota editada → atualize `updated`.
+
+---
+
+## 7. Protocolo multiprojeto (memória em camadas)
+
+Vale para agentes trabalhando **fora** do vault, num diretório de projeto. O projeto
+é o ambiente de trabalho; o vault é a memória persistente. Regra de ouro: buscar o
+mínimo necessário para responder corretamente, nunca carregar tudo "por garantia".
+
+### 7.1 Registro de projetos
+
+| Projeto | Diretório local | Cérebro no vault | Hub | `projeto:` |
+| --- | --- | --- | --- | --- |
+| _(nenhum ainda)_ | | | | |
+
+Projeto fora desta tabela não tem cérebro próprio: use a tabela de roteamento (§1).
+
+### 7.2 Busca progressiva — pare no primeiro nível suficiente
+
+| Nível | Onde | Como |
+| --- | --- | --- |
+| 0 | Contexto da sessão | Nada a buscar |
+| 1 | Repo do projeto | Arquivos locais; código via ferramentas de busca de código |
+| 2 | Estas regras | Uma vez por sessão, só ao ler ou gravar memória: `get_note_outline` + `read_note_lines` só deste §7 |
+| 3 | Cérebro do projeto | Ferramenta `search_notes` do MCP `obsidian` com `pathPrefix` do cérebro, `limit: 3` |
+| 4 | Outro cérebro ou área global | Só com motivo explícito da tarefa; mesmo método, outro `pathPrefix` |
+| 5 | Vault inteiro | Último recurso: `excludePaths: ["99-Templates"]`, `limit: 5` |
+
+Economia de contexto:
+- `get_frontmatter` / `get_notes_info` antes do corpo; descarte `status: arquivado`.
+- Nota grande → `get_note_outline` + `read_note_lines` só da seção útil.
+- No máximo um salto de wikilink. Uma nota respondeu → pare.
+- `search_notes` é textual, não semântico: busque termo exato (nome de componente,
+  tag), não frases.
+
+### 7.3 Onde gravar
+- Conhecimento do projeto → cérebro do projeto (destino explícito; não vai ao Inbox).
+- Conhecimento reutilizável entre projetos → área pela tabela §1 (ex.: `20-Dev-IA/`),
+  com wikilink para o hub do projeto de origem.
+- Dúvida real sobre o destino → `00-Inbox/` com `status: inbox`.
+- Dentro do cérebro, só estas subpastas fixas. Não crie outras; subpasta nova só a pedido
+  do usuário e registrada aqui.
+
+| Local | Guarda | `type` / template | Nome do arquivo |
+| --- | --- | --- | --- |
+| raiz do cérebro | só o hub | `nota` | `<slug>.md` |
+| `arquitetura/` | plano arquitetural, visão geral, módulos, fluxos, integrações | `nota` / `_nota` | `<assunto>.md` (ex.: `visao-geral.md`) |
+| `decisoes/` | uma decisão por nota: contexto, escolha, alternativas, consequências | `decisao` / `_decisao` | `decisao-<assunto>.md` |
+| `procedimentos/` | passo a passo reutilizável (setup, deploy, rotina de trabalho) | `nota` / `_nota` | `como-<acao>.md` |
+| `componentes/` | papel de um componente de código | `nota` / `_nota` | `<componente>.md` (ex.: `auth-service.md`) |
+| `estudos/` | material didático para o usuário estudar o que o projeto usa (conceitos, cada arquivo criado, licenças) | `estudo` / `_nota` | `<assunto>.md` |
+
+- `estudos/` guarda material didático; `Exemplos/` guarda protótipos e referências visuais externas, só como referência, nunca como código a copiar.
+- `50-Pessoal/preferencias/` guarda preferências declaradas pelo usuário sobre como os agentes
+  devem trabalhar; `50-Pessoal/perfil/` guarda o modo de agir, decidir e aprender observado.
+  Só fato dito pelo usuário ou observado em sessão, nunca suposição.
+- Sem sub-subpastas. Nome de arquivo único no vault inteiro (wikilink resolve por nome);
+  se colidir com outro projeto, prefixe com o slug (`meu-projeto-auth-service.md`).
+- Nota nova → link no hub do projeto, na seção da subpasta correspondente.
+
+### 7.4 Promover memória sem duplicar
+Grave só o que terá valor futuro: decisão e motivo, arquitetura e relações entre
+componentes, regra permanente, causa raiz, procedimento reutilizável, preferência
+declarada. Não grave: raciocínio temporário, logs, estado transitório, nada que o
+código ou o grafo regenerem.
+
+1. Procurar equivalente: `search_notes` no cérebro pelo termo; se a nota descreve
+2. Existe → `patch_note` só na seção + `update_frontmatter` com `updated`.
+3. Não existe → `write_note` com o template do `type` e frontmatter completo.
+4. Linkar a nota nova no hub do projeto, na seção correspondente.
+
+### 7.5 Frontmatter extra
+- `projeto` — slug do projeto. Obrigatório em notas de cérebro de projeto; vazio nas demais.
+
+### 7.6 Papéis — cada informação tem um único dono
+
+| Camada | Guarda | Não guarda |
+| --- | --- | --- |
+| Vault (este) | Conhecimento curado e durável | Logs de sessão |
+| Memória nativa do agente | Preferências de uso da própria ferramenta | Conhecimento de projeto |
+
+### 7.9 Novo projeto
+1. Criar `30-Projetos/<Projeto>_Cerebro/` com as subpastas `arquitetura/`, `decisoes/`,
+   `procedimentos/` e `componentes/`, e o hub `<slug>.md` com `projeto: <slug>`.
+2. Adicionar a linha no registro §7.1 deste arquivo e no outro arquivo gêmeo.
+3. No repo: `CLAUDE.md` e `AGENTS.md` roteadores (os que o Anamnésia gera ao inicializar o projeto).
