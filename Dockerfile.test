@@ -1,0 +1,14 @@
+# Test image: runs the whole suite in a clean container, for any supported Python.
+#   docker build -f Dockerfile.test --build-arg PYTHON_VERSION=3.12 -t anamnesia-test:3.12 .
+#   docker run --rm --init anamnesia-test:3.12   (--init: PID 1 reaps orphans; the POSIX PTY test needs it)
+ARG PYTHON_VERSION=3.14
+FROM python:${PYTHON_VERSION}-slim
+ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 ANAMNESIA_HOME=/tmp/anamnesia-home
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install -r requirements.txt -r requirements-dev.txt
+COPY . /src
+RUN useradd --create-home --uid 10001 tester && chown -R tester /src
+USER tester
+CMD ["python", "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider"]

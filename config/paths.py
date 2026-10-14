@@ -27,6 +27,8 @@ PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 def is_installed_layout(root: Path | None = None) -> bool:
     """True when `root` looks like a pip/pipx/uv install rather than a source checkout."""
     root = Path(root) if root is not None else PACKAGE_ROOT
+    if getattr(sys, "frozen", False):          # PyInstaller bundle: resources are read-only, state goes to the user dir
+        return True
     if (root / ".git").exists():
         return False
     return any(part.lower() in {"site-packages", "dist-packages"} for part in root.parts)

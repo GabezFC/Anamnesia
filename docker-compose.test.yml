@@ -1,0 +1,14 @@
+# Run the suite on several Python versions:  docker compose -f docker-compose.test.yml run --rm py312
+services:
+  py312:
+    build: {context: ., dockerfile: Dockerfile.test, args: {PYTHON_VERSION: "3.12"}}
+    image: anamnesia-test:3.12
+    init: true   # PID 1 must reap orphans, else a killed grandchild stays a zombie and the PTY test fails
+  py313:
+    build: {context: ., dockerfile: Dockerfile.test, args: {PYTHON_VERSION: "3.13"}}
+    image: anamnesia-test:3.13
+    init: true   # PID 1 must reap orphans, else a killed grandchild stays a zombie and the PTY test fails
+  py314:
+    build: {context: ., dockerfile: Dockerfile.test, args: {PYTHON_VERSION: "3.14"}}
+    image: anamnesia-test:3.14
+    init: true   # PID 1 must reap orphans, else a killed grandchild stays a zombie and the PTY test fails

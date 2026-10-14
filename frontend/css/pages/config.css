@@ -289,3 +289,6 @@
 .config-page select {
   width: 100%;
 }
+
+.vault-scaffold-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.vault-scaffold-row .input-hint { font-size: 12px; color: var(--text-secondary, #888); }

@@ -583,6 +583,26 @@ def set_vault_path(req: VaultPathRequest):
     return {"vault_path": str(validated), "markdown_files": len(new_gw.vault.list_markdown())}
 
 
+class VaultScaffoldRequest(BaseModel):
+    path: str = Field(..., min_length=1, max_length=1000)
+    dry_run: bool = False
+    project: str | None = Field(None, max_length=120)
+
+
+@router.post("/config/vault-scaffold", dependencies=[Depends(require_local_write)])
+def vault_scaffold(req: VaultScaffoldRequest):
+    """Create the standard memory folder layout in the chosen vault. Only adds missing folders/templates."""
+    from app.memory_store import vault_scaffold as vs
+    try:
+        root = validate_vault_path_for_runtime(resolve_vault_path(req.path), db_path=gw().db.path)
+        out = vs.scaffold(root, dry_run=req.dry_run)
+        if req.project:
+            out["project"] = vs.scaffold_project(root, req.project, dry_run=req.dry_run)["created"]
+        return out
+    except (FileNotFoundError, NotADirectoryError, PermissionError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.get("/config/verdict")
 def get_verdict_flag():
     return {"enabled": gw().optimizer.cfg.verdict_enabled}

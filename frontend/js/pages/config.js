@@ -518,6 +518,10 @@ function renderGatewayTab(t) {
         <div class="input-control">
           <input type="text" value="${esc(gatewayConfig.vaultPath)}" data-bind="vault-path-input" />
         </div>
+        <div class="vault-scaffold-row">
+          <button class="btn btn-secondary" data-action="scaffold-vault">${t.vaultScaffoldBtn}</button>
+          <span class="input-hint">${t.vaultScaffoldHint}</span>
+        </div>
       </div>
 
       <div class="input-group">
@@ -563,6 +567,21 @@ function renderActiveConfigTab(t) {
 }
 
 /* ------------------------------------------------------------------ ações */
+async function scaffoldVault(root) {
+  const t = I18N.config;
+  const vp = root.querySelector('[data-bind="vault-path-input"]')?.value?.trim();
+  if (!vp) { toast('error', t.vaultScaffoldNoPath); return; }
+  try {
+    const plan = await call('POST', '/config/vault-scaffold', { path: vp, dry_run: true });
+    if (!plan.created.length) { toast('success', t.vaultScaffoldNothing); return; }
+    if (!window.confirm(fmt(t.vaultScaffoldConfirm, { n: plan.created.length, path: plan.root }))) return;
+    const done = await call('POST', '/config/vault-scaffold', { path: vp });
+    toast('success', fmt(t.vaultScaffoldDone, { n: done.created.length }));
+  } catch (e) {
+    toast('error', fmt(t.saveFailed, { err: errMsg(e) }));
+  }
+}
+
 async function saveGateway(root) {
   const vp = root.querySelector('[data-bind="vault-path-input"]')?.value?.trim() || gatewayConfig.vaultPath;
   const prev = persistedGw || { vaultPath: '', enableJev: true };
@@ -632,6 +651,8 @@ export function mount(root) {
       if (!patch) { inlineError = I18N.config.budgetInvalid; repaint(); return; }
       inlineError = '';
       saveSettings(root, patch, { okMessage: I18N.config.saved });
+    } else if (action === 'scaffold-vault') {
+      scaffoldVault(root);
     } else if (action === 'toggle-jev') {
       gatewayConfig.enableJev = !gatewayConfig.enableJev; repaint();
     } else if (action === 'toggle-prefilter') {

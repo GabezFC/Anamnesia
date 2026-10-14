@@ -1,0 +1,17 @@
+# Test image context: sources + tests, but never DBs, logs, secrets, venvs or build output.
+.git
+.venv
+venv
+node_modules
+dist
+build
+_studio
+graphify-out
+logs
+*.db
+*.db-*
+*.db.bak*
+.env
+.env.*
+**/__pycache__/
+**/*.pyc

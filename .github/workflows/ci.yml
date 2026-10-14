@@ -44,6 +44,27 @@ jobs:
       # headless Chrome/Playwright session are intentionally NOT run here — this job has neither.
       # They stay local/dev-only checks (front-end E2E: ver docs/FRONTEND_WORKSPACE.md).
 
+  # Clean-container checks: production image builds and answers /health; Dockerfile.test runs the suite per Python.
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.14']
+    steps:
+      - uses: actions/checkout@v5
+      - name: Production image smoke
+        run: |
+          docker build -t anamnesia:ci .
+          docker run -d --name smoke -p 127.0.0.1:8000:8000 anamnesia:ci
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8000/health && break; sleep 1; done
+          curl -fs http://127.0.0.1:8000/health
+      - name: Test suite in container (Python ${{ matrix.python }})
+        run: |
+          docker build -f Dockerfile.test --build-arg PYTHON_VERSION=${{ matrix.python }} -t anamnesia-test:${{ matrix.python }} .
+          docker run --rm --init anamnesia-test:${{ matrix.python }}
+
   # ANA-223: browser E2E in its OWN job (never blocks or slows the unit matrix above). Ubuntu only: the real PTY
   # path there is the POSIX one; Chromium comes from Playwright. Runs on every trigger of this workflow (push, PR, manual dispatch);
   # continue-on-error is intentionally NOT set. NOT verified on a real runner yet (see docs/guides/E2E.md).
