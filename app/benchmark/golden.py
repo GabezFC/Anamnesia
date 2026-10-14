@@ -72,7 +72,7 @@ def freeze(questions: list[dict], vault: Path, version: str, owner: str, out_dir
         rows.append({**q, "split": split_of(str(q["id"]))})
     (out_dir / "retrieval.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False, sort_keys=True) for r in rows) + "\n",
                                              encoding="utf-8")
-    body = (out_dir / "retrieval.jsonl").read_bytes()
+    body = (out_dir / "retrieval.jsonl").read_bytes().replace(b"\r\n", b"\n")  # EOL-agnostic (checkout no Windows)
     manifest = {"version": version, "owner": owner, "corpus_hash": corpus_hash(vault),
                 "items_sha256": hashlib.sha256(body).hexdigest(), "split_salt": SPLIT_SALT,
                 "coverage": coverage(questions)}
@@ -90,7 +90,7 @@ def verify(vault: Path, out_dir: Path = GOLDEN_DIR) -> dict:
     """Raise CorpusMismatch if the vault or the items drifted from the frozen manifest."""
     out_dir = Path(out_dir)
     m = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
-    if hashlib.sha256((out_dir / "retrieval.jsonl").read_bytes()).hexdigest() != m["items_sha256"]:
+    if hashlib.sha256((out_dir / "retrieval.jsonl").read_bytes().replace(b"\r\n", b"\n")).hexdigest() != m["items_sha256"]:
         raise CorpusMismatch("golden items were edited after freezing; bump the version and re-freeze")
     got = corpus_hash(vault)
     if got != m["corpus_hash"]:
