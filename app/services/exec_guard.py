@@ -120,7 +120,14 @@ def posix_limits(cpu_s: int = 120, mem_bytes: int = 4 * 1024 ** 3):
 
     def _apply():  # pragma: no cover - POSIX only
         import resource
-        resource.setrlimit(resource.RLIMIT_CPU, (cpu_s, cpu_s))
-        resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
-        resource.setrlimit(resource.RLIMIT_NPROC, (256, 256)) if hasattr(resource, "RLIMIT_NPROC") else None
+        # Best-effort por limite: macOS recusa RLIMIT_AS/NPROC (ValueError/OSError) e uma excecao no preexec_fn
+        # aborta o spawn inteiro (SubprocessError). Limite nao suportado = sem limite, nunca falha de spawn.
+        for name, val in (("RLIMIT_CPU", cpu_s), ("RLIMIT_AS", mem_bytes), ("RLIMIT_NPROC", 256)):
+            lim = getattr(resource, name, None)
+            if lim is None:
+                continue
+            try:
+                resource.setrlimit(lim, (val, val))
+            except (ValueError, OSError):
+                pass
     return _apply
