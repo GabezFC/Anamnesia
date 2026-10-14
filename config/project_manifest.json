@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Fonte única do que um projeto precisa ter para usar o Anamnésia/Memory Gateway. Lido por app/services/project_initializer.py (botão 'Inicializar Anamnésia' do Workspace). Para exigir algo novo, acrescente uma entrada aqui (e o template em config/project_templates/); nenhum código muda.",
+  "description": "Fonte única do que um projeto precisa ter para usar o Anamnésia/Memory Gateway. Lido por app/terminals/project_initializer.py (botão 'Inicializar Anamnésia' do Workspace). Para exigir algo novo, acrescente uma entrada aqui (e o template em config/project_templates/); nenhum código muda.",
   "vault": {
     "description": "Arquivos criados na RAIZ do vault configurado (só se ausentes; nunca sobrescreve). Mesmo formato de 'files'.",
     "files": [

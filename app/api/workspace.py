@@ -177,7 +177,7 @@ class InitializeIn(BaseModel):
 def initialize_project(project_id: str, body: InitializeIn | None = None,
                        reg: ProjectRegistry = Depends(get_registry)):
     """Cria só os arquivos ausentes que ligam o projeto ao Anamnésia/Memory Gateway (manifesto em config/)."""
-    from app.services import project_initializer as pi
+    from app.terminals import project_initializer as pi
     proj = reg.get(project_id)
     if proj is None:
         return _err(404, "not_found", "projeto não encontrado")

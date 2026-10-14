@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api import workspace as ws_api
-from app.services import project_initializer as pi
+from app.terminals import project_initializer as pi
 from app.terminals.projects import ProjectRegistry
 
 TOKEN = "test-token-abc123"

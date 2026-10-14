@@ -162,7 +162,7 @@ async function jevRun(root, kind) {
   if (root.isConnected) refresh(root);
 }
 
-/** Botão + relatório de "Inicializar Anamnésia no projeto" (a lógica vive no backend: app/services/project_initializer.py). */
+/** Botão + relatório de "Inicializar Anamnésia no projeto" (a lógica vive no backend: app/terminals/project_initializer.py). */
 function initPanel(t, projectId) {
   if (!projectId || !mockProjects.some((p) => p.id === projectId)) return '';
   const own = initState.projectId === projectId;

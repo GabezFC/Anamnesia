@@ -58,7 +58,7 @@ Validação em navegador real (Playwright/Chromium) é manual/local: abrir cada 
 ## Inicializar Anamnésia no projeto
 
 Botão **Inicializar Anamnésia** (coluna de projetos do Workspace) -> `POST /api/projects/{id}/initialize` ->
-`app/services/project_initializer.py`. Nenhuma lógica nem template vive na UI; o Hermes não participa em runtime.
+`app/terminals/project_initializer.py`. Nenhuma lógica nem template vive na UI; o Hermes não participa em runtime.
 
 - **Fonte única:** `config/project_manifest.json` (diretórios e arquivos: `path`, `template`, `description`, `required`)
   + `config/project_templates/*.tmpl`. Para exigir algo novo, acrescente uma entrada e o template; nenhum código muda.

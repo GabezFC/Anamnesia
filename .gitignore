@@ -58,6 +58,8 @@ benchmark.db.bak-*
 logs/
 *.log
 *.jsonl
+# Golden set sintético (nomes inventados) exigido pelos testes/CI
+!benchmark/golden/retrieval.jsonl
 
 # --- PRIVATE: anything derived from the user's Obsidian vault ---
 # Ignore the CONTENTS of data/ rather than the directory itself: git cannot re-include a child of
