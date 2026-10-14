@@ -21,7 +21,7 @@ def read(p: Path) -> str:
 
 def node(code: str) -> str:
     r = subprocess.run(["node", "--input-type=module", "-e", code], cwd=str(JS), capture_output=True,
-                       text=True, timeout=30)
+                       text=True, encoding="utf-8", timeout=30)
     assert r.returncode == 0, r.stderr
     return r.stdout.strip()
 

@@ -138,13 +138,13 @@ def test_theme_is_light_by_default_and_toggle_exists():
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 def test_module_graph_resolves():
     r = subprocess.run(["node", str(ROOT / "scripts" / "check_frontend_imports.mjs")],
-                       capture_output=True, text=True, cwd=ROOT, timeout=60)
+                       capture_output=True, text=True, encoding="utf-8", cwd=ROOT, timeout=60)
     assert r.returncode == 0, r.stdout + r.stderr
 
 # ---------------------------------------------------------------- UX parte 1 (i18n, tema, skeleton, lazy, virtual)
 def _node(code: str) -> str:
     r = subprocess.run(["node", "--input-type=module", "-e", code], cwd=str(FRONT / "js"),
-                       capture_output=True, text=True, timeout=30)
+                       capture_output=True, text=True, encoding="utf-8", timeout=30)
     assert r.returncode == 0, r.stderr
     return r.stdout.strip()
 
