@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "e2e_workspace.py"
 def _load():
     spec = importlib.util.spec_from_file_location("e2e_workspace", _SCRIPT)
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod  # @dataclass (py3.14) resolve cls.__module__ em sys.modules
     spec.loader.exec_module(mod)
     return mod
 
