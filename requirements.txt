@@ -10,7 +10,7 @@ mcp==2.2.0
 httpx==0.28.1
 python-dotenv==1.2.3
 pydantic==2.13.5
-anthropic==1.8.0
+anthropic==1.13.0
 openai==3.19.2
 PyYAML==6.0.3
 # External CLIs (not pip): graphify 0.9.59, hermes 0.20.5, ollama 0.34.2
