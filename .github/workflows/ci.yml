@@ -103,7 +103,7 @@ jobs:
         run: python -m pytest tests/e2e -q
       - name: Upload E2E evidence
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-evidence
           path: ${{ runner.temp }}/pytest-of-runner
