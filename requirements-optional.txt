@@ -10,7 +10,7 @@
 #   The project itself requires Python >= 3.12; the optional stack was benchmarked on 3.11 because
 #   torch/llmlingua wheels are published for it. Not validated on 3.12+ (3.14 is the dev venv).
 
-torch==2.6.0+cu124          # CUDA 12.4 build (index https://download.pytorch.org/whl/cu124)
+torch==2.14.1          # CUDA 12.4 build (index https://download.pytorch.org/whl/cu124)
 
 # [compress] -- llmlingua2, provence
 llmlingua==0.2.2            # llmlingua2 (MIT). Model microsoft/llmlingua-2-xlm-roberta-large-meetingbank (MIT)
