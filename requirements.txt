@@ -8,7 +8,7 @@ fastapi==0.141.1
 uvicorn[standard]==0.53.0
 mcp==2.2.0
 httpx==0.28.1
-python-dotenv==1.2.3
+python-dotenv==1.2.4
 pydantic==2.13.5
 anthropic==1.8.0
 openai==3.19.2
