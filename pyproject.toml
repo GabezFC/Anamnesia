@@ -23,7 +23,7 @@ dependencies = [
     "python-dotenv==1.2.3",
     "pydantic==2.13.5",
     "anthropic==1.8.0",
-    "openai==3.19.2",
+    "openai==3.29.0",
     # app/* imports yaml directly; until now it only arrived transitively via uvicorn[standard].
     "PyYAML==6.0.3",
 ]
