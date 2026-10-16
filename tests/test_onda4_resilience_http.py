@@ -81,7 +81,7 @@ def base_url():
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
-    monkeypatch.delenv("ANAMNESIA_PAID_CALLS", raising=False)
+    monkeypatch.setenv("ANAMNESIA_PAID_CALLS", "1")   # ANAM-003: explicit consent (default is now OFF)
 
 
 def gen(base_url, model, timeout_s=5.0):

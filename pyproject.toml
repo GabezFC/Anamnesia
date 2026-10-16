@@ -36,6 +36,7 @@ dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
     "pytest-repeat==0.9.4",
+    "pytest-timeout==2.4.0",
     "ruff==0.17.0",
     "mypy==2.4.0",
     "build==1.6.1",
@@ -86,14 +87,14 @@ extend-exclude = ["spikes", "graphify-out", "frontend", "data", "build", "dist"]
 select = ["E9", "F63", "F7", "F82"]
 
 # ---------------------------------------------------------------------------------------------
-# coverage (ANA-087). fail_under is the ratchet: raise it, never lower it. See scripts/coverage_report.py.
+# coverage (ANA-087/ANAM-022). fail_under is the ratchet: raise it, never lower it. Measured 90.19% (Windows, py3.14, full suite, 2026-10-15); set 1 point below for OS variance. See scripts/coverage_report.py.
 # ---------------------------------------------------------------------------------------------
 [tool.coverage.run]
 source = ["app", "config", "anamnesia", "memory_gateway"]
 omit = ["*/__pycache__/*", "*/tests/*"]
 
 [tool.coverage.report]
-fail_under = 0
+fail_under = 89
 show_missing = false
 skip_empty = true
 exclude_also = ["if TYPE_CHECKING:", "if __name__ == .__main__.:", "raise NotImplementedError"]

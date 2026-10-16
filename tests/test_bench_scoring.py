@@ -65,7 +65,8 @@ def test_verify_task_citation_subset_of_retrieved():
 
 def test_verify_task_without_retrieval_skips_citation_explicitly():
     r = rb.verify_task(_task(), "O valor é 42.", None)
-    assert r.passed and r.details["citation_checked"] is False
+    assert not r.passed and r.failure_code == "citation_unchecked"   # AUD-053: unchecked never counts as PASS
+    assert r.details["citation_checked"] is False
 
 
 def test_verify_task_plain_fact_match_task_ignores_citation():

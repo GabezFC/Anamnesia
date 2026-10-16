@@ -43,11 +43,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
-from app.services.query_fp import QUERY_NORMALIZER_VERSION, canonical, fingerprint, term_key
+from app.services.query_fp import QUERY_NORMALIZER_VERSION, canonical, fingerprint, fold, term_key
 
 CACHE_SCHEMA_VERSION = "cache-v2"
 RANKING_VERSION = "rank-v1"
@@ -74,14 +75,20 @@ class CacheIdentity:
     query_normalizer_version: str = QUERY_NORMALIZER_VERSION
     cache_schema_version: str = CACHE_SCHEMA_VERSION
     namespace: str = ""
+    # ANAM-014 (AUD-014): validade por versão do índice / da política do juiz. Vazio == comportamento
+    # antigo (o campo é omitido do digest, então chaves existentes continuam endereçáveis).
+    index_version: str = ""
+    judge_policy_version: str = ""
 
     # ANA-099: the cache stores the judge's RAW relevance/injection scores; thresholds only decide what
     # to do with them afterwards. Keeping them out of the key means moving a threshold re-uses every
     # paid judgement instead of orphaning the whole cache (hit-rate kept after a threshold change).
     KEY_EXCLUDED = ("relevance_threshold", "review_threshold")
+    KEY_OPTIONAL = ("index_version", "judge_policy_version")     # só entram na chave quando preenchidos
 
     def digest(self) -> str:
-        d = {k: v for k, v in asdict(self).items() if k not in self.KEY_EXCLUDED}
+        d = {k: v for k, v in asdict(self).items()
+             if k not in self.KEY_EXCLUDED and not (k in self.KEY_OPTIONAL and not v)}
         return hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()[:16]
 
     def to_dict(self) -> dict:
@@ -94,6 +101,46 @@ def _key(layer: str, qrepr: Any, content_hash: str, ident: CacheIdentity, extra:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+# ANAM-014 (AUD-014): L2 ignora a ordem das palavras, o que é seguro para reformulações ("norteia postgres
+# driver" == "driver postgres norteia") mas FUNDE consultas direcionais: "migrar mysql para postgres" e
+# "migrar postgres para mysql" tinham a mesma chave L2 e o cache servia o veredito da direção oposta.
+# Consultas com marcador de direção/contraste/tempo não usam L2 (só L1, que preserva a ordem).
+_DIRECTIONAL = re.compile(
+    r"->|=>|\u2192|\u21d2|\b(?:para|to|from|vs|versus|antes|depois|before|after|into|onto|ate|until|"
+    r"then|entao|contra|against)\b")
+
+
+def is_directional(query: str) -> bool:
+    return bool(_DIRECTIONAL.search(fold(query)))
+
+
+def l2_repr(query: str) -> list[str] | None:
+    """Representação L2 (termos únicos ordenados) ou None quando a ordem muda o significado."""
+    return None if is_directional(query) else list(term_key(query))
+
+
+def db_batch_ops(get: Any) -> tuple[Callable | None, Callable | None]:
+    """ANAM-014: se `get` é `Database.cache_get`, devolve (get_many, put_many) sobre a mesma tabela jev_cache:
+    1 SELECT ... IN e 1 transação por candidato em vez de 3 SELECT + 3 commits. Qualquer outro `get` (dict.get
+    nos testes, lambdas) devolve (None, None) e o caminho unitário antigo é mantido."""
+    db = getattr(get, "__self__", None)
+    if getattr(get, "__name__", "") != "cache_get" or not (hasattr(db, "query") and hasattr(db, "_tx")):
+        return None, None
+
+    def get_many(keys: list[str]) -> dict[str, dict]:
+        marks = ",".join("?" * len(keys))
+        rows = db.query(f"SELECT key, value FROM jev_cache WHERE key IN ({marks})", tuple(keys))
+        return {r["key"]: json.loads(r["value"]) for r in rows}
+
+    def put_many(items: dict[str, dict]) -> None:
+        now = time.time()
+        with db._tx() as conn:
+            conn.executemany("INSERT OR REPLACE INTO jev_cache VALUES (?,?,?)",
+                             [(k, json.dumps(v), now) for k, v in items.items()])
+
+    return get_many, put_many
+
+
 @dataclass
 class CacheStats:
     lookups: int = 0
@@ -103,6 +150,8 @@ class CacheStats:
     hits_l5: int = 0
     misses: int = 0
     writes: int = 0
+    store_gets: int = 0          # chamadas ao armazenamento (ANAM-014: contagem de operações por candidato)
+    store_puts: int = 0
     negative_hits: int = 0       # hits whose cached verdict was a DROP-range relevance
     l3_suggested: int = 0        # shadow mode: L3 would have hit but was not served
     l3_agreements: int = 0       # shadow: suggestion matched the real judgement's routing band
@@ -136,8 +185,14 @@ class LayeredCache:
     def __init__(self, get: Callable[[str], dict | None] | None,
                  put: Callable[[str, dict], None] | None,
                  ident: CacheIdentity, *, promote_l3: bool = False,
-                 enable_l2: bool = True, enable_l3_shadow: bool = True):
+                 enable_l2: bool = True, enable_l3_shadow: bool = True,
+                 get_many: Callable[[list[str]], dict[str, dict]] | None = None,
+                 put_many: Callable[[dict[str, dict]], None] | None = None):
         self._get, self._put = get, put
+        # ANAM-014: operações em lote opcionais (1 SELECT ... IN / 1 transação por candidato em vez de 3+3).
+        if get_many is None and put_many is None:
+            get_many, put_many = db_batch_ops(get)
+        self._get_many, self._put_many = get_many, put_many
         self.ident = ident
         self.promote_l3 = promote_l3
         self.enable_l2 = enable_l2
@@ -151,23 +206,39 @@ class LayeredCache:
         return self._get is not None
 
     # -- judgement layers ----------------------------------------------------
+    def _fetch(self, keys: list[str]) -> dict[str, dict]:
+        """Lê várias chaves: 1 chamada em lote quando disponível, senão uma por chave (comportamento antigo,
+        com curto-circuito feito por quem chama)."""
+        self.stats.store_gets += 1
+        return self._get_many(keys) or {}
+
+    def _get1(self, key: str) -> dict | None:
+        self.stats.store_gets += 1
+        return self._get(key)
+
     def get_judgement(self, query: str, content_hash: str) -> tuple[dict | None, str | None]:
         """Look up a judgement. Returns (value, layer_hit) — value is None on a miss."""
         if self._get is None:
             return None, None
         self.stats.lookups += 1
         reprs = [(L1, canonical(query), "hits_l1")]
-        if self.enable_l2:
-            reprs.append((L2, list(term_key(query)), "hits_l2"))
-        for layer, qr, counter in reprs:
-            v = self._get(_key(layer, qr, content_hash, self.ident))
+        l2 = l2_repr(query) if self.enable_l2 else None
+        if l2 is not None:
+            reprs.append((L2, l2, "hits_l2"))
+        fp_key = _key(L3, list(fingerprint(query)), content_hash, self.ident)
+        want_l3 = self.promote_l3 or self.enable_l3_shadow
+        keys = [(layer, _key(layer, qr, content_hash, self.ident), counter) for layer, qr, counter in reprs]
+        batch: dict[str, dict] | None = None
+        if self._get_many is not None:
+            batch = self._fetch([k for _, k, _ in keys] + ([fp_key] if want_l3 else []))
+        for layer, key, counter in keys:
+            v = batch.get(key) if batch is not None else self._get1(key)
             if v:
                 setattr(self.stats, counter, getattr(self.stats, counter) + 1)
                 self._count_negative(v)
                 return v, layer
 
-        fp_key = _key(L3, list(fingerprint(query)), content_hash, self.ident)
-        v3 = self._get(fp_key) if (self.promote_l3 or self.enable_l3_shadow) else None
+        v3 = (batch.get(fp_key) if batch is not None else self._get1(fp_key)) if want_l3 else None
         if v3 and self.promote_l3:
             self.stats.hits_l3 += 1
             self._count_negative(v3)
@@ -189,10 +260,18 @@ class LayeredCache:
         if self._put is None:
             return
         payload = {**value, "cached_at": time.time(), "identity": self.ident.digest()}
-        self._put(_key(L1, canonical(query), content_hash, self.ident), payload)
-        if self.enable_l2:
-            self._put(_key(L2, list(term_key(query)), content_hash, self.ident), payload)
-        self._put(_key(L3, list(fingerprint(query)), content_hash, self.ident), payload)
+        items = {_key(L1, canonical(query), content_hash, self.ident): payload}
+        l2 = l2_repr(query) if self.enable_l2 else None
+        if l2 is not None:
+            items[_key(L2, l2, content_hash, self.ident)] = payload
+        items[_key(L3, list(fingerprint(query)), content_hash, self.ident)] = payload
+        if self._put_many is not None:
+            self.stats.store_puts += 1
+            self._put_many(items)
+        else:
+            for k, v in items.items():
+                self.stats.store_puts += 1
+                self._put(k, v)
         self.stats.writes += 1
 
     def record_shadow_outcome(self, content_hash: str, real_relevance: float | None,

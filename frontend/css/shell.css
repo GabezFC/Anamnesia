@@ -443,3 +443,17 @@
     align-items: center;
   }
 }
+
+/* Grupo recolhível "Avançado" (páginas experimentais) */
+.nav-advanced { margin-top: var(--space-2); border-top: 1px solid var(--border-subtle); padding-top: var(--space-2); }
+.nav-advanced-toggle { width: 100%; background: none; border-top: 0; border-right: 0; border-bottom: 0; cursor: pointer; text-align: left; color: var(--text-tertiary); font-size: var(--text-xs); }
+.nav-advanced-toggle .nav-item-icon { transition: transform var(--duration-fast); }
+.nav-advanced-toggle[aria-expanded="false"] .nav-item-icon { transform: rotate(-90deg); }
+.nav-advanced-list { display: flex; flex-direction: column; gap: 3px; }
+.nav-advanced-list[hidden] { display: none; }
+@media (max-width: 900px) {
+  /* sidebar só com ícones: o item de Decision Engine fica sempre acessível */
+  .nav-item .nav-item-icon { display: flex; }   /* o seletor `.nav-item span` acima também escondia o ícone */
+  .nav-advanced-toggle { display: none; }
+  .nav-advanced-list[hidden] { display: flex; }
+}

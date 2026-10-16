@@ -129,7 +129,8 @@ def test_timeout_is_classified():
         srv.shutdown()
 
 
-def test_error_never_contains_the_api_key(server):
+def test_error_never_contains_the_api_key(server, monkeypatch):
+    monkeypatch.setenv("ANAMNESIA_PAID_CALLS", "1")      # ANAM-003: explicit consent
     _Handler.plan = {"/chat/completions": (401, b'{"error":"bad"}', {})}
     r = OpenAICompatibleAdapter(server, "m", "sk-SECRET-VALUE-123456", "openai", timeout_s=3).generate("hi")
     assert "sk-SECRET-VALUE-123456" not in (r.error or "") and r.error_kind == "auth"
@@ -147,14 +148,23 @@ def test_paid_calls_off_values(monkeypatch, val):
     assert E.paid_calls_enabled() is False
 
 
-@pytest.mark.parametrize("val", [None, "", "1", "true", "yes"])
-def test_paid_calls_default_and_on(monkeypatch, val):
+@pytest.mark.parametrize("val", ["1", "true", "yes", "on", " TRUE "])
+def test_paid_calls_on_only_when_explicit(monkeypatch, val):
+    monkeypatch.setenv("ANAMNESIA_PAID_CALLS", val)
+    assert E.paid_calls_enabled() is True
+    E.ensure_paid_allowed("openai")      # no raise
+
+
+@pytest.mark.parametrize("val", [None, "", "maybe", "2"])
+def test_paid_calls_default_is_off_anam003(monkeypatch, val):
     if val is None:
         monkeypatch.delenv("ANAMNESIA_PAID_CALLS", raising=False)
     else:
         monkeypatch.setenv("ANAMNESIA_PAID_CALLS", val)
-    assert E.paid_calls_enabled() is True
-    E.ensure_paid_allowed("openai")      # no raise
+    assert E.paid_calls_enabled() is False
+    with pytest.raises(E.PaidCallsDisabled):
+        E.ensure_paid_allowed("openai")
+    E.ensure_paid_allowed("ollama")
 
 
 def test_kill_switch_blocks_every_cloud_provider_and_spares_local(monkeypatch):
@@ -173,9 +183,9 @@ def test_adapters_do_not_touch_the_network_when_off(monkeypatch):
         raise AssertionError("network call attempted with the kill-switch on")
     monkeypatch.setattr(httpx, "post", boom)
     r = OpenAICompatibleAdapter("https://api.openai.com/v1", "m", "k", "openai").generate("x")
-    assert r.answer is None and "ANAMNESIA_PAID_CALLS=0" in r.error and r.error_kind == "other"
+    assert r.answer is None and "ANAMNESIA_PAID_CALLS" in r.error and r.error_kind == "other"
     r2 = AnthropicAdapter("claude-x").generate("x")
-    assert r2.answer is None and "ANAMNESIA_PAID_CALLS=0" in r2.error
+    assert r2.answer is None and "ANAMNESIA_PAID_CALLS" in r2.error
 
 
 def test_make_adapter_zero_cloud_adapters_with_flag_off(monkeypatch):

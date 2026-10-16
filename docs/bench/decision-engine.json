@@ -1,0 +1,302 @@
+{
+ "dataset": {
+  "items": 192,
+  "positives": 59,
+  "queries": 74,
+  "source": "benchmark/laya_labeled.json (corpus SINTÉTICO; sem vault real)"
+ },
+ "labels": {
+  "jev": "FAKE (proxy lexical) — JEV real: não medido",
+  "laya_probs": "REPLAY de ANAM-042 (MEASURED lá)",
+  "laya_latency": "ESTIMATED (227,6 ms/cand. em lote, CPU, execução ANAM-042)",
+  "jev_tokens": "ESTIMATED (340·req + 209·perguntas)",
+  "jev_usd": "UNKNOWN"
+ },
+ "reference": {
+  "no_filter": {
+   "tp": 59,
+   "fp": 133,
+   "fn": 0,
+   "precision": 0.3073,
+   "recall": 1.0,
+   "f1": 0.4701
+  },
+  "auc_laya": 0.642,
+  "auc_lexical": 0.975
+ },
+ "results": [
+  {
+   "name": "JEV-only (padrão)",
+   "requests": 74,
+   "items": 192,
+   "precision": 0.8281,
+   "recall": 0.8983,
+   "f1": 0.8618,
+   "tp": 53,
+   "fp": 11,
+   "fn": 6,
+   "jev_items": 192,
+   "jev_requests": 74,
+   "jev_calls_avoided": 0,
+   "jev_avoided_pct": 0.0,
+   "jev_tokens_est": 65288,
+   "laya_items": 0,
+   "laya_ms_total_est": 0.0,
+   "laya_ms_p50_est": 0.0,
+   "laya_ms_p95_est": 0.0,
+   "engine_wall_ms_p50": 0.094,
+   "engine_wall_ms_p95": 0.114,
+   "fallbacks": 0
+  },
+  {
+   "name": "Laya-only",
+   "requests": 74,
+   "items": 192,
+   "precision": 0.3257,
+   "recall": 0.9661,
+   "f1": 0.4872,
+   "tp": 57,
+   "fp": 118,
+   "fn": 2,
+   "jev_items": 0,
+   "jev_requests": 0,
+   "jev_calls_avoided": 192,
+   "jev_avoided_pct": 100.0,
+   "jev_tokens_est": 0,
+   "laya_items": 192,
+   "laya_ms_total_est": 43699.2,
+   "laya_ms_p50_est": 682.8,
+   "laya_ms_p95_est": 682.8,
+   "engine_wall_ms_p50": 0.053,
+   "engine_wall_ms_p95": 0.061,
+   "fallbacks": 0
+  },
+  {
+   "name": "Laya→JEV",
+   "requests": 74,
+   "items": 192,
+   "precision": 0.534,
+   "recall": 0.9322,
+   "f1": 0.679,
+   "tp": 55,
+   "fp": 48,
+   "fn": 4,
+   "jev_items": 107,
+   "jev_requests": 64,
+   "jev_calls_avoided": 85,
+   "jev_avoided_pct": 44.3,
+   "jev_tokens_est": 44123,
+   "laya_items": 192,
+   "laya_ms_total_est": 43699.2,
+   "laya_ms_p50_est": 682.8,
+   "laya_ms_p95_est": 682.8,
+   "engine_wall_ms_p50": 0.764,
+   "engine_wall_ms_p95": 1.922,
+   "fallbacks": 0
+  },
+  {
+   "name": "JEV→Laya",
+   "requests": 74,
+   "items": 192,
+   "precision": 0.8281,
+   "recall": 0.8983,
+   "f1": 0.8618,
+   "tp": 53,
+   "fp": 11,
+   "fn": 6,
+   "jev_items": 192,
+   "jev_requests": 74,
+   "jev_calls_avoided": 0,
+   "jev_avoided_pct": 0.0,
+   "jev_tokens_est": 65288,
+   "laya_items": 20,
+   "laya_ms_total_est": 4552.0,
+   "laya_ms_p50_est": 0.0,
+   "laya_ms_p95_est": 227.6,
+   "engine_wall_ms_p50": 0.107,
+   "engine_wall_ms_p95": 0.152,
+   "fallbacks": 0
+  },
+  {
+   "name": "ensemble",
+   "requests": 74,
+   "items": 192,
+   "precision": 0.3277,
+   "recall": 0.9831,
+   "f1": 0.4915,
+   "tp": 58,
+   "fp": 119,
+   "fn": 1,
+   "jev_items": 192,
+   "jev_requests": 74,
+   "jev_calls_avoided": 0,
+   "jev_avoided_pct": 0.0,
+   "jev_tokens_est": 65288,
+   "laya_items": 192,
+   "laya_ms_total_est": 43699.2,
+   "laya_ms_p50_est": 682.8,
+   "laya_ms_p95_est": 682.8,
+   "engine_wall_ms_p50": 0.142,
+   "engine_wall_ms_p95": 0.162,
+   "fallbacks": 0
+  },
+  {
+   "name": "adaptive",
+   "requests": 74,
+   "items": 192,
+   "precision": 0.4741,
+   "recall": 0.9322,
+   "f1": 0.6286,
+   "tp": 55,
+   "fp": 61,
+   "fn": 4,
+   "jev_items": 89,
+   "jev_requests": 60,
+   "jev_calls_avoided": 103,
+   "jev_avoided_pct": 53.6,
+   "jev_tokens_est": 39001,
+   "laya_items": 192,
+   "laya_ms_total_est": 43699.2,
+   "laya_ms_p50_est": 682.8,
+   "laya_ms_p95_est": 682.8,
+   "engine_wall_ms_p50": 0.668,
+   "engine_wall_ms_p95": 1.366,
+   "fallbacks": 0
+  }
+ ],
+ "adaptive_sweep": [
+  {
+   "name": "adaptive min_conf=0.01",
+   "precision": 0.3957,
+   "recall": 0.9322,
+   "f1": 0.5556,
+   "jev_items": 57,
+   "jev_avoided_pct": 70.3
+  },
+  {
+   "name": "adaptive min_conf=0.02",
+   "precision": 0.4135,
+   "recall": 0.9322,
+   "f1": 0.5729,
+   "jev_items": 63,
+   "jev_avoided_pct": 67.2
+  },
+  {
+   "name": "adaptive min_conf=0.05",
+   "precision": 0.4741,
+   "recall": 0.9322,
+   "f1": 0.6286,
+   "jev_items": 89,
+   "jev_avoided_pct": 53.6
+  },
+  {
+   "name": "adaptive min_conf=0.1",
+   "precision": 0.5464,
+   "recall": 0.8983,
+   "f1": 0.6795,
+   "jev_items": 122,
+   "jev_avoided_pct": 36.5
+  },
+  {
+   "name": "adaptive min_conf=0.2",
+   "precision": 0.7681,
+   "recall": 0.8983,
+   "f1": 0.8281,
+   "jev_items": 163,
+   "jev_avoided_pct": 15.1
+  }
+ ],
+ "divergence_laya_vs_fakejev": {
+  "n": {
+   "value": 192,
+   "label": "MEASURED"
+  },
+  "agreement_rate": {
+   "value": 0.2917,
+   "label": "MEASURED"
+  },
+  "survival_agreement_rate": {
+   "value": 0.401,
+   "label": "MEASURED"
+  },
+  "cohen_kappa": {
+   "value": 0.0846,
+   "label": "MEASURED"
+  },
+  "laya_keep_jev_drop": 113,
+  "laya_drop_jev_keep": 2,
+  "matrix_rows_laya_cols_jev": {
+   "KEEP": {
+    "KEEP": 32,
+    "REVIEW": 11,
+    "DROP": 68,
+    "QUARANTINE": 0
+   },
+   "REVIEW": {
+    "KEEP": 10,
+    "REVIEW": 9,
+    "DROP": 45,
+    "QUARANTINE": 0
+   },
+   "DROP": {
+    "KEEP": 2,
+    "REVIEW": 0,
+    "DROP": 15,
+    "QUARANTINE": 0
+   },
+   "QUARANTINE": {
+    "KEEP": 0,
+    "REVIEW": 0,
+    "DROP": 0,
+    "QUARANTINE": 0
+   }
+  },
+  "caveat": "amostra dos itens em que os dois providers responderam; pode ser enviesada pela estratégia",
+  "vs_labels": {
+   "laya": {
+    "tp": 57,
+    "fp": 118,
+    "fn": 2,
+    "precision": 0.3257,
+    "recall": 0.9661,
+    "f1": 0.4872
+   },
+   "jev": {
+    "tp": 53,
+    "fp": 11,
+    "fn": 6,
+    "precision": 0.8281,
+    "recall": 0.8983,
+    "f1": 0.8618
+   },
+   "laya_right_jev_wrong": 6,
+   "jev_right_laya_wrong": 109
+  }
+ },
+ "fault_injection": {
+  "retrieval": {
+   "decisions": [
+    "UNJUDGED"
+   ],
+   "fallback_action": "allow",
+   "all_flagged": true,
+   "dropped_silently": 0
+  },
+  "memory": {
+   "decisions": [
+    "REVIEW"
+   ],
+   "fallback_action": "review",
+   "all_flagged": true,
+   "dropped_silently": 0
+  },
+  "security": {
+   "decisions": [
+    "QUARANTINE"
+   ],
+   "fallback_action": "block",
+   "all_flagged": true,
+   "dropped_silently": 0
+  }
+ }
+}

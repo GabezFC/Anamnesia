@@ -280,7 +280,8 @@ def verify_task(task: Task, answer: str | None, retrieved_ids: Sequence[str] | N
 
     ANA-111: for `fact_match+citation` tasks, when retrieval happened (`retrieved_ids` is not None) the
     cited note paths must exist and be a subset of the retrieved ones; without retrieval the citation
-    check is skipped (details["citation_checked"] is False) -- never silently counted as verified."""
+    check cannot run, so the task is NOT a PASS (AUD-053: failure_code "citation_unchecked",
+    details["citation_checked"] is False) -- an unverified citation never counts as verified."""
     v, gt = task.verifier, task.ground_truth
     kind = v.get("type")
     if answer is None:
@@ -302,7 +303,7 @@ def verify_task(task: Task, answer: str | None, retrieved_ids: Sequence[str] | N
     if not res.passed or "citation" not in str(kind):
         return res
     if retrieved_ids is None:
-        return VerifyResult(True, res.level, None, {**res.details, "citation_checked": False})
+        return VerifyResult(False, res.level, "citation_unchecked", {**res.details, "citation_checked": False})
     cited = match_cited_to_retrieved(extract_cited_ids(answer), retrieved_ids)
     cres = verify_citation(cited, [str(r).replace("\\", "/").lower() for r in retrieved_ids])
     details = {**res.details, "citation_checked": True, "citation_ok": bool(cres.passed), **cres.details}
@@ -590,7 +591,10 @@ def run_controls(tasks: Sequence[Task], strategies: Sequence[str]) -> dict:
     for strat in [x for x in strategies if x in CONTROL_STRATEGIES]:
         passed, by_kind = [], defaultdict(lambda: [0, 0])
         for t in sorted(tasks, key=lambda t: t.id):
-            ok = bool(verify_task(t, control_answer(strat, t)).passed)
+            vr = verify_task(t, control_answer(strat, t))
+            # AUD-053: "citation_unchecked" means the FACT check already passed -> a control that echoes the
+            # facts got through the verifier; it is a leak even though the task no longer counts as PASS.
+            ok = bool(vr.passed) or vr.failure_code == "citation_unchecked"
             if ok:
                 passed.append(t.id)
             by_kind[t.kind][0] += ok
@@ -606,7 +610,7 @@ def oracle_cells(task: Task, models: Sequence[ModelEntry], cache: ResultCache, r
     for m in models:
         out = cache.get_or_run(task, m, runner)
         c, o = call_cost(m, out)
-        cells[m.id] = {"tier": m.tier, "solved": bool(verify_task(task, out.answer).passed), "cost": c,
+        cells[m.id] = {"tier": m.tier, "solved": bool(verify_task(task, out.answer, out.retrieved_ids).passed), "cost": c,
                        "origin": o, "tokens": _tok(out), "simulated": out.simulated}
     return cells
 

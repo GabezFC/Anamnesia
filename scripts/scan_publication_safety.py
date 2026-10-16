@@ -65,7 +65,8 @@ CONTENT_RULES = [
 ]
 # The synthetic corpus deliberately mimics the vault folder layout with invented names.
 # ANA-048: tests assert that secret scanners REJECT these; they are fakes, reported as low severity.
-FAKE_SECRET_FIXTURES = ("tests/", "scripts/e2e_workspace.py")
+FAKE_SECRET_FIXTURES = ("tests/", "scripts/e2e_workspace.py", "scripts/bench_laya.py",
+                        "benchmark/laya_labeled.json")  # ANAM-042: frases sintéticas rotuladas (token falso)
 SYNTHETIC_PREFIXES = (
     "data/synthetic_vault/", "benchmark/synthetic_questions.json", "benchmark/routing_tasks.json",
     "benchmark/questions.example.json", "scripts/gen_synthetic_corpus.py", "scripts/gen_routing_tasks.py",

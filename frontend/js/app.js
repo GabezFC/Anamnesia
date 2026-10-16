@@ -17,8 +17,13 @@ import * as connectionsPage from './pages/connections.js';
 import * as configPage from './pages/config.js';
 import * as costsPage from './pages/costs.js';
 import * as memoryPage from './pages/memory.js';
+import * as decisionPage from './pages/decision.js';
 import * as compareLab from './pages/compare/index.js';
 import { esc, fmtNumber } from './format.js';
+import { installShortcutDispatcher } from './commands.js';
+import { registerAppCommands } from './app-commands.js';
+import { openPalette, isPaletteOpen } from './components/command-palette.js';
+import { trapFocus } from './components/focus-trap.js';
 import { loadLive, installTerminalObserver, registerProject, live, demoBlocks, isDemo, checkHealth, refreshAlerts } from './live.js';
 
 // `title` é getter: lê I18N no momento do render para acompanhar a troca de idioma.
@@ -28,7 +33,26 @@ const ROUTES = {
   '#/config': { id: 'config', get title() { return I18N.nav.config; }, icon: 'config', module: configPage },
   '#/costs': { id: 'costs', get title() { return I18N.nav.costs; }, icon: 'costs', module: costsPage },
   '#/memory': { id: 'memory', get title() { return I18N.nav.memory; }, icon: 'database', module: memoryPage },
+  '#/decision': { id: 'decision', get title() { return I18N.nav.decision; }, icon: 'cpu', module: decisionPage },
 };
+
+let navAdvancedOpen = false;
+/** Grupo recolhível "Avançado" da sidebar: abriga páginas experimentais sem poluir a navegação principal. */
+function navAdvancedHtml(activeDecision) {
+  const open = navAdvancedOpen || activeDecision;
+  return `<div class="nav-advanced">
+              <button type="button" class="nav-item nav-advanced-toggle" data-action="toggle-nav-advanced" aria-expanded="${open}" aria-controls="nav-advanced-list">
+                <span class="nav-item-icon">${icon('chevronDown', '', 16)}</span>
+                <span>${esc(I18N.nav.advanced)}</span>
+              </button>
+              <div id="nav-advanced-list" class="nav-advanced-list" data-bind="nav-advanced-list" ${open ? '' : 'hidden'}>
+                <a class="nav-item ${activeDecision ? 'is-active' : ''}" href="#/decision" aria-current="${activeDecision ? 'page' : 'false'}">
+                  <span class="nav-item-icon">${icon('cpu', '', 18)}</span>
+                  <span>${esc(I18N.nav.decision)}</span>
+                </a>
+              </div>
+            </div>`;
+}
 
 /** Seletor PT | EN (botões segmentados; delegação via data-action="set-lang"). */
 function renderLangSwitch() {
@@ -55,7 +79,9 @@ function getInitialTheme() {
 let currentRoute = '#/workspace';
 let currentTheme = getInitialTheme();
 let activePageModule = null;
-let isCommandPaletteOpen = false;
+let modalRelease = null; // libera o focus trap do modal (ANAM-027)
+let modalTrigger = null; // elemento que abriu o modal (retorno de foco)
+let firstRoute = true;
 let activeModal = null; // null | { type: 'add-project' } | { type: 'snippet', title, snippet }
 let currentDebugState = 'loaded'; // 'loaded' | 'loading' | 'empty' | 'error' | 'backend-unavailable'
 
@@ -80,7 +106,18 @@ export async function init() {
     }
     renderShell();
   });
-  window.addEventListener('keydown', handleKeyboardShortcuts);
+  registerAppCommands({
+    navigate: (hash) => { window.location.hash = hash; },
+    openPalette: () => openPalette(),
+    toggleTheme,
+    toggleLang: () => changeLang(getLang() === 'en' ? 'pt' : 'en'),
+    newTerminal: () => {
+      window.location.hash = '#/workspace';
+      setTimeout(() => document.querySelector('[data-action="toggle-profile-menu"]')?.click(), 60);
+    },
+  });
+  installShortcutDispatcher(window);
+  window.addEventListener('keydown', handleModalEscape);
   // ANA-201/202: cabeçalho do Lab (nº de runs/alertas) depende de dados reais carregados sob demanda
   window.addEventListener('anamnesia:lab-ready', () => { if (currentRoute.startsWith('#/compare')) renderShell(); });
   // Saúde real e alertas: atualizados em segundo plano; só os indicadores são repintados (sem re-render de página)
@@ -153,9 +190,18 @@ function handleRoute() {
   }
 
   renderShell();
+  // AUD-038: a cada navegação (não na carga inicial) o foco vai para o conteúdo da nova página.
+  if (!firstRoute) focusPageHeading();
+  firstRoute = false;
 }
 
 function renderShell() {
+  renderShellBody();
+  updateDocumentTitle();
+  syncModalFocus();
+}
+
+function renderShellBody() {
   const isLab = currentRoute.startsWith('#/compare');
 
   // REGRA DE OURO: Se estiver na rota #/compare, a casca do app some completamente
@@ -165,7 +211,6 @@ function renderShell() {
     appRoot.innerHTML = `
       ${compareLab.render(subRoute, { langSwitch: renderLangSwitch() })}
       ${renderGlobalToasts()}
-      ${renderCommandPalette()}
     `;
     compareLab.mount(appRoot);
     activePageModule = compareLab;
@@ -222,6 +267,7 @@ function renderShell() {
               <span class="nav-item-icon">${icon('database', '', 18)}</span>
               <span>${I18N.nav.memory}</span>
             </a>
+            ${navAdvancedHtml(routeObj.id === 'decision')}
           </nav>
         </div>
 
@@ -339,7 +385,6 @@ function renderShell() {
 
       <!-- Modais Globais & Paleta de Comandos -->
       ${renderModal()}
-      ${renderCommandPalette()}
       ${renderGlobalToasts()}
     </div>
   `;
@@ -362,22 +407,22 @@ function renderModal() {
   if (activeModal.type === 'add-project') {
     return `
       <div class="modal-backdrop is-active" data-action="close-modal">
-        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-add-title">
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-add-title" tabindex="-1">
           <div class="modal-header">
             <h3 id="modal-add-title" class="card-title">${I18N.workspace.addProjectModalTitle}</h3>
             <button class="btn btn-ghost btn-icon" data-action="close-modal" aria-label="${I18N.app.close}">${icon('x', '', 16)}</button>
           </div>
           <div class="modal-body">
             <div class="input-group">
-              <label class="input-label">${I18N.workspace.projectNameLabel}</label>
+              <label class="input-label" for="new-project-name">${I18N.workspace.projectNameLabel}</label>
               <div class="input-control">
-                <input type="text" id="new-project-name" placeholder="meu-novo-projeto" autofocus />
+                <input type="text" id="new-project-name" placeholder="meu-novo-projeto" autocomplete="off" />
               </div>
             </div>
             <div class="input-group">
-              <label class="input-label">${I18N.workspace.projectPathLabel}</label>
+              <label class="input-label" for="new-project-path">${I18N.workspace.projectPathLabel}</label>
               <div class="input-control">
-                <input type="text" id="new-project-path" placeholder="/home/dev/meu-novo-projeto" />
+                <input type="text" id="new-project-path" placeholder="/home/dev/meu-novo-projeto" autocomplete="off" />
               </div>
             </div>
           </div>
@@ -393,7 +438,7 @@ function renderModal() {
   if (activeModal.type === 'snippet') {
     return `
       <div class="modal-backdrop is-active" data-action="close-modal">
-        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-snip-title">
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-snip-title" tabindex="-1">
           <div class="modal-header">
             <div>
               <h3 id="modal-snip-title" class="card-title">${I18N.connections.snippetModalTitle}</h3>
@@ -416,88 +461,6 @@ function renderModal() {
   }
 
   return '';
-}
-
-function renderCommandPalette() {
-  if (!isCommandPaletteOpen) return '';
-
-  return `
-    <div class="command-palette-backdrop is-active" data-action="close-command-palette">
-      <div class="command-palette-dialog" role="dialog" aria-modal="true" aria-label="${esc(I18N.app.openPalette)}">
-        <div class="command-palette-input-wrap">
-          ${icon('search', '', 16)}
-          <input 
-            type="text" 
-            class="command-palette-input" 
-            placeholder="Digite para buscar páginas, projetos ou ações..." 
-            data-action="filter-palette" 
-            aria-label="${esc(I18N.app.searchPlaceholder)}"
-            autofocus 
-          />
-          <kbd>Esc</kbd>
-        </div>
-        <div class="command-palette-list" data-bind="palette-list">
-          <div class="command-palette-group-title">Navegação Rápida</div>
-          <div class="command-palette-item" data-action="palette-navigate" data-target="#/workspace">
-            <div class="command-palette-item-left">
-              ${icon('terminal', '', 14)}
-              <span>Ir para Workspace (IDE)</span>
-            </div>
-            <kbd>#1</kbd>
-          </div>
-          <div class="command-palette-item" data-action="palette-navigate" data-target="#/connections">
-            <div class="command-palette-item-left">
-              ${icon('connections', '', 14)}
-              <span>Ir para Conexões</span>
-            </div>
-            <kbd>#2</kbd>
-          </div>
-          <div class="command-palette-item" data-action="palette-navigate" data-target="#/config">
-            <div class="command-palette-item-left">
-              ${icon('config', '', 14)}
-              <span>Ir para Configuração</span>
-            </div>
-            <kbd>#3</kbd>
-          </div>
-          <div class="command-palette-item" data-action="palette-navigate" data-target="#/costs">
-            <div class="command-palette-item-left">
-              ${icon('costs', '', 14)}
-              <span>Ir para Livro de Custos</span>
-            </div>
-            <kbd>#4</kbd>
-          </div>
-          <div class="command-palette-item" data-action="palette-navigate" data-target="#/compare/overview">
-            <div class="command-palette-item-left u-088d7f">
-              ${icon('scale', '', 14)}
-              <span>Abrir Laboratório de Comparação de Modelos</span>
-            </div>
-            <span class="badge-seal badge-seal-experimental">Lab</span>
-          </div>
-
-          <div class="command-palette-group-title">Ações do Sistema</div>
-          <div class="command-palette-item" data-action="palette-action" data-subaction="new-terminal">
-            <div class="command-palette-item-left">
-              ${icon('plus', '', 14)}
-              <span>${I18N.app.paletteNewTerminal}</span>
-            </div>
-            <kbd>Ctrl+T</kbd>
-          </div>
-          <div class="command-palette-item" data-action="palette-action" data-subaction="toggle-theme">
-            <div class="command-palette-item-left">
-              ${icon('sun', '', 14)}
-              <span>${I18N.app.paletteToggleTheme}</span>
-            </div>
-          </div>
-          <div class="command-palette-item" data-action="palette-action" data-subaction="toggle-lang">
-            <div class="command-palette-item-left">
-              ${icon('info', '', 14)}
-              <span>${I18N.app.paletteToggleLang}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
 }
 
 function renderGlobalToasts() {
@@ -526,6 +489,7 @@ function showToast({ type = 'info', message = '' }) {
 }
 
 function openModal(modalData) {
+  modalTrigger = document.activeElement;
   activeModal = modalData;
   renderShell();
 }
@@ -533,26 +497,46 @@ function openModal(modalData) {
 function closeModal() {
   activeModal = null;
   renderShell();
+  const trigger = modalTrigger; modalTrigger = null;
+  const target = trigger && trigger.isConnected ? trigger : (trigger?.getAttribute?.('data-action') && document.querySelector(`[data-action="${trigger.getAttribute('data-action')}"]`));
+  (target || document.getElementById('main-content'))?.focus?.();
 }
 
-function handleKeyboardShortcuts(e) {
-  // Ctrl+K / Cmd+K opens Command Palette
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-    e.preventDefault();
-    isCommandPaletteOpen = !isCommandPaletteOpen;
-    renderShell();
-    return;
-  }
+/** Focus trap do modal: refeito a cada render do shell (o DOM do diálogo é recriado). */
+function syncModalFocus() {
+  if (modalRelease) { modalRelease({ restore: false }); modalRelease = null; }
+  if (!activeModal || !appRoot) return;
+  const dialog = appRoot.querySelector('.modal-dialog');
+  if (!dialog) return;
+  modalRelease = trapFocus(dialog, { initial: dialog.querySelector('input, textarea') || dialog.querySelector('.modal-footer .btn-primary') });
+}
 
-  // Escape closes Command Palette or Modal
-  if (e.key === 'Escape') {
-    if (isCommandPaletteOpen) {
-      isCommandPaletteOpen = false;
-      renderShell();
-    } else if (activeModal) {
-      closeModal();
-    }
-  }
+function toggleTheme() {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('anamnesia_theme', currentTheme);
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  renderShell();
+}
+
+function focusPageHeading() {
+  const el = appRoot.querySelector('#main-content') || appRoot.querySelector('h1');
+  if (!el) return;
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+  el.focus({ preventScroll: true });
+}
+
+/** Título do documento por rota (WCAG 2.4.2). */
+function routeTitle() {
+  if (currentRoute.startsWith('#/compare')) return I18N.a11y.labTitle;
+  return (ROUTES[currentRoute] || ROUTES['#/workspace']).title;
+}
+function updateDocumentTitle() {
+  document.title = `${routeTitle()} · ${I18N.a11y.pageTitleSuffix}`;
+}
+
+/** Esc fecha o modal (a paleta trata o próprio Esc). */
+function handleModalEscape(e) {
+  if (e.key === 'Escape' && activeModal && !isPaletteOpen() && !e.defaultPrevented) closeModal();
 }
 
 function attachShellHandlers() {
@@ -564,15 +548,7 @@ function attachShellHandlers() {
 
     switch (action) {
       case 'open-command-palette': {
-        isCommandPaletteOpen = true;
-        renderShell();
-        break;
-      }
-      case 'close-command-palette': {
-        if (e.target.classList.contains('command-palette-backdrop')) {
-          isCommandPaletteOpen = false;
-          renderShell();
-        }
+        openPalette();
         break;
       }
       case 'skip-to-content': {
@@ -580,15 +556,21 @@ function attachShellHandlers() {
         appRoot.querySelector('#main-content')?.focus();
         break;
       }
+      case 'toggle-nav-advanced': {   // grupo "Avançado" da sidebar (Decision Engine): só alterna a visibilidade
+        const list = appRoot.querySelector('[data-bind="nav-advanced-list"]');
+        if (!list) break;
+        const open = list.hidden;
+        list.hidden = !open;
+        target.setAttribute('aria-expanded', String(open));
+        navAdvancedOpen = open;
+        break;
+      }
       case 'set-lang': {
         changeLang(target.getAttribute('data-lang'));
         break;
       }
       case 'toggle-theme': {
-        currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-        localStorage.setItem('anamnesia_theme', currentTheme);
-        document.documentElement.setAttribute('data-theme', currentTheme);
-        renderShell();
+        toggleTheme();
         break;
       }
       case 'close-modal': {
@@ -619,27 +601,6 @@ function attachShellHandlers() {
         showToast({ type: 'success', message: I18N.app.copied });
         break;
       }
-      case 'palette-navigate': {
-        const dest = target.getAttribute('data-target');
-        isCommandPaletteOpen = false;
-        window.location.hash = dest;
-        break;
-      }
-      case 'palette-action': {
-        const subaction = target.getAttribute('data-subaction');
-        isCommandPaletteOpen = false;
-        if (subaction === 'toggle-theme') {
-          currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-          localStorage.setItem('anamnesia_theme', currentTheme);
-          document.documentElement.setAttribute('data-theme', currentTheme);
-          renderShell();
-        } else if (subaction === 'toggle-lang') {
-          changeLang(getLang() === 'en' ? 'pt' : 'en');
-        } else if (subaction === 'new-terminal') {
-          window.location.hash = '#/workspace';
-        }
-        break;
-      }
     }
   };
 
@@ -652,19 +613,6 @@ function attachShellHandlers() {
       if (activePageModule && activePageModule.setDebugState && contentArea) {
         activePageModule.setDebugState(currentDebugState, contentArea);
       }
-    };
-  }
-
-  // Palette input filter
-  const paletteInput = appRoot.querySelector('[data-action="filter-palette"]');
-  if (paletteInput) {
-    paletteInput.oninput = (e) => {
-      const q = e.target.value.toLowerCase().trim();
-      const items = appRoot.querySelectorAll('.command-palette-item');
-      items.forEach(it => {
-        const text = it.textContent.toLowerCase();
-        it.style.display = text.includes(q) ? 'flex' : 'none';
-      });
     };
   }
 }

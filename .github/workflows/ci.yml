@@ -24,10 +24,25 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install Python dependencies
         run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Docs/config drift (ANAM-022)
+        # Both generated docs must match the code; regenerate locally with the scripts if this fails.
+        run: |
+          python scripts/gen_config_reference.py --check
+          python scripts/gen_interface_docs.py --check
       - name: Python tests
         # tests/conftest.py: no network, no TypeSafe API, no graphify binary, no real vault —
         # everything is mocked, so this runs unmodified in CI.
-        run: pytest tests -q --junitxml=junit.xml
+        # ANAM-022: --block-network fails any real socket; --shuffle-seed=<run_id> shuffles the order with a
+        # seed that is registered in the log + job summary (repro: pytest --shuffle-seed=<seed>);
+        # --timeout (pytest-timeout) kills a hung test instead of the 6 h job limit.
+        # Coverage (fail_under in pyproject.toml, ratchet) is enforced on one leg only: ubuntu + 3.14.
+        shell: bash
+        run: |
+          SEED="${{ github.run_id }}"
+          echo "pytest shuffle seed: ${SEED} (os=${{ matrix.os }} py=${{ matrix.python }})" | tee -a "$GITHUB_STEP_SUMMARY"
+          COV=""
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ] && [ "${{ matrix.python }}" = "3.14" ]; then COV="--cov --cov-report=term"; fi
+          pytest tests -q --junitxml=junit.xml --block-network --shuffle-seed="${SEED}" --timeout=300 ${COV}
       - name: Annotate failing tests
         if: failure()
         run: python scripts/ci_annotate_failures.py junit.xml

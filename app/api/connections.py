@@ -95,6 +95,8 @@ def _ollama_probe() -> tuple[bool, str]:
     if not host.startswith("http"):
         host = "http://" + host
     try:
+        from app.services.egress import check_egress  # ANAM-005
+        check_egress(host, "ollama_probe")
         with urllib.request.urlopen(host.rstrip("/") + "/api/tags", timeout=3) as r:  # noqa: S310
             return r.status == 200, f"HTTP {r.status}"
     except Exception as e:  # noqa: BLE001

@@ -1,17 +1,69 @@
-# Test image context: sources + tests, but never DBs, logs, secrets, venvs or build output.
-.git
-.venv
-venv
-node_modules
-dist
-build
-_studio
-graphify-out
-logs
-*.db
-*.db-*
-*.db.bak*
+# ANAM-024: ALLOW-LIST. Ignore everything, then re-include only what the test suite needs.
+# Anything new at the repo root is excluded by default (benchmark.db*, *.bak*, backups, logs, reports,
+# data/vault_mirror, data/terminal_mcp, .delegation, Python/, _studio/, .env*, local_settings.json ...).
+# Verified by tests/test_ci_consistency.py (simulates this file) and `docker build -f Dockerfile.test`.
+*
+
+# source + tests + tooling the suite reads
+!app
+!anamnesia
+!memory_gateway
+!config
+!tests
+!scripts
+!frontend
+!docs
+!benchmark
+!integrations
+!assets
+!packaging
+!spikes
+!.github
+!.githooks
+!data
+!data/synthetic_vault
+
+# top-level files
+!pyproject.toml
+!requirements.txt
+!requirements-dev.txt
+!requirements-optional.txt
+!Dockerfile
+!Dockerfile.test
+!Dockerfile.test.dockerignore
+!docker-compose.yml
+!docker-compose.test.yml
+!README.md
+!LICENSE
+!SECURITY.md
+!CONTRIBUTING.md
+!CODE_OF_CONDUCT.md
+!THIRD_PARTY_LICENSES.md
+!AGENTS.md
+!CLAUDE.md
+!.gitignore
+!.gitattributes
+!.dockerignore
+!.env.example
+!.ai-memory.toml
+
+# re-exclude (last match wins): data not in the allow-list, local state, secrets, caches, databases
+data/*
+!data/synthetic_vault
+config/local_settings.json
 .env
 .env.*
-**/__pycache__/
+!.env.example
+**/*.db
+**/*.db-*
+**/*.db.bak*
+**/*.sqlite*
+**/__pycache__
 **/*.pyc
+**/node_modules
+**/.pytest_cache
+benchmark.db*
+backups
+**/backups
+.delegation
+**/.delegation

@@ -21,7 +21,7 @@ from app.benchmark.runner import BenchmarkRunner, estimate_plan, load_questions
 from app.benchmark.statistics import aggregate_stats
 from app.benchmark.timeseries import DEFAULT_MAX_POINTS, MAX_POINTS_CEILING, build_timeseries
 from app.core.state import STATE, GatewayNotReady, LegacyStateView
-from app.schemas.models import DEFAULT_EXPLICIT_PIPELINE, PIPELINES
+from app.schemas.models import DEFAULT_EXPLICIT_PIPELINE, DEFAULT_PIPELINES, PIPELINES
 from app.services import security
 from app.services.envfile import EnvValueError, set_env_var
 from app.services.security import (MODEL_KEY_ENV_VARS, get_or_create_local_token, mask_secret,
@@ -164,15 +164,41 @@ def _overrides(jev_mode=None, threshold=None, review_action=None) -> dict | None
     return o or None
 
 
+SCOPE_ANON_ENV = "ANAMNESIA_SCOPE_ANON"   # ANAM-002 transition flag: deny (default) | ignore | allow
+
+
+def _anon_scope_mode() -> str:
+    import os
+    v = os.environ.get(SCOPE_ANON_ENV, "").strip().lower()
+    return v if v in ("allow", "ignore") else "deny"
+
+
 def session_scope(request: Request | None, requested: str | None) -> str | None:
-    """ANA-032 / P-05: a request carrying a valid `X-MG-Session` token gets the scope bound to that token
-    by the server (the project of the terminal it was minted for); the client-sent `scope` is ignored.
-    Without the header (or with an unknown/expired token) nothing changes."""
+    """ANA-032 / P-05 + ANAM-002: the scope is derived SERVER-side, never trusted from the body.
+
+    1. valid `X-MG-Session` -> the scope bound to that token; the client `scope` is ignored.
+    2. trusted credential (X-MG-Token / Bearer = local token: UI, MCP bridge, CLI) -> the requested scope is
+       honoured (those callers already pin/validate their scope upstream, e.g. MCP `enforce_scope`).
+    3. anonymous caller (no session, no valid token) asking for a `scope` -> 403 by default (deny).
+       Transition: ANAMNESIA_SCOPE_ANON=ignore drops the client scope silently; =allow restores the legacy
+       behaviour (client scope honoured). A request WITHOUT scope is never affected.
+    `request is None` (internal callers) keeps passing `requested` through."""
     if request is None:
         return requested
     from app.services import session_tokens
+    from app.services.security import has_valid_token
     bound = session_tokens.resolve(request.headers.get(session_tokens.HEADER))
-    return bound if bound else requested
+    if bound:
+        return bound
+    if not (requested or "").strip() or has_valid_token(request):
+        return requested
+    mode = _anon_scope_mode()
+    if mode == "allow":
+        return requested
+    if mode == "ignore":
+        return None
+    raise HTTPException(403, "scope requer sessão (X-MG-Session) ou credencial local (X-MG-Token); "
+                             "o escopo enviado pelo cliente anônimo foi recusado")
 
 
 def _search(req: SearchRequest, pipeline: str, request: Request | None = None):
@@ -201,7 +227,8 @@ def _health_warnings(g) -> list[dict]:
             out.append({"component": "graphify", "code": "binary_missing",
                         "message": "Graphify not found: graph pipelines degrade; default 'auto' keeps working.",
                         "hint": "Install graphify or ignore: the baseline pipeline does not need it."})
-    if not os.getenv("TYPESAFE_API_KEY"):
+    from app.services.jev import is_local_base_url   # ANAM-041: backend loopback (Colibri) dispensa a chave
+    if not os.getenv("TYPESAFE_API_KEY") and not is_local_base_url(os.getenv("TYPESAFE_BASE_URL")):
         out.append({"component": "jev", "code": "api_key_missing",
                     "message": "JEV key not set: JEV pipelines are unavailable; 'auto'/baseline keep working.",
                     "hint": "Set TYPESAFE_API_KEY in .env (each user brings their own key)."})
@@ -303,7 +330,7 @@ def benchmark_run(req: BenchmarkRequest):
 
 @router.post("/benchmark/run-all", dependencies=[Depends(require_local_write)])
 def benchmark_run_all(req: BenchmarkRequest):
-    return _run_benchmark(req, list(PIPELINES))
+    return _run_benchmark(req, list(DEFAULT_PIPELINES))
 
 
 @router.post("/benchmark/estimate")
@@ -314,7 +341,7 @@ def benchmark_estimate(req: BenchmarkRequest):
     toks = [json.loads(r["metrics_json"]).get("jev_input_tokens") for r in rows if r["metrics_json"]]
     toks = [t for t in toks if t]
     avg = sum(toks) / len(toks) if toks else None
-    return estimate_plan(len(_sized_questions(req)), req.pipelines or list(PIPELINES),
+    return estimate_plan(len(_sized_questions(req)), req.pipelines or list(DEFAULT_PIPELINES),
                          [c.model_dump() for c in req.consumers], req.repetitions, avg_jev_tokens=avg)
 
 

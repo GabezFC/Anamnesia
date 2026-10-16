@@ -19,7 +19,7 @@ from typing import Any, Callable
 from config.benchmark import ALLOWED_REPETITIONS, SWEEP_THRESHOLDS
 from app.gateway.context_builder import render_prompt
 from app.core.tokens import estimate_tokens
-from app.schemas.models import JEV_PIPELINES, PIPELINES
+from app.schemas.models import DEFAULT_PIPELINES, JEV_PIPELINES, PIPELINES
 from app.services.metrics import jsonl
 from app.services.pricing import add_costs, break_even, cost_usd
 
@@ -79,7 +79,7 @@ class BenchmarkRunner:
             repetitions: int = 1, warmup: bool = True, jev_overrides: dict | None = None,
             max_results: int = 10, seed: int | None = None, session_id: str | None = None,
             notes: str = "") -> dict:
-        pipelines = [p for p in (pipelines or list(PIPELINES)) if p in PIPELINES]
+        pipelines = [p for p in (pipelines or list(DEFAULT_PIPELINES)) if p in PIPELINES]
         if repetitions not in ALLOWED_REPETITIONS:
             raise ValueError(f"repetitions deve ser um de {ALLOWED_REPETITIONS}")
         consumers = consumers or []  # [] -> retrieval-only benchmark

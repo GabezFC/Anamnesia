@@ -177,10 +177,15 @@ def test_ana032_session_token_overrides_client_scope(monkeypatch):
     tok = session_tokens.mint("projeto:alpha")
     c.post("/memory/search", json={"query": "x", "scope": "projeto:beta"}, headers={"X-MG-Session": tok})
     assert seen["scope"] == "projeto:alpha"
-    c.post("/memory/search", json={"query": "x", "scope": "projeto:beta"}, headers={"X-MG-Session": "bogus"})
-    assert seen["scope"] == "projeto:beta"
+    # ANAM-002: token desconhecido/revogado + sem credencial local => escopo do cliente NAO e honrado (403)
+    seen.clear()
+    r = c.post("/memory/search", json={"query": "x", "scope": "projeto:beta"}, headers={"X-MG-Session": "bogus"})
+    assert r.status_code == 403 and "scope" not in seen
     session_tokens.revoke(tok)
-    c.post("/memory/search", json={"query": "x", "scope": "projeto:beta"}, headers={"X-MG-Session": tok})
+    r = c.post("/memory/search", json={"query": "x", "scope": "projeto:beta"}, headers={"X-MG-Session": tok})
+    assert r.status_code == 403 and "scope" not in seen
+    # com credencial local (UI/MCP/CLI) o escopo continua valendo
+    c.post("/memory/search", json={"query": "x", "scope": "projeto:beta"}, headers={**_hdr(), "X-MG-Session": "bogus"})
     assert seen["scope"] == "projeto:beta"
 
 
@@ -202,8 +207,8 @@ def test_ana033_budget_default_follows_configured_ceiling(monkeypatch):
     from app.gateway import budget_guard as bg
     monkeypatch.delenv(bg.ENV_FLAG, raising=False)
     monkeypatch.delenv(bg.DEGRADE_FLAG, raising=False)
-    assert bg.enforcement_enabled() is False
-    assert bg.enforcement_enabled({"day": None, "month": 0}) is False
+    assert bg.enforcement_enabled() is True              # ANAM-003: default ON
+    assert bg.enforcement_enabled({"day": None, "month": 0}) is True
     assert bg.enforcement_enabled({"day": 1.0, "month": None}) is True
     monkeypatch.setenv(bg.ENV_FLAG, "0")
     assert bg.enforcement_enabled({"day": 1.0}) is False

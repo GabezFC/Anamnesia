@@ -1,0 +1,15 @@
+# ANAM-026: PRs de atualização para revisão humana; nenhuma atualização automática é aplicada.
+# Fonte das versões: pyproject.toml. Depois de aceitar um PR, regenere requirements.lock:
+#   uv pip compile requirements.txt --generate-hashes --python-version 3.12 -o requirements.lock
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3

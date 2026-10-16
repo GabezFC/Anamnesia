@@ -5,7 +5,7 @@
 
 Contrato único de REST, CLI e MCP. Contexto e semântica: [README](../README.md) · [MEMORY_SEARCH_MODES](guides/MEMORY_SEARCH_MODES.md) · [SECURITY](guides/SECURITY.md).
 
-## REST (OpenAPI 3.1.0, 112 operações)
+## REST (OpenAPI 3.1.0, 119 operações)
 
 Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`. `?` = parâmetro opcional.
 
@@ -31,6 +31,13 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | GET | `/api/costs/routing/summary` | — | — | Routing Summary |
 | GET | `/api/costs/stream` | max_seconds?, max_events?, poll_interval?, after_rowid? | — | Stream |
 | GET | `/api/costs/summary` | range?, project? | — | Summary |
+| POST | `/api/decision/batch` | — | sim | Batch |
+| GET | `/api/decision/config` | — | — | Config |
+| POST | `/api/decision/decision` | — | sim | Decision |
+| GET | `/api/decision/evaluation` | — | — | Evaluation |
+| GET | `/api/decision/history` | limit?, project? | — | History |
+| GET | `/api/decision/metrics` | project? | — | Metrics |
+| GET | `/api/decision/status` | — | — | Status |
 | POST | `/api/jev/config` | — | sim | Jev Save Config |
 | GET | `/api/jev/status` | — | — | Jev Status |
 | POST | `/api/jev/test` | — | — | Jev Test Connection |
@@ -128,14 +135,14 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 
 ### memory_gateway
 
-`python -m memory_gateway` — 11 subcomandos: `search`, `benchmark`, `sweep`, `stats`, `info`, `vault-check`, `index`, `db-maintenance`, `db-prune`, `memory-audit`, `vault-lint`
+`python -m memory_gateway` — 14 subcomandos: `search`, `benchmark`, `sweep`, `stats`, `info`, `vault-check`, `decision`, `index`, `db-maintenance`, `db-prune`, `memory-audit`, `vault-lint`, `backup-create`, `backup-restore`
 
 #### `python -m memory_gateway search`
 
 | Argumento | Ajuda | Detalhes |
 | --- | --- | --- |
 | `query` |  | posicional |
-| `--pipeline` |  | choices: auto/baseline/graphify/graphify_jev/graphify_jev_opt; default: auto |
+| `--pipeline` |  | choices: auto/baseline/graphify/graphify_jev/graphify_jev_opt/graphify_laya/graphify_laya_jev; default: auto |
 | `--max-results` |  | default: 10 |
 | `--jev-mode` |  | choices: performance/strict |
 | `--threshold` |  | — |
@@ -148,7 +155,7 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 
 | Argumento | Ajuda | Detalhes |
 | --- | --- | --- |
-| `--pipeline` |  | choices: baseline/graphify/graphify_jev/graphify_jev_opt |
+| `--pipeline` |  | choices: baseline/graphify/graphify_jev/graphify_jev_opt/graphify_laya/graphify_laya_jev |
 | `--questions` |  | — |
 | `--agent` |  | choices: hermes/claude_code/codex/opencode/generic |
 | `--provider` |  | — |
@@ -184,6 +191,18 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | `--save` |  | — |
 | `--compare` |  | — |
 
+#### `python -m memory_gateway decision` — Decision Engine (ANAM-043): status \| test (itens sintéticos) \| history (IDs/hashes)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `action` |  | choices: status/test/history; posicional |
+| `--provider` | test: força o provider | choices: jev/laya/hybrid/adaptive |
+| `--strategy` | test: estratégia do hybrid | choices: laya_then_jev/jev_then_laya/ensemble |
+| `--op` |  | choices: retrieval/memory/security; default: retrieval |
+| `--project` | isolamento por projeto (limiares/cache/histórico) | — |
+| `--limit` |  | default: 20 |
+| `--json` |  | — |
+
 #### `python -m memory_gateway index`
 
 #### `python -m memory_gateway db-maintenance` — retenção opt-in de benchmark.db (dry-run por padrão; --apply altera)
@@ -203,6 +222,9 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | `--keep-sessions` | session_ids (separados por vírgula) que nunca são apagados | — |
 | `--dry-run` | só conta quantas runs seriam apagadas | — |
 | `--vacuum` | roda VACUUM após apagar (ignora com --dry-run) | — |
+| `--yes` | não pergunta confirmação (ANAM-006) | — |
+| `--purge-text` | também apaga query/context/answer de runs mais velhas que DAYS (padrão: env ANAMNESIA_RUNS_TEXT_RETENTION_DAYS, 30; decisão D-4 revisável) | — |
+| `--db` | caminho do banco (padrão: config) | — |
 
 #### `python -m memory_gateway memory-audit` — inventário somente leitura da memória persistente (contagens, sem conteúdo)
 
@@ -225,6 +247,27 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | `--max-note-chars` | limite de tamanho de nota (default 20000) | — |
 | `--json` |  | — |
 | `-v, --verbose` | lista todos os itens em vez do resumo por categoria | — |
+
+#### `python -m memory_gateway backup-create` — backup (zip + sha256) de benchmark.db e do memory store
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `--out` | arquivo .zip de saída | — |
+| `--db` | caminho do banco (padrão: config) | — |
+| `--memory-dir` | pasta do memory store (padrão: saved_context) | — |
+| `--no-db` |  | — |
+| `--no-memory` |  | — |
+| `--force` | sobrescreve o .zip se existir | — |
+
+#### `python -m memory_gateway backup-restore` — restaura um backup verificando sha256 (sem --force não sobrescreve)
+
+| Argumento | Ajuda | Detalhes |
+| --- | --- | --- |
+| `archive` |  | posicional |
+| `--db` | destino do banco (padrão: config) | — |
+| `--memory-dir` | destino do memory store (padrão: saved_context) | — |
+| `--force` | permite sobrescrever destinos existentes | — |
+| `--verify-only` | só valida a integridade | — |
 
 ### anamnesia
 
@@ -337,5 +380,13 @@ Fonte: `server.list_tools()` de `app/mcp/server.py` em subprocesso, uma vez por 
 | --- | --- | --- |
 | `memory_feedback` | `note_id: string, verdict: useful\|wrong\|stale, reason?: string/null, client?: string/null` | Avalia uma nota salva: useful, wrong ou stale. Duas avaliações `wrong` tiram a nota do top-k padrão. |
 | `memory_save` | `title: string, content: string, tags?: array/null, project?: string/null, source_agent?: string/null, kind?: string/null, ttl_days?: number/null, confidence?: number/null, source?: string/null, supersedes?: string/null, dedupe?: string/null` | Salva uma nota de contexto (decisão, fato, preferência) na memória própria do Gateway. |
+
+(+ as 1 tools do conjunto padrão.)
+
+### Tools — `MG_MCP_DECISION=1` (opt-in): 2
+
+| Tool | Parâmetros | Descrição |
+| --- | --- | --- |
+| `decision_status` | `` | Estado do Anamnésia Decision Engine: provider ativo (padrão JEV-only), saúde de Laya/JEV, política de |
 
 (+ as 1 tools do conjunto padrão.)

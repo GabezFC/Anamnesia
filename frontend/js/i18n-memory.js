@@ -1,0 +1,78 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ * ANAM-029: textos da aba "Notas" de #/memory (CRUD, histórico, import/export, consolidate).
+ * Mesclado em I18N.memory por i18n.js (mergeDeep). EN ausente cai para PT (nunca undefined).
+ */
+export const MEM_NOTES_I18N = {
+  pt: {
+    memory: {
+      tabs: { aria: 'Seções da memória', notes: 'Notas', search: 'Busca e diagnóstico' },
+      notes: {
+        title: 'Notas salvas', desc: 'Crie, edite, versione, arquive e exporte as notas de memória deste computador. Nada sai do localhost.',
+        toolbar: 'Ações das notas', filters: 'Filtros das notas', newNote: 'Nova nota', editNote: 'Editar nota', consolidate: 'Consolidar duplicatas…',
+        exportJsonl: 'Exportar JSONL', importJsonl: 'Importar JSONL…', trash: 'Lixeira', reload: 'Atualizar', retry: 'Tentar de novo',
+        filterQ: 'Buscar por título, tag, projeto', filterQPh: 'Filtrar a lista…', filterProject: 'Projeto', filterKind: 'Tipo', filterStatus: 'Estado', all: 'Todos',
+        kind: { decision: 'Decisão', fact: 'Fato', preference: 'Preferência', task: 'Tarefa', episodic: 'Episódico' }, kindNone: '— sem tipo —',
+        status: { active: 'Ativa', superseded: 'Substituída', archived: 'Arquivada' },
+        loading: 'Carregando notas…', emptyTitle: 'Nenhuma nota salva', emptyDesc: 'Crie a primeira nota ou importe um arquivo JSONL exportado do Anamnésia.',
+        noMatchTitle: 'Nenhuma nota corresponde aos filtros', noMatchDesc: 'Ajuste ou limpe os filtros para ver as notas.', clearFilters: 'Limpar filtros',
+        errorTitle: 'Falha ao carregar notas', offlineTitle: 'Serviço local indisponível',
+        offlineDesc: 'Não foi possível falar com o gateway local.', offlineHint: 'Inicie o gateway e tente de novo.',
+        countOf: 'Exibindo {n} de {total} notas', showMore: 'Mostrar mais', tableCaption: 'Notas salvas',
+        colTitle: 'Título', colKind: 'Tipo', colStatus: 'Estado', colUpdated: 'Atualizada', colActions: 'Ações', colId: 'Nota', colVersion: 'Versão', colBytes: 'Bytes',
+        edit: 'Editar', history: 'Histórico', archive: 'Arquivar', del: 'Excluir', cancel: 'Cancelar', close: 'Fechar', save: 'Salvar',
+        fTitle: 'Título', fContent: 'Conteúdo', fTags: 'Tags', fTagsPh: 'separadas por vírgula', fKind: 'Tipo', fProject: 'Projeto',
+        versionNote: 'Cada edição guarda a versão anterior; veja em Histórico.',
+        errTitle: 'Informe um título.', errTitleLen: 'O título aceita até 200 caracteres.', errContent: 'Informe o conteúdo.',
+        created: 'Nota criada.', updated: 'Nota atualizada.', savedSimilar: 'Nota salva; existe nota parecida (veja Consolidar).',
+        archiveTitle: 'Arquivar nota', archiveMsg: 'Arquivar “{title}”? Ela deixa de ser usada nas buscas, mas continua na lista.', archived: 'Nota arquivada.',
+        deleteTitle: 'Excluir nota', deleteMsg: 'Excluir “{title}”? Ela vai para a lixeira e pode ser restaurada até ser removida automaticamente.', deleted: 'Nota movida para a lixeira.',
+        trashDesc: 'Notas excluídas, restauráveis até a limpeza automática.', trashEmptyTitle: 'Lixeira vazia', trashEmptyDesc: 'Nenhuma nota excluída.', deletedAt: 'Excluída em', restore: 'Restaurar', restored: 'Nota restaurada.',
+        historyEmptyTitle: 'Sem versões anteriores', historyEmptyDesc: 'A nota ainda não foi editada.', diff: 'Comparar', diffTitle: 'Diferença: versão escolhida → atual', diffSame: 'Sem diferenças em relação à versão atual.',
+        rollback: 'Restaurar versão', rollbackTitle: 'Restaurar versão anterior', rollbackMsg: 'Substituir a nota atual por esta versão? O estado atual é guardado antes, então dá para desfazer.', rolledBack: 'Versão restaurada.',
+        exported: 'Exportação iniciada.', importTitle: 'Importar JSONL', importConfirm: 'Importar', importMsg: 'Importar {n} nota(s) de {file}?',
+        importOverwrite: 'Sobrescrever notas com o mesmo id', importOverwriteHint: 'Sem isto, notas que já existem são puladas. Sobrescrever guarda a versão anterior.',
+        importEmpty: 'O arquivo está vazio.', importBadLine: 'Linha {n} não é um objeto JSON válido; nada foi importado.', imported: 'Importadas {imported}; puladas {skipped}.',
+        consolidateTitle: 'Consolidar duplicatas', consolidatePreview: 'Prévia (nada foi alterado): {groups} grupo(s) de notas quase idênticas; {notes} nota(s) seriam marcadas como substituídas.',
+        keep: 'Manter', supersede: 'Substituir', consolidateSafe: 'Nada é excluído; cada alteração fica versionada.', consolidateNone: 'Nenhuma duplicata encontrada.',
+        consolidateApply: 'Aplicar ({notes})', consolidated: 'Consolidação aplicada: {n} nota(s) marcadas como substituídas.',
+      },
+    },
+  },
+  en: {
+    memory: {
+      tabs: { aria: 'Memory sections', notes: 'Notes', search: 'Search & diagnostics' },
+      notes: {
+        title: 'Saved notes', desc: 'Create, edit, version, archive and export the memory notes on this computer. Nothing leaves localhost.',
+        toolbar: 'Note actions', filters: 'Note filters', newNote: 'New note', editNote: 'Edit note', consolidate: 'Consolidate duplicates…',
+        exportJsonl: 'Export JSONL', importJsonl: 'Import JSONL…', trash: 'Trash', reload: 'Refresh', retry: 'Try again',
+        filterQ: 'Search by title, tag, project', filterQPh: 'Filter the list…', filterProject: 'Project', filterKind: 'Kind', filterStatus: 'Status', all: 'All',
+        kind: { decision: 'Decision', fact: 'Fact', preference: 'Preference', task: 'Task', episodic: 'Episodic' }, kindNone: '— no kind —',
+        status: { active: 'Active', superseded: 'Superseded', archived: 'Archived' },
+        loading: 'Loading notes…', emptyTitle: 'No saved notes', emptyDesc: 'Create the first note or import a JSONL file exported from Anamnésia.',
+        noMatchTitle: 'No notes match the filters', noMatchDesc: 'Adjust or clear the filters to see notes.', clearFilters: 'Clear filters',
+        errorTitle: 'Failed to load notes', offlineTitle: 'Local service unavailable',
+        offlineDesc: 'Could not reach the local gateway.', offlineHint: 'Start the gateway and try again.',
+        countOf: 'Showing {n} of {total} notes', showMore: 'Show more', tableCaption: 'Saved notes',
+        colTitle: 'Title', colKind: 'Kind', colStatus: 'Status', colUpdated: 'Updated', colActions: 'Actions', colId: 'Note', colVersion: 'Version', colBytes: 'Bytes',
+        edit: 'Edit', history: 'History', archive: 'Archive', del: 'Delete', cancel: 'Cancel', close: 'Close', save: 'Save',
+        fTitle: 'Title', fContent: 'Content', fTags: 'Tags', fTagsPh: 'comma separated', fKind: 'Kind', fProject: 'Project',
+        versionNote: 'Every edit keeps the previous version; see History.',
+        errTitle: 'Enter a title.', errTitleLen: 'The title accepts up to 200 characters.', errContent: 'Enter the content.',
+        created: 'Note created.', updated: 'Note updated.', savedSimilar: 'Note saved; a similar note exists (see Consolidate).',
+        archiveTitle: 'Archive note', archiveMsg: 'Archive “{title}”? It stops being used in searches but stays in the list.', archived: 'Note archived.',
+        deleteTitle: 'Delete note', deleteMsg: 'Delete “{title}”? It moves to the trash and can be restored until it is removed automatically.', deleted: 'Note moved to the trash.',
+        trashDesc: 'Deleted notes, restorable until automatic cleanup.', trashEmptyTitle: 'Trash is empty', trashEmptyDesc: 'No deleted notes.', deletedAt: 'Deleted at', restore: 'Restore', restored: 'Note restored.',
+        historyEmptyTitle: 'No earlier versions', historyEmptyDesc: 'The note has not been edited yet.', diff: 'Compare', diffTitle: 'Difference: chosen version → current', diffSame: 'No differences from the current version.',
+        rollback: 'Restore version', rollbackTitle: 'Restore earlier version', rollbackMsg: 'Replace the current note with this version? The current state is saved first, so this can be undone.', rolledBack: 'Version restored.',
+        exported: 'Export started.', importTitle: 'Import JSONL', importConfirm: 'Import', importMsg: 'Import {n} note(s) from {file}?',
+        importOverwrite: 'Overwrite notes with the same id', importOverwriteHint: 'Without this, existing notes are skipped. Overwriting keeps the previous version.',
+        importEmpty: 'The file is empty.', importBadLine: 'Line {n} is not a valid JSON object; nothing was imported.', imported: 'Imported {imported}; skipped {skipped}.',
+        consolidateTitle: 'Consolidate duplicates', consolidatePreview: 'Preview (nothing changed): {groups} group(s) of near-identical notes; {notes} note(s) would be marked superseded.',
+        keep: 'Keep', supersede: 'Supersede', consolidateSafe: 'Nothing is deleted; every change is versioned.', consolidateNone: 'No duplicates found.',
+        consolidateApply: 'Apply ({notes})', consolidated: 'Consolidation applied: {n} note(s) marked superseded.',
+      },
+    },
+  },
+};

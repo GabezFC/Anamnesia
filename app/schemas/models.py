@@ -4,11 +4,15 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-PipelineName = Literal["baseline", "graphify", "graphify_jev", "graphify_jev_opt"]
-PIPELINES: tuple[str, ...] = ("baseline", "graphify", "graphify_jev", "graphify_jev_opt")
+PipelineName = Literal["baseline", "graphify", "graphify_jev", "graphify_jev_opt", "graphify_laya", "graphify_laya_jev"]
+PIPELINES: tuple[str, ...] = ("baseline", "graphify", "graphify_jev", "graphify_jev_opt",
+                              "graphify_laya", "graphify_laya_jev")  # ANAM-042: Laya local / cascata Laya->JEV
+# Padrão de run-all / estimate / CLI benchmark / enum do MCP: os pipelines congelados. Laya (ANAM-042) é
+# opt-in: só roda se pedido explicitamente (pipelines=[...]); nunca entra nos defaults.
+DEFAULT_PIPELINES: tuple[str, ...] = tuple(p for p in PIPELINES if not p.startswith("graphify_laya"))
 # Pipelines that call the paid judge (JEV): they alone carry judge tokens, judge cost and JEV
 # metadata. Centralized here so app/gateway/memory_gateway.py and app/benchmark/runner.py agree.
-JEV_PIPELINES: tuple[str, ...] = ("graphify_jev", "graphify_jev_opt")
+JEV_PIPELINES: tuple[str, ...] = ("graphify_jev", "graphify_jev_opt", "graphify_laya_jev")  # laya_jev paga o JEV só nos incertos
 # Public default when an interface needs ONE concrete pipeline (not "auto"/MOL routing) and the
 # caller did not choose one — e.g. a single-pipeline benchmark run or a legacy default value.
 # `graphify_jev` stays the frozen reference pipeline; it is never the default (§1.3 da proposta

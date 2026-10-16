@@ -64,9 +64,14 @@ def validate_base_url(raw: str) -> str:
         raise JevSetupError("invalid_field", "Endpoint inválido.", "base_url")
     if parts.username or parts.password or parts.query or parts.fragment:
         raise JevSetupError("invalid_field", "O endpoint não pode conter usuário/senha, query ou fragmento.", "base_url")
-    if parts.scheme == "https" or (parts.scheme == "http" and host in _LOOPBACK):
-        return url
-    raise JevSetupError("invalid_field", "O endpoint deve usar https (http só em localhost).", "base_url")
+    if not (parts.scheme == "https" or (parts.scheme == "http" and host in _LOOPBACK)):
+        raise JevSetupError("invalid_field", "O endpoint deve usar https (http só em localhost).", "base_url")
+    from app.services.egress import EgressBlocked, check_policy  # ANAM-004: allow-list de hosts (anti-exfiltração)
+    try:
+        check_policy(url, "jev_setup")
+    except EgressBlocked as e:
+        raise JevSetupError("host_not_allowed", str(e), "base_url") from e
+    return url
 
 
 def _validate(field: str, kind, value) -> str:
@@ -144,6 +149,11 @@ def _defaults() -> dict:
     return d
 
 
+def _is_local(base_url: str) -> bool:
+    from app.services.jev import is_local_base_url   # ANAM-041
+    return is_local_base_url(base_url)
+
+
 def _fingerprint(env=None) -> str:
     e = os.environ if env is None else env
     key = e.get(KEY_ENV) or ""
@@ -159,7 +169,8 @@ def status(db=None, env=None) -> dict:
     last = db.get_kv(KV_LAST_TEST) if db is not None else None
     if last and last.get("fingerprint") != _fingerprint(e):
         last = None   # a configuração mudou depois do último teste: resultado antigo não vale
-    if not key:
+    local = _is_local(eff["base_url"])
+    if not key and not local:   # ANAM-041: backend loopback (Colibrì) dispensa TYPESAFE_API_KEY
         state = "not_configured"
     elif offline.offline_enabled() and not offline.is_loopback_url(eff["base_url"]):
         state = "blocked"
@@ -167,7 +178,7 @@ def status(db=None, env=None) -> dict:
         state = last["state"]
     else:
         state = "configured"
-    return {"state": state, "key_present": bool(key), "key_masked": security.mask_secret(key) if key else None,
+    return {"state": state, "key_present": bool(key), "local": local, "key_masked": security.mask_secret(key) if key else None,
             "settings": eff, "defaults": defaults,
             "customized": sorted(k for k, v in eff.items() if v != defaults[k]),
             "last_test": {k: last[k] for k in ("state", "http_status", "message", "at", "latency_ms", "model")
@@ -294,7 +305,8 @@ def test_connection(db=None, backend_factory=None) -> dict:
     except (ValueError, JevSetupError) as e:
         checks.append({"step": "config", "ok": False})
         return finish("not_configured", None, f"Configuração inválida: {getattr(e, 'message', e)}")
-    if cfg.backend == "typesafe" and not os.environ.get(KEY_ENV):
+    if (cfg.backend == "typesafe" and not os.environ.get(KEY_ENV)
+            and not _is_local(os.environ.get(BASE_URL_ENV) or DEFAULT_BASE_URL)):
         checks.append({"step": "config", "ok": False})
         return finish("not_configured", None, "API Key não configurada.")
     checks.append({"step": "config", "ok": True})

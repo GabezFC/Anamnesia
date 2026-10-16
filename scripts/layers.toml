@@ -14,6 +14,7 @@ roots = ["app", "config", "anamnesia", "memory_gateway"]
 "app.adapters" = 1
 "app.memory_store" = 1
 "app.retrieval" = 2
+"app.decision" = 2
 "app.gateway" = 2
 "app.routing" = 2
 "app.benchmark" = 3

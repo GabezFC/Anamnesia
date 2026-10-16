@@ -122,6 +122,9 @@ def choose_next(decision, reg, current, kind: str, action: Action, tried: set, f
     def ok(entry) -> bool:
         if entry.id in tried or entry.provider in banned_providers:
             return False
+        allowed_ids = getattr(decision, "allowed_models", None)   # ANAM-033: private data stays on allowed models
+        if allowed_ids is not None and entry.id not in allowed_ids:
+            return False
         return not (use_cb and cb.get_breaker().state(cb.key_for(entry.provider, entry.model)) == cb.OPEN)
 
     def entries(ids):

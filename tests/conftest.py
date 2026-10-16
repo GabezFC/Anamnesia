@@ -223,3 +223,11 @@ def _terminal_mcp_tmpdir(tmp_path, monkeypatch):
     """Sessões de terminal geram config MCP por sessão: nunca escrever em data/ do repo durante testes."""
     from app.terminals import mcp_inject
     monkeypatch.setattr(mcp_inject, "CONFIG_DIR", tmp_path / "terminal_mcp")
+
+
+@pytest.fixture(autouse=True)
+def _legacy_ui_challenge_modes(monkeypatch):
+    """ANAM-001: production default is `enforce`; legacy tests that drive the API without the UI cookie run in
+    `warn` (the documented transition mode). Tests of the default itself call monkeypatch.delenv(...)."""
+    monkeypatch.setenv("MG_TOKEN_COOKIE", "warn")
+    monkeypatch.setenv("MG_SHELL_CONFIRM", "warn")

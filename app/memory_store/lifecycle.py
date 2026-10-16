@@ -61,7 +61,7 @@ def find_similar(store: SavedContextStore, title: str, content: str, project: st
     thr = SIMILAR_THRESHOLD if threshold is None else threshold
     nt, hits = _norm_title(title), []
     for n in store.list():
-        if n.id == exclude_id or (n.status or "active") != "active":
+        if n.id == exclude_id or (n.status or "active") not in ("active", "reinforced"):  # ANAM-013
             continue
         if project and n.project and n.project != project:
             continue
@@ -103,6 +103,14 @@ def save_checked(store: SavedContextStore, title: str, content: str, tags=None, 
     mode = (dedupe or os.environ.get("MG_MEMORY_DEDUPE", "warn")).strip().lower()
     if mode not in ("off", "warn", "skip", "update"):
         raise InvalidNote("dedupe inválido (off|warn|skip|update)")
+    # ANAM-042: triagem Laya na escrita (MG_LAYA_WRITE_TRIAGE=off|warn|block; padrão off = comportamento antigo).
+    # Sinal ADICIONAL ao injection_screen: só eleva severidade; `block` recusa a escrita e devolve o motivo.
+    triage = None
+    if os.environ.get("MG_LAYA_WRITE_TRIAGE", "off").strip().lower() not in ("", "off"):
+        from app.services.laya_decider import triage_write
+        triage = triage_write("\n".join((title or "", content or ""))).to_dict()
+        if triage["action"] == "block":
+            return {"id": None, "saved": False, "similar": [], "action": "blocked_by_triage", "triage": triage}
     similar = [] if mode == "off" else find_similar(store, (title or "").strip(), content or "", (project or "").strip() or None)
     if v2.get("supersedes"):
         nid = store.save(title, content, tags, project, source_agent, trust, **v2)
@@ -115,13 +123,16 @@ def save_checked(store: SavedContextStore, title: str, content: str, tags=None, 
         return {"id": dup["id"], "saved": False, "updated": True, "similar": similar, "action": "suggest_update",
                 "duplicate_of": dup["id"]}
     nid = store.save(title, content, tags, project, source_agent, trust, **v2)
-    return {"id": nid, "saved": True, "similar": similar, "action": suggested_action(similar)}
+    res = {"id": nid, "saved": True, "similar": similar, "action": suggested_action(similar)}
+    if triage is not None:
+        res["triage"] = triage
+    return res
 
 
 def contradictions(store: SavedContextStore, min_similarity: float = 0.5) -> list[dict]:
     """ANA-162: CANDIDATES for human review (never a verdict). Pairs of active notes about the same
     subject (same normalised title, or same project + high text overlap) whose numbers/dates differ."""
-    notes = [n for n in store.list() if (n.status or "active") == "active"]
+    notes = [n for n in store.list() if (n.status or "active") in ("active", "reinforced")]  # ANAM-013
     out = []
     for i, a in enumerate(notes):
         for b in notes[i + 1:]:

@@ -82,3 +82,26 @@ def context_fields() -> dict[str, str]:
         if v:
             out[k] = v
     return out
+
+
+class TraceLogFilter:
+    """Handler filter (ANAM-012): prefixes the message with ``[trace=<id>]`` while a request scope is open."""
+
+    def filter(self, record) -> bool:
+        tid = _trace_id.get()
+        if tid and not getattr(record, "_mg_trace", False):
+            record.msg = f"[trace={tid}] {record.msg}"
+            record._mg_trace = True
+        return True
+
+
+def install_log_trace(logger) -> None:
+    """Idempotently attach TraceLogFilter to every handler of ``logger``."""
+    for h in logger.handlers:
+        if not any(isinstance(f, TraceLogFilter) for f in h.filters):
+            h.addFilter(TraceLogFilter())
+
+
+def trace_metrics() -> dict[str, str]:
+    """Fields stored ADDITIVELY in runs.metrics_json: the trace/request ids of the current scope."""
+    return {k: v for k, v in context_fields().items() if k in ("trace_id", "request_id")}

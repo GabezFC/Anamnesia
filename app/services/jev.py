@@ -101,11 +101,37 @@ class JevBackend(Protocol):
     def evaluate(self, state: dict, questions: dict[str, dict]) -> tuple[dict[str, float], dict[str, int | None], str]: ...
 
 
+LOCAL_KEY_ENV = "TYPESAFE_LOCAL_API_KEY"  # ANAM-041: chave opcional para um /v1/systemone local (Colibrì)
+LOCAL_KEY_DEFAULT = "local"               # o SDK exige chave não vazia; o Colibrì sem COLI_API_KEY aceita qualquer
+
+
+def is_local_base_url(url: str | None) -> bool:
+    """True se `url` (TYPESAFE_BASE_URL) aponta para loopback (127.0.0.1/localhost/::1): backend local, não é egress remoto."""
+    from urllib.parse import urlsplit
+    try:
+        host = (urlsplit((url or "").strip()).hostname or "").lower()
+    except ValueError:
+        return False
+    return host in {"127.0.0.1", "localhost", "::1"}
+
+
 class TypeSafeBackend:
     def __init__(self, cfg: JevConfig):
+        import os
+        from app.services.egress import check_egress  # ANAM-004/005: snippets do vault só vão a hosts da allow-list
+        base = os.environ.get("TYPESAFE_BASE_URL") or "https://api.typesafe.ai"
+        check_egress(base, "typesafe")  # loopback passa (destino local); OFFLINE também
         from typesafe_sdk import RetryPolicy, TypeSafeClient  # imported lazily: tests run without the SDK
         self._retry = RetryPolicy(max_retries=cfg.max_retries)
-        self._client = TypeSafeClient(model=cfg.model, retry=self._retry, timeout=cfg.timeout_s)
+        kw: dict = {}
+        self.local = is_local_base_url(base)
+        if self.local:
+            # ANAM-041: Colibrì local. Sem TYPESAFE_API_KEY real usa chave local opcional; base_url explícito.
+            kw = {"base_url": base.rstrip("/"),
+                  "api_key": os.environ.get("TYPESAFE_API_KEY") or os.environ.get(LOCAL_KEY_ENV) or LOCAL_KEY_DEFAULT}
+            if not os.environ.get("JEV_FAILURE_MODE"):
+                cfg.failure_mode = "fail_closed"  # servidor local fora do ar => candidatos não julgados NÃO passam
+        self._client = TypeSafeClient(model=cfg.model, retry=self._retry, timeout=cfg.timeout_s, **kw)
         self.cfg = cfg
 
     def evaluate(self, state, questions):

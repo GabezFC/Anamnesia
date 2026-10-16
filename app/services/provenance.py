@@ -45,7 +45,8 @@ HISTORY_TERMS: tuple[str, ...] = (
 )
 
 HISTORICAL_STATUSES = frozenset({"arquivado", "arquivada", "archived", "obsoleto", "obsoleta",
-                                 "superseded", "supersedida"})
+                                 "superseded", "supersedida",
+                                 "candidate", "deleted"})  # ANAM-013: nunca entram como fato corrente
 # ANA-145: `supersedes:` / `substitui:` say which OLDER note THIS note replaces -- the note that declares
 # them is the CURRENT one, so they must not mark it historical. Only the pointer to the NEWER note does.
 SUPERSEDED_KEYS = ("superseded_by", "substituida_por", "supersededby")
@@ -329,18 +330,76 @@ def _title_key(c: Candidate, index: ProvenanceIndex) -> str:
     return fold(_WS.sub(" ", raw).strip())
 
 
+# AUD-015: the Jaccard detector misses "same subject, different value" (TTL 30 -> 60, v1 -> v2, Redis -> Valkey)
+# because those pairs share most words yet fall below the overlap threshold once a few tokens differ.
+_ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+_NUMBER = re.compile(r"(?<![\w.])v?\d+(?:[.,]\d+)*(?:\s?(?:%|ms|s|h|d|gb|mb|kb|usd|us\$|r\$|x))?(?![\w])", re.IGNORECASE)
+_ENTITY = re.compile(r"`([^`\n]{2,40})`|\b([A-Z][a-z]+[A-Z]\w*|[A-Z]{2,}\w*|[A-Z][a-z]{2,})\b")
+_WORD = re.compile(r"[a-z]{3,}")
+#: minimum overlap of the NON-value words for two snippets to be "about the same subject".
+VALUE_CONTEXT_MIN = 0.35
+_STOP_ENTITIES = frozenset({"the", "this", "that", "para", "com", "sem", "uma", "por", "como", "mas", "nos"})
+
+
+def _numbers(text: str) -> set[str]:
+    clean = _ISO_DATE.sub(" ", text or "")
+    return {re.sub(r"\s+", "", m.group(0).lower()).lstrip("v").replace(",", ".") for m in _NUMBER.finditer(clean)}
+
+
+def _entities(text: str) -> set[str]:
+    out = set()
+    for m in _ENTITY.finditer(text or ""):
+        e = fold((m.group(1) or m.group(2)).strip())
+        if e and e not in _STOP_ENTITIES:
+            out.add(e)
+    return out
+
+
+def _context_words(text: str) -> set[str]:
+    return set(_WORD.findall(fold(_NUMBER.sub(" ", _ISO_DATE.sub(" ", text or "")))))
+
+
+def value_conflict(a: str, b: str, min_context: float = VALUE_CONTEXT_MIN) -> str | None:
+    """Reason when two snippets talk about the same subject but assert DIFFERENT values, else None.
+
+    `numbers`: each side has a number the other lacks (30 vs 60). `entities`: each side names an
+    entity the other lacks (Redis vs Valkey). One side merely adding information is NOT a conflict:
+    the differences must be on both sides. Deterministic, no model call."""
+    wa, wb = _context_words(a), _context_words(b)
+    if not wa or not wb or len(wa & wb) / len(wa | wb) < min_context:
+        return None
+    na, nb = _numbers(a), _numbers(b)
+    if na - nb and nb - na:
+        return "numbers"
+    ea, eb = _entities(a), _entities(b)
+    if ea - eb and eb - ea and (ea & eb or na == nb):
+        return "entities"
+    return None
+
+
+def _pair_conflict(a: Candidate, b: Candidate, overlap: float) -> str | None:
+    """Reason string for the (a, b) pair with different dates: shingle overlap or value divergence."""
+    score = jaccard(shingles(a.snippet or "", 5), shingles(b.snippet or "", 5))
+    if score >= overlap:
+        return f"overlap_{score:.2f}"
+    kind = value_conflict(a.snippet or "", b.snippet or "")
+    return f"value_{kind}" if kind else None
+
+
 def resolve_conflicts(cands: list[Candidate], index: ProvenanceIndex | None, demote_factor: float,
                       overlap: float) -> tuple[list[Candidate], dict]:
     """Flag potentially conflicting notes inside the final set. The newest wins; nothing is dropped.
 
-    Two detectors, both cheap and both deterministic:
+    Three detectors, all cheap and all deterministic:
       1. same normalized title in two different notes (the classic "old decision still ativo");
       2. high shingle overlap between two different notes whose `updated` dates DIFFER -- same
          subject, different moment. Identical dates are exempt: two sections of the same decision
          written on the same day are not a contradiction, and flagging them would be noise.
+      3. (AUD-015) same subject but different VALUES (numbers/entities) on both sides, even when the
+         shingle overlap is below the threshold -- see `value_conflict`. Same date exemption applies.
     """
     metrics = {"memory_conflicts_detected": 0, "memory_conflict_same_title": 0,
-               "memory_conflict_overlap": 0}
+               "memory_conflict_overlap": 0, "memory_conflict_value": 0}
     if index is None or len(cands) < 2:
         return cands, metrics
 
@@ -380,12 +439,12 @@ def resolve_conflicts(cands: list[Candidate], index: ProvenanceIndex | None, dem
             fa, fb = index.facts(a.source_file), index.facts(b.source_file)
             if fa.touched is None or fb.touched is None or fa.touched == fb.touched:
                 continue
-            overlap_score = jaccard(shingles(a.snippet or "", 5), shingles(b.snippet or "", 5))
-            if overlap_score < overlap:
+            reason = _pair_conflict(a, b, overlap)
+            if reason is None:
                 continue
             older, newer = (a, b) if (fa.touched, a.score) < (fb.touched, b.score) else (b, a)
-            if demote(older, newer, f"overlap_{overlap_score:.2f}"):
-                metrics["memory_conflict_overlap"] += 1
+            if demote(older, newer, reason):
+                metrics["memory_conflict_value" if reason.startswith("value_") else "memory_conflict_overlap"] += 1
 
     metrics["memory_conflicts_detected"] = len(demoted)
     return cands, metrics

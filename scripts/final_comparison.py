@@ -1,6 +1,10 @@
 """Final three-pipeline comparison against the REAL JEV API. Writes JSON + a readable table.
 
 Usage:  python scripts/final_comparison.py [--out reports/final.json]
+        [--baseline reports/previous.json [--max-regression-pp 2.0]]
+
+AUD-055 quality gate: with --baseline, the run FAILS (exit 1) when a pipeline's recall drops more than
+`--max-regression-pp` percentage points versus the baseline run, or when empty contexts increase.
 """
 from __future__ import annotations
 
@@ -15,11 +19,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.gateway.memory_gateway import MemoryGateway  # noqa: E402
 
 PIPELINES = ("baseline", "graphify", "graphify_jev")
+MAX_REGRESSION_PP = 2.0   # recall drop (percentage points) tolerated as noise between two runs
+
+
+def regression_gate(current: dict, baseline: dict, max_regression_pp: float = MAX_REGRESSION_PP) -> list[str]:
+    """Violations (empty list = pass) of `current` vs `baseline` (both final_comparison reports).
+
+    A pipeline missing from `current` is a violation too: silently dropping a pipeline hides regressions."""
+    out: list[str] = []
+    for p, base in (baseline.get("pipelines") or {}).items():
+        cur = (current.get("pipelines") or {}).get(p)
+        if cur is None:
+            out.append(f"{p}: ausente no run atual")
+            continue
+        drop = float(base["recall_pct"]) - float(cur["recall_pct"])
+        if drop > max_regression_pp:
+            out.append(f"{p}: recall {base['recall_pct']}% -> {cur['recall_pct']}% (queda {drop:.1f}pp > {max_regression_pp}pp)")
+        if cur["empty_contexts"] > base["empty_contexts"]:
+            out.append(f"{p}: contextos vazios {base['empty_contexts']} -> {cur['empty_contexts']}")
+    return out
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="")
+    ap.add_argument("--baseline", default="", help="previous report JSON; exit 1 on regression (AUD-055)")
+    ap.add_argument("--max-regression-pp", type=float, default=MAX_REGRESSION_PP)
     a = ap.parse_args()
 
     gw = MemoryGateway()
@@ -74,6 +99,14 @@ def main() -> None:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"\nJSON: {out}")
+
+    if a.baseline:
+        bad = regression_gate(report, json.loads(Path(a.baseline).read_text(encoding="utf-8")), a.max_regression_pp)
+        print("\nQUALITY GATE:", "FALHOU" if bad else "ok")
+        for line in bad:
+            print("  -", line)
+        if bad:
+            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,8 @@ class OllamaJevBackend:
             raise ValueError(f"JEV local backend is loopback-only; refusing host {host!r}")
         self.model, self.host, self.timeout_s = model, host.rstrip("/"), timeout_s
         self._open = opener or urllib.request.urlopen
+        from app.services.egress import check_egress  # ANAM-005 (loopback-only já garantido acima)
+        check_egress(self.host, "jev_ollama")
 
     def available(self) -> bool:
         try:

@@ -42,7 +42,9 @@ def assess(env: dict | None = None, which=shutil.which) -> dict:
     offline = offline_enabled(e)
     blocked = offline or _paid_blocked(e)
     jev_key = bool(e.get("TYPESAFE_API_KEY"))
-    jev_active = jev_key and not blocked
+    from app.services.jev import is_local_base_url   # ANAM-041: juiz em loopback nao e inferencia externa
+    jev_local = is_local_base_url(e.get("TYPESAFE_BASE_URL"))
+    jev_active = jev_key and not blocked and not jev_local
     local_runtime = bool(which("ollama") or e.get("VLLM_BASE_URL") or e.get("OLLAMA_HOST"))
     hosted = [k for k in _HOSTED_KEYS if e.get(k)]
 
@@ -51,8 +53,9 @@ def assess(env: dict | None = None, which=shutil.which) -> dict:
         "storage": {"where": "local", "detail": "SQLite + pasta própria; vault somente leitura"},
         "graph": {"where": "local" if which("graphify") else "off",
                   "detail": "graphify local" if which("graphify") else "graphify ausente (opcional)"},
-        "jev_judge": {"where": "network" if jev_active else "off",
-                      "detail": ("typesafe_sdk (inferência externa) ativo" if jev_active else
+        "jev_judge": {"where": "local" if jev_local else "network" if jev_active else "off",
+                      "detail": ("juiz JEV em loopback (TYPESAFE_BASE_URL local; chave dispensada)" if jev_local else
+                                 "typesafe_sdk (inferência externa) ativo" if jev_active else
                                  "bloqueado por OFFLINE/PAID_CALLS=0" if jev_key else "sem TYPESAFE_API_KEY")},
         "local_models": {"where": "local" if local_runtime else "off",
                          "detail": "runtime local detectado (sem sondar a rede)" if local_runtime

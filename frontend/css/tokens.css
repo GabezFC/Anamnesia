@@ -78,8 +78,8 @@
   /* Typography / Neutral Contrast */
   --text-primary: #0F172A;
   --text-secondary: #475569;
-  --text-tertiary: #64748B;
-  --text-muted: #94A3B8;
+  --text-tertiary: #566579;
+  --text-muted: #5F6E83;
   --text-inverse: #FFFFFF;
 
   /* Brand Primary (Electric Elegant Blue #2563EB) */
@@ -98,12 +98,12 @@
   --lab-banner-border: #E9D5FF;
 
   /* Semantics (Pastel tinted surfaces with high-contrast text) */
-  --success: #059669;
+  --success: #047857;
   --success-muted: #ECFDF5;
   --success-border: #A7F3D0;
   --success-text: #065F46;
 
-  --warning: #D97706;
+  --warning: #B45309;
   --warning-muted: #FFFBEB;
   --warning-border: #FDE68A;
   --warning-text: #92400E;
@@ -113,7 +113,7 @@
   --danger-border: #FECACA;
   --danger-text: #991B1B;
 
-  --info: #0284C7;
+  --info: #0369A1;
   --info-muted: #F0F9FF;
   --info-border: #BAE6FD;
 
@@ -130,6 +130,7 @@
   --term-selection: rgba(37, 99, 235, 0.35);
   --term-cursor: #38BDF8;
   --term-border: #1E293B;
+  --term-muted: #A8B5C8;
   --term-black: #1E293B;
   --term-red: #F87171;
   --term-green: #34D399;
@@ -150,12 +151,12 @@
   /* Chart Kit Tokens & Grid/Axis aliases */
   --chart-1: #2563EB; /* Blue */
   --chart-2: #7C3AED; /* Violet */
-  --chart-3: #059669; /* Emerald */
-  --chart-4: #D97706; /* Amber */
-  --chart-5: #0284C7; /* Sky */
+  --chart-3: #047857; /* Emerald */
+  --chart-4: #B45309; /* Amber */
+  --chart-5: #0369A1; /* Sky */
   --chart-6: #DC2626; /* Coral */
   --chart-7: #4F46E5; /* Indigo */
-  --chart-8: #94A3B8; /* Slate */
+  --chart-8: #64748B; /* Slate */
 
   --grid: #E6EAF0;
   --axis: #CBD5E1;
@@ -165,6 +166,7 @@
   --chart-tooltip-bg: #0F172A;
   --chart-tooltip-text: #FFFFFF;
   --chart-tooltip-border: #334155;
+  --chart-tooltip-muted: #CBD5E1;
 }
 
 /* --------------------------------------------------------------------------
@@ -189,14 +191,14 @@
   --text-primary: #F8FAFC;
   --text-secondary: #CBD5E1;
   --text-tertiary: #B4C0D2;
-  --text-muted: #9DABC1;
+  --text-muted: #AAB7CB;
   --text-inverse: #070A0E;
 
   --primary: #60A5FA;
-  --primary-hover: #2563EB;
+  --primary-hover: #93C5FD;
   --primary-muted: rgba(96, 165, 250, 0.18);
   --primary-border: rgba(96, 165, 250, 0.45);
-  --primary-text: #FFFFFF;
+  --primary-text: #0B1220;
 
   --lab-accent: #A78BFA;
   --lab-accent-hover: #8B5CF6;
@@ -235,6 +237,7 @@
   --term-selection: rgba(79, 156, 249, 0.35);
   --term-cursor: #4F9CF9;
   --term-border: rgba(255, 255, 255, 0.18);
+  --term-muted: #B4C0D2;
 
   --chart-1: #4F9CF9;
   --chart-2: #A78BFA;
@@ -243,7 +246,7 @@
   --chart-5: #38BDF8;
   --chart-6: #F87171;
   --chart-7: #818CF8;
-  --chart-8: #64748B;
+  --chart-8: #94A3B8;
 
   --grid: rgba(255, 255, 255, 0.12);
   --axis: rgba(255, 255, 255, 0.18);
@@ -253,4 +256,5 @@
   --chart-tooltip-bg: #1E293B;
   --chart-tooltip-text: #F8FAFC;
   --chart-tooltip-border: rgba(255, 255, 255, 0.16);
+  --chart-tooltip-muted: #CBD5E1;
 }

@@ -31,4 +31,4 @@ def test_estimate_plan_counts_jev_runs_for_the_cascade_too():
     assert only_frozen["jev_runs"] == 10
     assert both["jev_runs"] == 20
     assert neither["jev_runs"] == 0
-    assert set(JEV_PIPELINES) == {"graphify_jev", "graphify_jev_opt"}
+    assert set(JEV_PIPELINES) == {"graphify_jev", "graphify_jev_opt", "graphify_laya_jev"}  # ANAM-042

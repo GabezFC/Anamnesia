@@ -190,3 +190,39 @@ export const benchmarkReportUrl = (fmt = 'md') => `/api/benchmark/report.${fmt =
 export const jevStatus = () => call('GET', '/api/jev/status');
 export const jevSaveConfig = (settings, apiKey) => call('POST', '/api/jev/config', { settings, api_key: apiKey || null });
 export const jevTestConnection = () => call('POST', '/api/jev/test', {});
+
+
+// ---- ANAM-029: memória (notas salvas) — CRUD, versões, lixeira, JSONL, consolidate ----
+/** Como call(), mas para corpo/resposta que não é JSON (JSONL, diff). as: 'text' | 'blob'. */
+async function rawCall(method, path, { body, contentType, as = 'text' } = {}) {
+  const headers = {};
+  if (contentType) headers['Content-Type'] = contentType;
+  try { headers['X-MG-Token'] = await getLocalToken(); } catch { /* leitura funciona sem token em loopback */ }
+  let r;
+  try { r = await fetch(path, { method, headers, cache: 'no-store', body }); }
+  catch (e) { throw new ApiError(0, 'network error', path, e && e.message ? e.message : 'fetch falhou'); }
+  if (!r.ok) throw await errorFrom(r, path);
+  return as === 'blob' ? r.blob() : r.text();
+}
+const _nid = (id) => encodeURIComponent(id);
+export const memListNotes = ({ project, tag, kind } = {}) => call('GET', `/api/memory/notes?${_q({ project, tag, kind })}`);
+export const memGetNote = (id) => call('GET', `/api/memory/notes/${_nid(id)}`);
+export const memCreateNote = (note) => call('POST', '/api/memory/notes', note);
+export const memUpdateNote = (id, patch) => call('PUT', `/api/memory/notes/${_nid(id)}`, patch);
+export const memDeleteNote = (id) => call('DELETE', `/api/memory/notes/${_nid(id)}`);
+export const memHistory = (id) => call('GET', `/api/memory/notes/${_nid(id)}/history`);
+export const memDiff = (id, a, b = 'current') => rawCall('GET', `/api/memory/notes/${_nid(id)}/diff?${_q({ a, b })}`);
+export const memRollback = (id, version) => call('POST', `/api/memory/notes/${_nid(id)}/rollback`, { version });
+export const memTrash = () => call('GET', '/api/memory/trash');
+export const memRestore = (trashId) => call('POST', `/api/memory/trash/${_nid(trashId)}/restore`, {});
+export const memConsolidate = (apply = false) => call('POST', '/api/memory/consolidate', { apply: !!apply });
+export const memExportJsonl = () => rawCall('GET', '/api/memory/export.jsonl', { as: 'blob' });
+export const memImportJsonl = (text, overwrite = false) =>
+  rawCall('POST', `/api/memory/import?${_q({ overwrite: overwrite ? 'true' : '' })}`, { body: text, contentType: 'text/plain; charset=utf-8' }).then((t) => JSON.parse(t));
+
+/* ---- decision engine (somente leitura; sem rota de escrita de config) ------------------------------ */
+export const decStatus = () => call('GET', '/api/decision/status');
+export const decConfig = () => call('GET', '/api/decision/config');
+export const decMetrics = () => call('GET', '/api/decision/metrics');
+export const decEvaluation = () => call('GET', '/api/decision/evaluation');
+export const decHistory = (limit = 500) => call('GET', `/api/decision/history?limit=${Math.min(500, Math.max(1, Number(limit) || 50))}`);

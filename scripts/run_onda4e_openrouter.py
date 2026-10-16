@@ -314,16 +314,31 @@ def rb_version() -> str:
     return rb.PROMPT_VERSION
 
 
-def stage_bench(repeats: int, rep1_budget: float):
+def power_gate(n_tasks: int, allow_underpowered: bool = False, p1: float = 0.5, delta: float = 0.10):
+    """AUD-054: refuse to spend money on a benchmark that cannot detect `delta` (Onda4e N=197 had power
+    0.514). Returns (power_report, required_n); power_report is None when the run must be refused."""
+    from app.benchmark.statistics import power_report, required_n_two_proportions
+    pw, need = power_report(n_tasks, p1, delta), required_n_two_proportions(p1, delta)
+    print(f"N={n_tasks} tarefas; poder={pw['achieved_power']} para {delta * 100:.0f}pp; necessário ~{need}/braço")
+    if pw["sufficient"] or allow_underpowered:
+        return pw, need
+    print(f"REFUSED underpowered: N={n_tasks} < {need} (poder {pw['achieved_power']} < 0.8). "
+          f"Aumente o corpus ou use --allow-underpowered (resultado só exploratório).")
+    return None, need
+
+
+def stage_bench(repeats: int, rep1_budget: float, allow_underpowered: bool = False):
     from app.benchmark import routing_bench as rb
     from app.benchmark.preflight import BudgetExceeded, preflight
-    from app.benchmark.statistics import power_report, required_n_two_proportions
     c = Credits()
     st = load_state(c)
     bal = c.usage()
     print(f"credits total={bal['total_credits']} usage={bal['total_usage']} spent_since_baseline={spent_now(c, st)}")
     assert bal["total_credits"] - bal["total_usage"] > CAP_USD - spent_now(c, st), "saldo insuficiente para o teto"
     rb_, models, tasks, memo, registry = make_env()
+    pw, need = power_gate(len(tasks), allow_underpowered)
+    if pw is None:
+        return 2
     Runner = make_runner_cls(rb)
     raw = Runner(timeout_s=90.0, context_fn=memo, max_tokens=400)
     cache = rb.ResultCache(CACHE, registry_version=registry.version_hash())
@@ -335,9 +350,6 @@ def stage_bench(repeats: int, rep1_budget: float):
     if not pf.ok:
         print("REFUSED", pf.reason)
         return 2
-    pw = power_report(len(tasks))
-    need = required_n_two_proportions(0.5, 0.10)
-    print(f"N={len(tasks)} tarefas; poder={pw['achieved_power']} para 10pp; necessário ~{need}/braço")
     guard = SpendGuard(raw, c, st)
     pre = []
     try:
@@ -409,6 +421,8 @@ if __name__ == "__main__":
     ap.add_argument("stage", choices=["integration", "bench", "status"])
     ap.add_argument("--repeats", type=int, default=2)
     ap.add_argument("--rep1-budget", type=float, default=3.0, help="skip rep>=1 if spend already exceeds this (US$)")
+    ap.add_argument("--allow-underpowered", action="store_true",
+                    help="run even if N < n required for 80%% power at 10pp (result is exploratory only)")
     a = ap.parse_args()
     if not _or_env.load():
         print("BLOCKED: OPENROUTER_API_KEY not found", file=sys.stderr)
@@ -418,4 +432,4 @@ if __name__ == "__main__":
         s_ = load_state(cc)
         print(json.dumps({**cc.usage(), "spent_since_baseline": spent_now(cc, s_), "cap": CAP_USD, "stop": STOP_USD}))
         sys.exit(0)
-    sys.exit(stage_integration() if a.stage == "integration" else stage_bench(a.repeats, a.rep1_budget))
+    sys.exit(stage_integration() if a.stage == "integration" else stage_bench(a.repeats, a.rep1_budget, a.allow_underpowered))

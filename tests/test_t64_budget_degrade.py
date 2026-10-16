@@ -34,10 +34,11 @@ def mkdb(tmp_path, day=None, month=None, runs=1):
     return db
 
 
-def test_flag_default_follows_ceiling():
-    assert bg.enforcement_enabled(None) is False
-    assert bg.enforcement_enabled({"day": None, "month": None}) is False
-    assert bg.enforcement_enabled({"day": 0, "month": 0}) is False
+def test_flag_default_is_on_anam003(monkeypatch):
+    monkeypatch.delenv(bg.ENV_FLAG, raising=False)
+    monkeypatch.delenv(bg.DEGRADE_FLAG, raising=False)
+    assert bg.enforcement_enabled(None) is True          # ANAM-003: enforce ON by default
+    assert bg.enforcement_enabled({"day": None, "month": None}) is True
     assert bg.enforcement_enabled({"day": 0, "month": 5.0}) is True
 
 
@@ -116,10 +117,11 @@ def test_gateway_end_to_end_degrades_offline(tiny_vault, tmp_path):
     assert m["budget_effective_pipeline"] == "baseline" and m["budget_warning"]
 
 
-def test_budget_route_reports_degrade(tmp_path):
+def test_budget_route_reports_degrade(tmp_path, monkeypatch):
     from app.api.costs_ext import budget_view
     v = budget_view(mkdb(tmp_path, day=SPEND / 2))
     assert v["degrade"] == {"enabled": True, "fallback_pipeline": "baseline", "active": True, "unknown_spend": []}
     d = tmp_path / "n"
     d.mkdir()
+    monkeypatch.setenv(bg.ENV_FLAG, "0")                 # explicit opt-out is still honoured
     assert budget_view(mkdb(d))["degrade"]["enabled"] is False

@@ -27,13 +27,13 @@ Pure functions here have no I/O except `OllamaEmbedder`, which only ever talks t
 from __future__ import annotations
 
 import json
-import math
 import re
 import urllib.request
 from dataclasses import asdict, dataclass, field, replace
 from typing import Callable, Iterable, Protocol
 
 from config import env_bool, env_float, env_int, env_str
+from app.retrieval.similarity import cosine as _cosine, normalize as _normalize, rank_by_cosine
 from app.schemas.models import Candidate
 from app.services.query_fp import CARRIER, classify, fold, stem, tokens
 
@@ -285,6 +285,8 @@ class OllamaEmbedder:
         if not _is_loopback(host):
             raise ValueError(f"semantic channel is local-only; refusing host {host!r}")
         self.model, self.host, self.timeout_s = model, host.rstrip("/"), timeout_s
+        from app.services.egress import check_egress  # ANAM-005 (loopback-only já garantido acima)
+        check_egress(self.host, "semantic_embed")
 
     def available(self) -> bool:
         try:
@@ -303,9 +305,7 @@ class OllamaEmbedder:
 
 
 def cosine(a: list[float], b: list[float]) -> float:
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(x * x for x in b))
-    return sum(x * y for x, y in zip(a, b)) / (na * nb) if na and nb else 0.0
+    return _cosine(a, b)        # ANAM-017: math.sumprod (app/retrieval/similarity.py)
 
 
 @dataclass
@@ -326,11 +326,11 @@ class SemanticIndex:
         vecs: list[list[float]] = []
         for i in range(0, len(texts), 64):
             vecs.extend(self.backend.embed(texts[i:i + 64]))
-        self.rows, self.vecs, self.key = [tuple(r) for r in rows], vecs, key
+        self.rows, self.vecs, self.key = [tuple(r) for r in rows], [_normalize(v) for v in vecs], key   # ANAM-017: unit vectors
 
     def search(self, query: str, limit: int, accept: Callable[[str], bool] | None = None) -> list[Candidate]:
         qv = self.backend.embed([query])[0]
-        scored = sorted(((cosine(qv, v), i) for i, v in enumerate(self.vecs)), reverse=True)
+        scored = rank_by_cosine(qv, self.vecs)
         out: list[Candidate] = []
         for s, i in scored:
             f, sec, body, line = self.rows[i]

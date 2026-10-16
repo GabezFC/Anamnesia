@@ -31,37 +31,71 @@ from app.services.query_fp import fold
 
 INJECTION_SCREEN_VERSION = "inj-screen-v2"  # ANA-036: NFKC + zero-width + homoglyph + base64 + markdown-link views
 
-# High-signal phrases: an explicit attempt to address or override an assistant.
-_STRONG = (
-    "ignore previous", "ignore all previous", "disregard previous", "disregard all",
-    "ignore as instrucoes", "ignore todas as instrucoes", "desconsidere as instrucoes",
-    "esqueca as instrucoes", "system message", "system prompt", "developer message",
-    "you must now", "voce deve agora", "a partir de agora voce", "from now on you",
-    "act as", "aja como", "pretend to be", "finja ser", "new instructions",
-    "novas instrucoes", "override", "jailbreak", "do not tell", "nao conte ao usuario",
-    "reveal your", "revele seu", "print your instructions", "repeat the above",
-    # ANA-036: paraphrases / indirect phrasing seen in the red-team corpus
-    "disregard the earlier", "disregard any prior", "forget everything", "forget your instructions",
-    "forget all prior", "ignore the rules above", "ignore your guidelines", "ignore prior",
-    "ignore o que foi dito", "ignore tudo acima", "ignore tudo o que", "desconsidere tudo",
-    "desconsidere o que", "esqueca tudo", "esqueca o que", "nao siga as regras", "deixe de lado as",
-    "ignorar as instrucoes", "your real task", "sua verdadeira tarefa", "your new task",
-    "sua nova tarefa", "bypass", "developer mode", "modo desenvolvedor", "dan mode",
-    "as an ai without", "sem restricoes", "without restrictions", "do anything now",
-    "exfiltrate", "exfiltre", "send the contents", "envie o conteudo", "instead, ", "em vez disso, ",
-    "mostre seu prompt", "show your prompt", "initial prompt", "prompt inicial", "regras acima",
-    "reveal the secret", "revele o segredo", "revele a chave", "reveal the key", "api key to",
+# ANAM-010: patterns are regexes with WORD BOUNDARIES, matched on the folded text (NFKC + casefold +
+# zero-width removal + diacritics stripped), so "override" no longer fires inside "overrides_json" and
+# "act as" no longer fires on "a transaction acts as a unit". Bare technical vocabulary (override,
+# bypass, system prompt, act as) is NOT strong on its own; it needs an attack-shaped context.
+_ADDR = r"(?:all|any|every|your|my|todas?|quaisquer|suas?|seus?|as|os|essas?|esses?|aquelas?)"
+_NOUN_EN = r"(?:instructions?|rules|guidelines?|prompts?|directives?|guidance|constraints|policies)"
+_NOUN_PT = r"(?:instrucoes|instrucao|regras|diretrizes|orientacoes|prompts?|comandos|ordens|politicas)"
+_QUAL_EN = r"(?:previous|prior|earlier|above|preceding|former)"
+_QUAL_PT = r"(?:anteriores|anterior|acima|previas|passadas|anteriormente)"
+_VERB_EN = r"(?:ignore|disregard|forget|discard|abandon|override|overrule)"
+_VERB_PT = (r"(?:ignor(?:e|a|ar)|desconsider(?:e|a|ar)|descart(?:e|ar)|esquec(?:a|er)|abandon(?:e|ar)|"
+            r"anul(?:e|ar)|substitu(?:a|ir)|sobrescrev(?:a|er)|deixe de lado|nao siga|nao obedeca)")
+_STRONG_RX: tuple[tuple[str, str], ...] = (
+    ("override_en", rf"\b{_VERB_EN}\s+(?:\w+\s+){{0,3}}?{_NOUN_EN}\s+{_QUAL_EN}\b"),
+    ("override_en_addr", rf"\b{_VERB_EN}\s+(?:{_ADDR}\s+)+(?:{_QUAL_EN}\s+)?{_NOUN_EN}\b"),
+    ("override_en_prev", rf"\b{_VERB_EN}\s+(?:\w+\s+){{0,2}}?{_QUAL_EN}\s+(?:\w+\s+){{0,2}}?{_NOUN_EN}\b"),
+    ("override_en_above", rf"\b(?:ignore|disregard|forget)\s+(?:the |all )?(?:rules|everything)\s+{_QUAL_EN}\b"),
+    ("override_pt", rf"\b{_VERB_PT}\s+(?:\w+\s+){{0,3}}?{_NOUN_PT}\s+{_QUAL_PT}\b"),
+    ("override_pt_addr", rf"\b{_VERB_PT}\s+(?:{_ADDR}\s+)+(?:\w+\s+)?{_NOUN_PT}\b"),
+    ("override_pt_prev", rf"\b{_VERB_PT}\s+(?:\w+\s+){{0,2}}?{_QUAL_PT}\b"),
+    ("forget_all", r"\bforget\s+(?:everything|all (?:prior|previous|of that))\b"),
+    ("esqueca_tudo", r"\b(?:esqueca|esquecer|ignore|ignorar|desconsidere|desconsiderar)\s+(?:tudo|o que (?:foi|esta))\b"),
+    ("regras_acima", r"\b(?:ignore|ignorar|desconsidere|siga)\s+(?:as )?regras acima\b"),
+    ("new_instructions", r"\b(?:new instructions|novas instrucoes)\s*:"),
+    ("from_now_on", r"\b(?:from now on,? you(?:'?re| are| must| will)?|a partir de agora,? (?:voce|tu)\b)"),
+    ("must_now", r"\b(?:you must now|you will now|voce deve agora|voce agora (?:e|sera))\b"),
+    ("act_as_role", r"\b(?:act as|aja como|atue como|pretend to be|pretend you are|finja (?:ser|que))\s+(?:an? |um |uma |o |a |if )?"
+                    r"(?:unrestricted|jailbroken|root|admin\w*|administrador\w*|dan\b|developer|desenvolvedor|evil|malicious|"
+                    r"different|new |outro|novo|hacker|my |meu |sem )"),
+    ("prompt_exfil", r"\b(?:reveal|show|print|repeat|output|display|leak|dump|revele|mostre|exiba|imprima|repita|vaze)\s+"
+                     r"(?:me |us )?(?:(?:your|the|seu|sua|o|a|todo o)\s+)?(?:\w+\s+)?"
+                     r"(?:system prompt|initial prompt|prompt inicial|prompt do sistema|system message|developer message|"
+                     r"instructions|instrucoes)\b"),
+    ("reveal_secret", r"\b(?:reveal (?:your|the) (?:secret|key|password|token|api key|credentials?)|"
+                      r"revele (?:o segredo|a chave|a senha|o token|suas credenciais))\b"),
+    ("exfiltrate", r"\bexfiltrat\w*|\bexfiltre\w*"),
+    ("send_contents", r"\b(?:send|post|upload|email|forward) the contents? of\b|\benvie o conteudo d[eoa]\b"),
+    ("api_key_to", r"\bapi key to\b"),
+    ("jailbreak", r"\bjailbreak(?:ing|ed)?\b(?! (?:detection|prevention|test|tests|benchmark|research|paper|resistance))"),
+    ("dan_mode", r"\b(?:dan mode|do anything now|developer mode enabled|modo desenvolvedor ativado)\b"),
+    ("no_restrictions", r"\b(?:as an ai without|(?:you|voce|agente|assistente|ai) (?:are |is |esta |fica |ficara |sera )?(?:now )?(?:sem restricoes|without (?:any )?(?:restrictions|limits|filters)))\b"),
+    ("hide_from_user", r"\b(?:do not tell|don't tell|never tell|nao conte|nao diga|nao informe|nao avise)\s+(?:to )?(?:the )?(?:ao |o )?(?:user|usuario)\b"),
+    ("bypass_safety", r"\bbypass(?:ing)?\s+(?:\w+\s+){0,2}?(?:safety|restrictions|filters?|guardrails|guidelines|rules|moderation|security)\b"),
+    ("your_real_task", r"\b(?:your (?:real|new|actual) task|sua (?:verdadeira|nova|real) tarefa)\b"),
+    ("instead_do", r"\b(?:instead|em vez disso),\s*(?:you |voce )?(?:reveal|print|output|send|ignore|execute|run|revele|envie)\b"),
+    ("role_marker", r"<\|im_start\|>\s*system|^\s*system\s*:\s*you (?:are|must)\b"),
 )
+_STRONG_COMPILED = tuple((n, re.compile(rx, re.M)) for n, rx in _STRONG_RX)
 # Weaker markers: role names and prompt vocabulary. Individually harmless (this vault documents
 # agents for a living), which is exactly why they only count as evidence in combination.
-_WEAK = (
-    "assistant:", "user:", "system:", "\"role\"", "'role'", "role:", "<|im_start|>", "[inst]",
-    "prompt injection", "prompt-injection", "instruction", "instrucao", "instrucoes",
-    "you must", "you should always", "obedeca", "obey", "comando ao agente",
+_WEAK_RX: tuple[tuple[str, str], ...] = (
+    ("assistant:", r"(?<!\w)assistant:"), ("user:", r"(?<!\w)user:"), ("system:", r"(?<!\w)system:"),
+    ('"role"', r'"role"'), ("'role'", r"'role'"), ("role:", r"(?<!\w)role:"),
+    ("<|im_start|>", r"<\|im_start\|>"), ("[inst]", r"\[inst\]"),
+    ("prompt injection", r"\bprompt[- ]injection\b"), ("system prompt", r"\bsystem prompt\b"),
+    ("system message", r"\bsystem message\b"), ("developer message", r"\bdeveloper message\b"),
+    ("instruction", r"\binstructions?\b"), ("instrucao", r"\binstrucao\b"), ("instrucoes", r"\binstrucoes\b"),
+    ("you must", r"\byou must\b"), ("you should always", r"\byou should always\b"),
+    ("obedeca", r"\bobedeca\b"), ("obey", r"\bobey\b"), ("comando ao agente", r"\bcomando ao agente\b"),
+    ("jailbreak", r"\bjailbreak\w*"), ("override", r"\boverride\b"),
 )
+_WEAK_COMPILED = tuple((n, re.compile(rx)) for n, rx in _WEAK_RX)
 _IMPERATIVE = re.compile(
     r"\b(ignore|disregard|forget|reveal|output|print|execute|run|delete|send|email|transfer|"
-    r"ignora|ignore|esqueca|revele|execute|envie|apague|responda apenas)\b")
+    r"ignora|esqueca|abandone|descarte|desconsidere|revele|envie|apague|responda apenas)\b")
 
 
 # ---- ANA-036: input normalisation -------------------------------------------------------------
@@ -135,20 +169,25 @@ class Screen:
                 "signals": list(self.signals)}
 
 
+def _prep(text: str) -> str:
+    """casefold + diacritics stripped + whitespace collapsed (NFKC/zero-width already done upstream)."""
+    return re.sub(r"\s+", " ", fold(str(text).casefold())).strip()
+
+
 def screen(text: str) -> Screen:
     """Lexical pre-screen of one candidate snippet. Deterministic, zero tokens."""
     if not text:
         return Screen(False, 0.0, ())
     views = normalized_views(text)
-    t = fold(views[0])
-    decoded = fold(views[1]) if len(views) > 1 else ""
+    t = _prep(views[0])
+    decoded = _prep(views[1]) if len(views) > 1 else ""
     signals: list[str] = []
     score = 0.0
-    for p in _STRONG:
-        if p in t:
-            signals.append(f"strong:{p}")
+    for n, rx in _STRONG_COMPILED:
+        if rx.search(t):
+            signals.append(f"strong:{n}")
             score += 0.5
-    weak_hits = [p for p in _WEAK if p in t]
+    weak_hits = [n for n, rx in _WEAK_COMPILED if rx.search(t)]
     for p in weak_hits:
         signals.append(f"weak:{p}")
     score += 0.15 * len(weak_hits)
@@ -156,12 +195,13 @@ def screen(text: str) -> Screen:
         signals.append("imperative")
         score += 0.15
     # Second person addressed to a machine is the shape of an instruction, not of documentation.
-    if re.search(r"\b(you|voce|vocês|voces)\b", t) and weak_hits:
+    if re.search(r"\b(you|voce|voces)\b", t) and weak_hits:
         signals.append("second_person+prompt_vocab")
         score += 0.2
     if decoded:  # hidden payload (base64 / link title / url): any strong hit there is decisive
-        hid = [p for p in _STRONG if p in decoded] or ([p for p in _WEAK if p in decoded and "instruc" in p]
-                                                       if _IMPERATIVE.search(decoded) else [])
+        hid = [n for n, rx in _STRONG_COMPILED if rx.search(decoded)] or (
+            [n for n, rx in _WEAK_COMPILED if "instruc" in n and rx.search(decoded)]
+            if _IMPERATIVE.search(decoded) else [])
         for p in hid:
             signals.append(f"hidden:{p}")
             score += 0.5

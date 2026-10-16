@@ -8,6 +8,8 @@
 import { COSTS_I18N } from './i18n-costs.js';
 import { WS_I18N } from './i18n-workspace.js';
 import { O7_I18N } from './i18n-onda7.js';
+import { MEM_NOTES_I18N } from './i18n-memory.js';
+import { DECISION_I18N } from './i18n-decision.js';
 
 import { CONFIG_PT, CONFIG_EN } from './i18n-config.js';
 
@@ -378,6 +380,10 @@ mergeDeep(PT, WS_I18N.pt);
 mergeDeep(EN, WS_I18N.en);
 mergeDeep(PT, O7_I18N.pt);
 mergeDeep(EN, O7_I18N.en);
+mergeDeep(PT, MEM_NOTES_I18N.pt);
+mergeDeep(EN, MEM_NOTES_I18N.en);
+mergeDeep(PT, DECISION_I18N.pt);
+mergeDeep(EN, DECISION_I18N.en);
 
 // chaves novas da tela de Configurações (js/i18n-config.js)
 Object.assign(PT.config, CONFIG_PT);

@@ -10,6 +10,13 @@ Layout (one directory per corpus):
 CORPUS: there is deliberately no function that merges corpora (ANA-113: synthetic and independent
 numbers are not comparable). No real corpus ships with the repo: it needs a human author and two
 annotators (see docs/reports/ANA109_ANA113_LABELING_INFRA.md).
+
+LIMITATION (AUD-057): the corpora shipped/used by the benchmarks today (benchmark/questions.json,
+benchmark/routing_tasks*.json) are SYNTHETIC -- written/derived by the same team (or an LLM) that tunes the
+retrieval/routing, so scores on them are optimistic and say nothing about unseen real vaults. They are good
+for regression detection (same corpus, before x after), NOT for absolute claims. Absolute quality claims
+require an external corpus (human author + >=2 independent annotators, kappa reported) loaded here, and
+reported separately. See docs/bench/anam025_rigor_power.md.
 """
 from __future__ import annotations
 

@@ -14,6 +14,8 @@
  */
 
 import { esc } from '../format.js';
+import { I18N } from '../i18n.js';
+import { enhanceChart } from './chart-a11y.js';
 
 /**
  * Calculates human-friendly "nice" ticks for axis scales.
@@ -314,6 +316,13 @@ export function createLineChart(container, options = {}) {
     }
 
     container.innerHTML = svgHtml + legendHtml;
+    container.appendChild(tooltip.element);
+    enhanceChart(container, {
+      caption: options.ariaLabel || I18N.a11y.chartTable, marks: '.chart-point',
+      head: [I18N.a11y.category, ...series.map((s) => s.label)],
+      rows: data.map((d) => [xFormatter(d[xKey]), ...series.map((s) => yFormatter(d[s.key]))]),
+      nameOf: (m) => { const d = data[+m.getAttribute('data-point-idx')]; const s = series[+m.getAttribute('data-series-idx')]; return `${xFormatter(d[xKey])}, ${s.label}: ${yFormatter(d[s.key])}`; },
+    });
 
     // Attach hover listeners for interactive tooltip
     const svgElem = container.querySelector('.chart-svg');
@@ -516,6 +525,13 @@ export function createBarChart(container, options = {}) {
     }
 
     container.innerHTML = svgHtml + legendHtml;
+    container.appendChild(tooltip.element);
+    enhanceChart(container, {
+      caption: options.ariaLabel || I18N.a11y.chartTable, marks: '.chart-bar',
+      head: [I18N.a11y.category, ...series.map((s) => s.label)],
+      rows: categories.map((cat, i) => [cat, ...series.map((s) => yFormatter(s.values[i] || 0))]),
+      nameOf: (m) => `${categories[+m.getAttribute('data-cat-idx')]}, ${series[+m.getAttribute('data-series-idx')].label}: ${yFormatter(parseFloat(m.getAttribute('data-val')))}`,
+    });
 
     // Attach hover listeners
     const bars = container.querySelectorAll('.chart-bar');
@@ -684,6 +700,13 @@ export function createStackedBarChart(container, options = {}) {
       `;
 
       container.innerHTML = svgHtml + legendHtml;
+      container.appendChild(tooltip.element);
+      enhanceChart(container, {
+        caption: options.ariaLabel || I18N.a11y.chartTable, marks: '.chart-bar',
+        head: [I18N.a11y.category, ...series.map((s) => s.label)],
+        rows: categories.map((cat, i) => [cat, ...series.map((s) => yFormatter(s.values[i] || 0))]),
+        nameOf: (m) => `${m.getAttribute('data-cat')}, ${m.getAttribute('data-series-label')}: ${yFormatter(parseFloat(m.getAttribute('data-val')))} (${m.getAttribute('data-pct')}%)`,
+      });
 
       // Event listeners for segments
       const segs = container.querySelectorAll('.chart-bar');
@@ -817,6 +840,13 @@ export function createDonutChart(container, options = {}) {
     `;
 
     container.innerHTML = svgHtml;
+    container.appendChild(tooltip.element);
+    enhanceChart(container, {
+      caption: options.ariaLabel || I18N.a11y.chartTable, marks: '.chart-donut-slices path',
+      head: [I18N.a11y.category, I18N.a11y.value, '%'],
+      rows: data.map((d) => [d.label, formatter(d.value), `${((d.value / total) * 100).toFixed(1)}%`]),
+      nameOf: (m) => `${m.getAttribute('data-label')}: ${m.getAttribute('data-val')} (${m.getAttribute('data-pct')}%)`,
+    });
 
     // Attach listeners
     const paths = container.querySelectorAll('.chart-donut-slices path');

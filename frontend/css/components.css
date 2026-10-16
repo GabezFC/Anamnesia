@@ -804,6 +804,25 @@
   background-color: var(--bg-surface-elevated);
   color: var(--text-primary);
 }
+.command-palette-item.is-selected {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+.command-palette-item-left { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.command-palette-item kbd { margin-left: auto; }
+.command-palette-empty { padding: var(--space-5); text-align: center; color: var(--text-secondary); font-size: var(--text-sm); }
+.command-palette-input { background: transparent; border: 0; outline: none; }
+.command-palette-input:focus-visible { outline: none; }
+.command-palette-input-wrap:focus-within { box-shadow: inset 0 -2px 0 var(--border-focus); }
+
+/* ANAM-028: alternativa tabular dos gráficos */
+.chart-data-details { margin-top: var(--space-3); font-size: var(--text-xs); color: var(--text-secondary); }
+.chart-data-details > summary { cursor: pointer; padding: 4px 0; font-weight: var(--font-medium); }
+.chart-data-table { width: 100%; border-collapse: collapse; margin-top: var(--space-2); }
+.chart-data-table th, .chart-data-table td { padding: 4px 8px; border-bottom: 1px solid var(--border-subtle); text-align: left; }
+.chart-data-table .chart-data-num { text-align: right; }
+.chart-point:focus-visible, .chart-bar:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.chart-donut-slices path:focus-visible { outline: none; stroke: var(--border-focus); stroke-width: 3; }
 
 /* --------------------------------------------------------------------------
    TOASTS
@@ -1001,7 +1020,7 @@
 }
 .chart-tooltip-title {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--chart-tooltip-muted);
   font-weight: 500;
   margin-bottom: 2px;
 }

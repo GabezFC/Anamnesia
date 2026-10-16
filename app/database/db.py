@@ -306,10 +306,11 @@ class Database:
                     mj = None
             if isinstance(mj, dict):
                 row["metrics_json"] = trim_metrics(mj)
+        if row.get("context") and not row.get("context_sha256"):
+            # ANAM-006: o hash do contexto entregue é sempre persistido (sobrevive ao expurgo do texto).
+            row["context_sha256"] = hashlib.sha256(str(row["context"]).encode("utf-8")).hexdigest()
         if os.environ.get("ANAMNESIA_METRICS_ONLY", "").strip().lower() in {"1", "true", "yes", "on"}:
             # ANA-041 / P-01: keep hash + sources, never the delivered context text.
-            if row.get("context"):
-                row["context_sha256"] = hashlib.sha256(str(row["context"]).encode("utf-8")).hexdigest()
             row["context"] = None
         self._maybe_compress_context(row)
         cols = ["run_id", "session_id", "created_at", "question_id", "query", "pipeline", "agent", "provider",
@@ -317,7 +318,8 @@ class Database:
                 "cache_enabled", "config_json", "config_hash", "metrics_json", "sources_json",
                 "context", "context_encoding", "answer", "error",
                 "project", "terminal_session_id", "cost_origin",
-                "initial_model", "final_model", "escalation_count", "retry_count", "routing_strategy"]
+                "initial_model", "final_model", "escalation_count", "retry_count", "routing_strategy",
+                "context_sha256"]
         vals = []
         for c in cols:
             v = row.get(c)
@@ -586,9 +588,15 @@ class Database:
         return self.query(sql, args)
 
     # maintenance (§5.3) -------------------------------------------------------
+    # tabelas com run_id que devem acompanhar a run no expurgo (ANAM-006: sem órfãos)
+    _RUN_CHILD_TABLES = ("candidates", "routing_decisions", "verification_results", "evaluations",
+                         "false_negatives", "retrieval_labels")
+
     def prune(self, keep_days: int, keep_sessions: list[str] | None = None, dry_run: bool = False) -> dict:
-        """Delete runs (and their candidates) older than `keep_days`. Runs whose session_id is in
-        `keep_sessions` are never deleted, regardless of age."""
+        """Delete runs (and every dependent row) older than `keep_days`. Runs whose session_id is in
+        `keep_sessions` are never deleted, regardless of age. ANAM-006: cascade in ONE transaction
+        (candidates, routing_decisions, verification_results, evaluations, false_negatives,
+        retrieval_labels) so no orphans are left behind."""
         cutoff = time.time() - keep_days * 86400
         keep = [s for s in (keep_sessions or []) if s]
         where = "created_at < ?"
@@ -599,11 +607,72 @@ class Database:
         run_ids = [r["run_id"] for r in self.query(f"SELECT run_id FROM runs WHERE {where}", tuple(args))]
         if dry_run:
             return {"would_delete": len(run_ids), "cutoff": cutoff, "dry_run": True}
-        self._exec(f"DELETE FROM runs WHERE {where}", tuple(args))
-        if run_ids:
-            placeholders = ",".join("?" * len(run_ids))
-            self._exec(f"DELETE FROM candidates WHERE run_id IN ({placeholders})", tuple(run_ids))
+        with self._tx() as cx:
+            for chunk in _chunks(run_ids, 500):
+                ph = ",".join("?" * len(chunk))
+                for t in self._RUN_CHILD_TABLES:
+                    cx.execute(f"DELETE FROM {t} WHERE run_id IN ({ph})", tuple(chunk))
+                cx.execute(f"DELETE FROM runs WHERE run_id IN ({ph})", tuple(chunk))
         return {"deleted": len(run_ids), "cutoff": cutoff, "dry_run": False}
+
+    def schema_version(self) -> int:
+        return int(self.query("PRAGMA user_version")[0]["user_version"])
+
+    def backup_before_prune(self) -> str | None:
+        """ANAM-006: consistent copy next to the DB as ``<db>.bak-v<user_version>`` (never overwrites).
+        Restore = close the DB and copy the .bak over it. None for :memory:."""
+        if self.path in ("", ":memory:") or not Path(self.path).exists():
+            return None
+        from app.database.migrations import backup_database
+        version = self.schema_version()          # fora do lock (query() o adquire; não é reentrante)
+        with self._lock:
+            if self.conn.in_transaction:
+                self.conn.commit()
+            return str(backup_database(self.conn, self.path, version))
+
+    @staticmethod
+    def runs_text_retention_days() -> float:
+        """ANAM-006 / decisão D-4 (pendente, REVISÁVEL): dias de retenção do texto de runs
+        (query/context/answer). Env ANAMNESIA_RUNS_TEXT_RETENTION_DAYS; default 30; 0 desliga."""
+        try:
+            return float(os.environ.get("ANAMNESIA_RUNS_TEXT_RETENTION_DAYS", "").strip() or 30)
+        except ValueError:
+            return 30.0
+
+    def purge_run_text(self, older_than_days: float | None = None, keep_sessions: list[str] | None = None,
+                       dry_run: bool = False) -> dict:
+        """ANAM-006: blank query/context/answer of runs older than N days (default: env retention).
+        Run rows, metrics, sources and cost history stay; ``context_sha256`` is backfilled from the
+        text BEFORE it is wiped, so the hash survives. N <= 0 is a no-op."""
+        days = self.runs_text_retention_days() if older_than_days is None else older_than_days
+        if not days or days <= 0:
+            return {"purged": 0, "days": days, "dry_run": dry_run}
+        cutoff = time.time() - days * 86400
+        keep = [s for s in (keep_sessions or []) if s]
+        where = ("created_at < ? AND (query IS NOT NULL OR context IS NOT NULL OR answer IS NOT NULL)")
+        args: list[Any] = [cutoff]
+        if keep:
+            where += f" AND session_id NOT IN ({','.join('?' * len(keep))})"
+            args += keep
+        if dry_run:
+            n = self.query(f"SELECT COUNT(*) n FROM runs WHERE {where}", tuple(args))[0]["n"]
+            return {"would_purge": n, "days": days, "cutoff": cutoff, "dry_run": True}
+        hashed = 0
+        rows = self.query(f"SELECT run_id, context, context_encoding FROM runs WHERE {where}"
+                          " AND context IS NOT NULL AND context_sha256 IS NULL", tuple(args))
+        with self._tx() as cx:
+            for r in rows:
+                ctx = r["context"]
+                if r["context_encoding"] == "zlib+b64":
+                    ctx = zlib.decompress(base64.b64decode(ctx)).decode("utf-8")
+                cx.execute("UPDATE runs SET context_sha256=? WHERE run_id=?",
+                           (hashlib.sha256(str(ctx).encode("utf-8")).hexdigest(), r["run_id"]))
+                hashed += 1
+            cur = cx.execute(
+                f"UPDATE runs SET query=NULL, context=NULL, context_encoding=NULL, answer=NULL WHERE {where}",
+                tuple(args))
+            purged = cur.rowcount or 0
+        return {"purged": purged, "hashes_backfilled": hashed, "days": days, "cutoff": cutoff, "dry_run": False}
 
     def rewrite_legacy_rows(self, compress_context: bool = False, batch_size: int = 500) -> dict:
         """One-off maintenance pass for a database that predates this migration (§5.3): dedups

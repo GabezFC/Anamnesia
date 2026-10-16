@@ -15,6 +15,7 @@ import { esc, fmtNumber, fmtDate } from '../format.js';
 import { getSettings, putSettings, lastSearch, isUnavailable } from '../anamnesia-api.js';
 import { skeletonLines, loadingBlock } from '../components/skeleton.js';
 import { emptyState } from '../components/empty-state.js';
+import { nextTabIndex } from '../components/tabs.js';
 
 let currentState = 'loaded'; // 'loaded' | 'loading' | 'empty' | 'error' | 'backend-unavailable'
 let activeProjectId = 'proj-1';
@@ -432,12 +433,12 @@ export function render() {
         ${initPanel(t, activeProjectId)}
         ${jevPanel(t)}
 
-        <div class="projects-list-container" data-bind="projects-list" role="list">
+        <div class="projects-list-container" data-bind="projects-list" role="list" aria-label="${esc(I18N.a11y.projects)}">
           ${mockProjects.map(proj => {
             const isActive = proj.id === activeProjectId;
             const hasActiveSessions = proj.active_sessions > 0;
             return `
-              <div class="project-item ${isActive ? 'is-active' : ''}" data-action="select-project" data-project-id="${proj.id}" role="listitem" tabindex="0">
+              <div role="listitem" class="project-li"><button type="button" class="project-item ${isActive ? 'is-active' : ''}" data-action="select-project" data-project-id="${esc(proj.id)}" aria-current="${isActive ? 'true' : 'false'}">
                 <div class="project-info">
                   <div class="project-name-row">
                     <span class="dot ${hasActiveSessions ? 'dot-success' : 'dot-neutral'}" title="${hasActiveSessions ? 'Sessão ativa' : 'Inativo'}"></span>
@@ -446,7 +447,7 @@ export function render() {
                   <span class="project-path">${proj.path}</span>
                 </div>
                 ${hasActiveSessions ? `<span class="badge-origin badge-origin-measured" title="${proj.active_sessions} terminais ativos">${proj.active_sessions}</span>` : ''}
-              </div>
+              </button></div>
             `;
           }).join('')}
         </div>
@@ -458,13 +459,13 @@ export function render() {
             <span class="section-count tabular">${mockSessions.length}</span>
           </div>
           ${sessions.map(sess => `
-            <div class="session-mini-item u-265908" data-action="focus-session" data-session-id="${esc(sess.id)}">
+            <button type="button" class="session-mini-item u-265908" data-action="focus-session" data-session-id="${esc(sess.id)}">
               <div class="u-2d1dcb">
                 <span class="dot dot-success"></span>
                 <span class="u-bcfbd4">${esc(sess.title)}</span>
               </div>
               <span class="time-stamp tabular u-1ab1cd">${sess.startTime}</span>
-            </div>
+            </button>
           `).join('')}
         </div>
       </aside>
@@ -473,27 +474,31 @@ export function render() {
       <!-- COLUNA CENTRAL: Canvas de Terminais -->
       <main class="workspace-center-col" aria-label="Terminal interativo">
         <!-- Barra de Abas de Terminal com moldura elegante e 3 pontinhos neutros -->
-        <div class="terminal-tab-bar" role="tablist">
+        <div class="terminal-tab-bar">
           <div class="terminal-dots" aria-hidden="true">
             <span class="terminal-dot"></span>
             <span class="terminal-dot"></span>
             <span class="terminal-dot"></span>
           </div>
 
+          <div class="terminal-tabs-list" role="tablist" aria-label="${esc(I18N.a11y.terminalTabs)}" data-bind="terminal-tablist">
           ${sessions.map(sess => {
             const isActive = sess.id === activeSessionId;
             return `
-              <div class="terminal-tab ${isActive ? 'is-active' : ''}" role="tab" aria-selected="${isActive}" draggable="true" data-action="switch-tab" data-session-id="${esc(sess.id)}">
-                ${icon(sess.profileId.includes('claude') || sess.profileId.includes('hermes') ? 'bot' : 'terminal', '', 13)}
-                <span>${esc(sess.title)}</span>
-                ${sessionChips(sess)}
-                <span class="dot dot-success" title="Ativo"></span>
-                <button class="terminal-tab-close" data-action="close-session" data-session-id="${esc(sess.id)}" title="Fechar terminal" aria-label="Fechar terminal">
+              <div class="terminal-tab ${isActive ? 'is-active' : ''}" role="presentation" draggable="true" data-session-id="${esc(sess.id)}">
+                <button type="button" class="terminal-tab-main" role="tab" id="term-tab-${esc(sess.id)}" aria-controls="term-panel" aria-selected="${isActive}" tabindex="${isActive ? '0' : '-1'}" data-action="switch-tab" data-session-id="${esc(sess.id)}">
+                  ${icon(sess.profileId.includes('claude') || sess.profileId.includes('hermes') ? 'bot' : 'terminal', '', 13)}
+                  <span>${esc(sess.title)}</span>
+                  ${sessionChips(sess)}
+                  <span class="dot dot-success" title="Ativo" aria-hidden="true"></span>
+                </button>
+                <button type="button" class="terminal-tab-close" data-action="close-session" data-session-id="${esc(sess.id)}" title="Fechar terminal" aria-label="Fechar terminal">
                   ${icon('x', '', 12)}
                 </button>
               </div>
             `;
           }).join('')}
+          </div>
 
           <!-- Botão + para novo terminal -->
           <button class="btn btn-ghost btn-sm u-3e9b1b" data-action="toggle-profile-menu" title="${t.newTerminal}" aria-label="${t.newTerminal}">
@@ -538,7 +543,7 @@ export function render() {
         </div>
 
         <!-- Contêiner de painéis divididos / fluido -->
-        <div class="terminal-panes-wrapper ${isSplitMode ? (splitDirection === 'vertical' ? 'split-vertical' : 'split-horizontal') : ''}">
+        <div class="terminal-panes-wrapper ${isSplitMode ? (splitDirection === 'vertical' ? 'split-vertical' : 'split-horizontal') : ''}" role="tabpanel" id="term-panel" aria-label="${esc(I18N.a11y.terminalTabs)}">
           ${activeSession ? (isSplitMode && splitSess ? slot(splitRatio, renderTerminalFrame(activeSession)) : renderTerminalFrame(activeSession)) : `
             <div class="state-container" data-bind="terminal-empty">
               <div class="state-icon-wrap">${icon('terminal', '', 28)}</div>
@@ -883,6 +888,21 @@ export function mount(root) {
     dragTabId = null;
   };
 
+  // AUD-040: abas de terminal por teclado (ativação manual: setas movem o foco, Enter/Espaço ativam, Delete fecha).
+  const handleTabKey = (e) => {
+    const list = e.target.closest && e.target.closest('[data-bind="terminal-tablist"]');
+    if (!list || e.altKey || e.ctrlKey || e.metaKey) return;
+    const main = e.target.closest('.terminal-tab-main');
+    if (!main) return;
+    const tabs = [...list.querySelectorAll('.terminal-tab-main')];
+    if (e.key === 'Delete') { e.preventDefault(); main.parentElement.querySelector('.terminal-tab-close')?.click(); return; }
+    const i = nextTabIndex(e.key, tabs.indexOf(main), tabs.length);
+    if (i < 0) return;
+    e.preventDefault();
+    tabs.forEach((t, k) => t.setAttribute('tabindex', k === i ? '0' : '-1'));
+    tabs[i].focus();
+  };
+
   const handleTreeKey = (e) => {
     const item = e.target.closest && e.target.closest('.file-tree-item[data-file-path]');
     if (!item) return;
@@ -898,6 +918,7 @@ export function mount(root) {
   };
 
   root.addEventListener('keydown', handleTreeKey);
+  root.addEventListener('keydown', handleTabKey);
   root.addEventListener('click', handleClick);
   root.addEventListener('input', handleInput);
   root.addEventListener('change', handleChange);
@@ -909,6 +930,7 @@ export function mount(root) {
   root._workspaceCleanup = () => {
     root.removeEventListener('click', handleClick);
     root.removeEventListener('keydown', handleTreeKey);
+    root.removeEventListener('keydown', handleTabKey);
     root.removeEventListener('input', handleInput);
     root.removeEventListener('change', handleChange);
     root.removeEventListener('pointerdown', handleDown);
@@ -923,8 +945,26 @@ export function mount(root) {
   jevLoad(root);
 }
 
+/** Chave estável do elemento focado para recuperar o foco depois do re-render por innerHTML. */
+function focusKey(el) {
+  if (!el || !el.getAttribute || !el.closest || el === document.body) return null;
+  const a = el.getAttribute('data-action');
+  const sid = el.getAttribute('data-session-id');
+  const pid = el.getAttribute('data-project-id');
+  const tab = el.getAttribute('data-tab');
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  if (a === 'select-project' && pid) return `[data-action="select-project"][data-project-id="${CSS.escape(pid)}"]`;
+  if (a && sid) return `[data-action="${a}"][data-session-id="${CSS.escape(sid)}"]`;
+  if (a && tab) return `[data-action="${a}"][data-tab="${CSS.escape(tab)}"]`;
+  if (a && el.closest('.workspace-page, [data-bind]')) return `[data-action="${a}"]`;
+  return null;
+}
+
 function refresh(root) {
+  const active = document.activeElement;
+  const key = root.contains(active) ? focusKey(active) : null;
   root.innerHTML = render();
+  if (key) { try { root.querySelector(key)?.focus({ preventScroll: true }); } catch { /* seletor inválido: sem restaurar */ } }
 }
 
 export function unmount(root) {

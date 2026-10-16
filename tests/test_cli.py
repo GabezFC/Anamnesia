@@ -72,6 +72,7 @@ def test_cmd_db_prune_runs_end_to_end(tmp_path, monkeypatch, capsys):
         keep_sessions = "keep-me"
         dry_run = False
         vacuum = True
+        yes = True
 
     cmd_db_prune(Args())
     out = capsys.readouterr().out

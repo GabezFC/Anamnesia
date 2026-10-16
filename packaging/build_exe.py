@@ -6,6 +6,7 @@ Bundles frontend/, config/*.yaml|json, data/synthetic_vault and assets/. Needs `
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -14,8 +15,19 @@ ROOT = Path(__file__).resolve().parent.parent
 SEP = ";" if sys.platform == "win32" else ":"
 
 
+def stage_config(dst: Path) -> Path:
+    """ANAM-024: copy config/ for bundling WITHOUT per-user state (local_settings.json can hold secrets)."""
+    out = dst / "config"
+    if out.exists():
+        shutil.rmtree(out)
+    shutil.copytree(ROOT / "config", out,
+                    ignore=shutil.ignore_patterns("local_settings.json", "__pycache__", "*.pyc", "*.bak*"))
+    return out
+
+
 def main() -> int:
     onefile = "--onefile" in sys.argv
+    staged_config = stage_config(ROOT / "build" / "pyinstaller_stage")
     adds = [("frontend", "frontend"), ("config", "config"), ("data/synthetic_vault", "data/synthetic_vault"),
             ("assets", "assets")]
     cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--name", "Anamnesia",
@@ -25,7 +37,8 @@ def main() -> int:
            "--collect-submodules", "app", "--collect-submodules", "config", "--collect-submodules", "memory_gateway",
            "--collect-submodules", "uvicorn", "--collect-submodules", "anamnesia"]
     for src, dst in adds:
-        cmd += ["--add-data", f"{ROOT / src}{SEP}{dst}"]
+        origin = staged_config if src == "config" else ROOT / src
+        cmd += ["--add-data", f"{origin}{SEP}{dst}"]
     icon = ROOT / "assets" / "anamnesia.ico"
     if icon.exists():
         cmd += ["--icon", str(icon)]

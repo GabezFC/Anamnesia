@@ -13,6 +13,19 @@ import { searchPreview, lastSearch, isUnavailable } from '../anamnesia-api.js';
 import { skeletonTable, skeletonKpis, loadingBlock } from '../components/skeleton.js';
 import { emptyState } from '../components/empty-state.js';
 import { extrasHtml, mountExtras } from './memory-extras.js';
+import { handleTablistKey, tabId, panelId } from '../components/tabs.js';
+import * as notesTab from './memory-notes.js';
+
+/**
+ * Abas da página (padrão APG Tabs, tabs.js). PONTO DE EXTENSÃO: para adicionar uma aba (ex.: Decision Engine)
+ * acrescente uma entrada { id, label: () => string, html: () => string, mount?(root) -> {activate?, cleanup?} }
+ * a TABS e as chaves de rótulo em I18N.memory.tabs. Nenhuma outra parte da navegação precisa mudar.
+ */
+const TABS = [
+  { id: 'notes', label: () => I18N.memory.tabs.notes, html: () => notesTab.html(), mount: (root) => notesTab.mount(root) },
+  { id: 'search', label: () => I18N.memory.tabs.search, html: () => searchTabHtml() },
+];
+let activeTab = 'notes';
 
 const st = {
   q: '', scope: '', max: 8,
@@ -94,14 +107,9 @@ function lastBody() {
       ${ctx ? `<pre class="memory-context-pre">${esc(ctx)}</pre>` : `<p class="state-desc">${esc(t.contextEmpty)}</p>`}</div>` : ''}`;
 }
 
-export function render() {
+function searchTabHtml() {
   const t = I18N.memory;
   return `
-    <div class="memory-page page-fade-slide">
-      <header class="memory-header">
-        <h1 class="page-title">${esc(t.title)}</h1>
-        <p class="page-subtitle">${esc(t.subtitle)}</p>
-      </header>
       <form class="memory-search card" data-action="memory-search-form" role="search">
         <label class="memory-field memory-field-grow"><span>${esc(t.queryLabel)}</span>
           <div class="input-control">${icon('search', '', 14)}
@@ -121,7 +129,21 @@ export function render() {
           <button type="button" class="btn btn-ghost btn-sm" data-action="memory-refresh-last">${icon('refresh', '', 13)} ${esc(t.refresh)}</button></div>
         <div data-bind="mem-last">${lastBody()}</div>
       </section>
-      ${extrasHtml()}
+      ${extrasHtml()}`;
+}
+
+export function render() {
+  const t = I18N.memory;
+  return `
+    <div class="memory-page page-fade-slide">
+      <header class="memory-header">
+        <h1 class="page-title">${esc(t.title)}</h1>
+        <p class="page-subtitle">${esc(t.subtitle)}</p>
+      </header>
+      <div class="tab-list" role="tablist" aria-label="${esc(t.tabs.aria)}" data-bind="mem-tablist">
+        ${TABS.map((x) => `<button type="button" class="tab-btn" role="tab" id="${tabId('memory', x.id)}" aria-selected="${activeTab === x.id}" aria-controls="${panelId('memory')}-${x.id}" tabindex="${activeTab === x.id ? '0' : '-1'}" data-action="memory-tab" data-tab="${x.id}">${esc(x.label())}</button>`).join('')}
+      </div>
+      ${TABS.map((x) => `<div class="memory-tabpanel" role="tabpanel" id="${panelId('memory')}-${x.id}" aria-labelledby="${tabId('memory', x.id)}" tabindex="0" data-tabpanel="${x.id}" ${activeTab === x.id ? '' : 'hidden'}>${x.html()}</div>`).join('')}
     </div>`;
 }
 
@@ -163,11 +185,29 @@ async function runSearch(root) {
 }
 
 export function mount(root) {
+  const tabApi = {};
+  const selectTab = (id, focus = false) => {
+    if (!TABS.some((x) => x.id === id)) return;
+    activeTab = id;
+    root.querySelectorAll('[data-action="memory-tab"]').forEach((b) => {
+      const on = b.getAttribute('data-tab') === id;
+      b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1;
+      if (on && focus) b.focus();
+    });
+    root.querySelectorAll('[data-tabpanel]').forEach((p) => { p.hidden = p.getAttribute('data-tabpanel') !== id; });
+    tabApi[id]?.activate?.();
+  };
+  const onKey = (e) => {
+    const list = root.querySelector('[data-bind="mem-tablist"]');
+    if (list) handleTablistKey(e, list, '[role="tab"]', (b) => selectTab(b.getAttribute('data-tab'), true));
+  };
+  root.addEventListener('keydown', onKey);
   const onClick = (e) => {
     const el = e.target.closest('[data-action]');
     if (!el) return;
     const a = el.getAttribute('data-action');
-    if (a === 'memory-refresh-last') loadLast(root);
+    if (a === 'memory-tab') selectTab(el.getAttribute('data-tab'));
+    else if (a === 'memory-refresh-last') loadLast(root);
     else if (a === 'memory-toggle-context') { st.showContext = !st.showContext; paint(root); }
     else if (a === 'memory-copy-context') navigator.clipboard?.writeText(st.last.data?.context || '').catch(() => {});
   };
@@ -183,8 +223,13 @@ export function mount(root) {
   root.addEventListener('click', onClick);
   root.addEventListener('submit', onSubmit);
   const stopExtras = mountExtras(root);
-  root._memoryCleanup = () => { root.removeEventListener('click', onClick); root.removeEventListener('submit', onSubmit); stopExtras(); };
+  TABS.forEach((x) => { if (x.mount) tabApi[x.id] = x.mount(root); });
+  root._memoryCleanup = () => {
+    root.removeEventListener('click', onClick); root.removeEventListener('submit', onSubmit); root.removeEventListener('keydown', onKey);
+    stopExtras(); Object.values(tabApi).forEach((x) => x?.cleanup?.());
+  };
   loadLast(root);
+  tabApi[activeTab]?.activate?.();
 }
 
 export function unmount(root) {

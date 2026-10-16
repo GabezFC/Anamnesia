@@ -21,6 +21,7 @@ from app.routing.resilience import guarded_generate, next_after_failure
 from app.routing.policy import RoutingPolicy, preset
 from app.routing.registry import ModelEntry, Registry, load_registry
 from app.routing.router import route
+from app.routing.spend import RunSpend, metered_factory
 from app.routing.shadow import maybe_shadow, pop_pending
 from app.services.query_fp import fold
 
@@ -211,6 +212,17 @@ def build_prompt(query: str, cands) -> str:
         f"<notes>\n" + "\n".join(parts) + f"\n</notes>\n\nPergunta: {query}\nResposta:")
 
 
+def _record_generation(att: dict, entry, gen) -> None:
+    att["tokens_in"], att["tokens_out"] = gen.input_tokens, gen.output_tokens
+    att["cost_usd"], att["cost_status"] = _cost(entry, gen.input_tokens, gen.output_tokens)
+    if gen.error:
+        att["error"] = _redact(gen.error)
+        # ANA-171: stubs/legacy adapters without the field still get a (non-null) kind
+        att["error_kind"] = getattr(gen, "error_kind", None) or "other"
+        att["status_code"] = getattr(gen, "status_code", None)
+        att["retry_after"] = getattr(gen, "retry_after", None)
+
+
 def _cost(entry: ModelEntry | None, tin, tout):
     if entry is None:
         return None, "unavailable"
@@ -284,12 +296,67 @@ def _public(extras: dict) -> dict:
     return {k: v for k, v in extras.items() if k not in ("mode_requested",) and not (k == "answer" and v is None)}
 
 
-def plan_route(query: str, context_tokens: int, task_kind: str, risk: str):
+_PRIVATE_TAGS = frozenset({"private", "privado", "privada", "local-only", "local_only", "sensitive", "sensivel",
+                           "sensível", "confidencial", "confidential", "pii"})
+_NOTE_FILE = re.compile(r"-([0-9a-f]{10})\.md$")
+
+
+def _note_private_reason(source_file: str) -> str | None:
+    """ANAM-033: a saved note marked private (visibility/tags) or session-scoped to an owner => stays local."""
+    m = _NOTE_FILE.search(source_file or "")
+    if not m or not (source_file or "").replace("\\", "/").startswith("saved_context/"):
+        return None
+    try:
+        from app.memory_store.store import get_store
+        n = get_store().get(m.group(1))
+    except Exception:  # noqa: BLE001 - unreadable note: cannot prove it is public -> fail closed
+        return "note_unreadable"
+    if (getattr(n, "visibility", None) or "").lower() == "private":
+        return "note_visibility_private"
+    if any(str(t).strip().lower() in _PRIVATE_TAGS for t in (getattr(n, "tags", None) or [])):
+        return "note_tag_private"
+    return None
+
+
+def privacy_signals(result) -> list[str]:
+    """ANAM-033: why this retrieval must only reach local models. Empty list => no restriction.
+
+    Sources: note metadata (visibility private / private-ish tags), candidate meta tags, and the text
+    classifier. `MG_PRIVACY_CLASSIFY`: `rules` (default; deterministic CPF/e-mail/keys..., no model),
+    `laya` (`must_stay_local`: rules + Laya, fail-closed when Laya is on but down), `off`.
+    """
+    sig: list[str] = []
+    cands = list(getattr(result, "candidates", None) or [])
+    for c in cands:
+        r = _note_private_reason(getattr(c, "source_file", ""))
+        if r and r not in sig:
+            sig.append(r)
+        tags = (getattr(c, "meta", None) or {}).get("tags") or []
+        if any(str(t).strip().lower() in _PRIVATE_TAGS for t in tags) and "candidate_tag_private" not in sig:
+            sig.append("candidate_tag_private")
+    mode = os.getenv("MG_PRIVACY_CLASSIFY", "rules").strip().lower()
+    if mode != "off":
+        text = "\n".join([getattr(result, "query", "") or ""] + [c.snippet or "" for c in cands])
+        try:
+            from app.services import laya_decider as ld
+            if mode == "laya":
+                if ld.must_stay_local(text):
+                    sig.append("text_must_stay_local")
+            elif ld._rule_hits(text):
+                sig.append("text_private_rules")
+        except Exception:  # noqa: BLE001 - classifier failure => fail closed
+            sig.append("privacy_classifier_error")
+    return sig
+
+
+def plan_route(query: str, context_tokens: int, task_kind: str, risk: str, private: bool = False):
     """Decision over MODELS THAT CAN RUN NOW. Zero model calls (availability probe only)."""
     policy = get_policy()
     avail = get_availability() if policy.enabled else {}
     reg = usable_registry(get_registry(), avail) if policy.enabled else get_registry()
     maybe_shadow(query, context_tokens, task_kind, risk, get_registry(), policy)   # ANA-186: no-op unless flag
+    if private:                                    # ANAM-033: only pass the kwarg when set (stubs keep working)
+        return route(query, context_tokens, task_kind, risk, reg, policy, private=True), reg, policy, avail
     return route(query, context_tokens, task_kind, risk, reg, policy), reg, policy, avail
 
 
@@ -300,17 +367,21 @@ def _answer(gateway, result, risk, task_kind, extras):
         return extras
 
     try:
+        private_why = privacy_signals(result)      # ANAM-033: fail closed -> local models only
+        private = bool(private_why)
         ctx = int(result.metrics.get("context_tokens") or 0)
-        decision, reg, policy, avail = plan_route(result.query, ctx, task_kind, risk)
+        decision, reg, policy, avail = plan_route(result.query, ctx, task_kind, risk, private)
         if decision.model_id is None and "context_window_unfit" in decision.reason_codes and ctx:
             # Registry context_window is null for most models (never guessed): the router then cannot
             # prove a fit. Answer mode sends only a few capped snippets, so retry without the window
             # check and say so in reason_codes instead of silently dropping to context.
-            decision, reg, policy, avail = plan_route(result.query, 0, task_kind, risk)
+            decision, reg, policy, avail = plan_route(result.query, 0, task_kind, risk, private)
             decision.reason_codes.append("context_window_unknown_assumed_fit")
     except Exception as exc:  # noqa: BLE001
         return fallback(f"routing_error:{type(exc).__name__}")
     extras["routing"] = dataclasses.asdict(decision)
+    if private:
+        extras["privacy"] = {"private": True, "signals": private_why}
     if not policy.enabled:
         return fallback("routing_disabled")
     eff_risk = decision.reason_codes and next((c[5:] for c in decision.reason_codes if c.startswith("risk_")), risk)
@@ -329,6 +400,8 @@ def _answer(gateway, result, risk, task_kind, extras):
     prompt = build_prompt(result.query, cands)
     snippets = [c.snippet for c in cands]
     model_id, failed, produced = decision.model_id, 0, False
+    run_spend = RunSpend()     # ANAM-003: accumulated spend of ALL attempts of this run
+    run_factory = metered_factory(lambda e, a: make_adapter(e, a), run_spend)
     while model_id:
         entry = reg.get(model_id)
         att = {"model_id": model_id, "tokens_in": None, "tokens_out": None, "cost_usd": None,
@@ -338,22 +411,16 @@ def _answer(gateway, result, risk, task_kind, extras):
         info: dict = {}
         try:
             # ANA-177/178/187/190: straight call unless a resilience flag is on (see app/routing/resilience.py)
-            gen = guarded_generate(entry, make_adapter, avail, prompt, info,
-                                   temperature=0.0, max_tokens=ANSWER_MAX_TOKENS)
+            gen_kw = {"private": True} if private else {}   # ANAM-033: adapter re-checks loopback
+            gen = guarded_generate(entry, run_factory, avail, prompt, info,
+                                   temperature=0.0, max_tokens=ANSWER_MAX_TOKENS, **gen_kw)
         except Exception as exc:  # noqa: BLE001
             from app.adapters.models.errors import classify_exception
             att["error"] = _redact(f"{type(exc).__name__}: {exc}")
             att["error_kind"], att["status_code"], att["retry_after"] = classify_exception(exc)   # ANA-171
             gen = None
         if gen is not None:
-            att["tokens_in"], att["tokens_out"] = gen.input_tokens, gen.output_tokens
-            att["cost_usd"], att["cost_status"] = _cost(entry, gen.input_tokens, gen.output_tokens)
-            if gen.error:
-                att["error"] = _redact(gen.error)
-                # ANA-171: stubs/legacy adapters without the field still get a (non-null) kind
-                att["error_kind"] = getattr(gen, "error_kind", None) or "other"
-                att["status_code"] = getattr(gen, "status_code", None)
-                att["retry_after"] = getattr(gen, "retry_after", None)
+            _record_generation(att, entry, gen)
         text = (gen.answer or "").strip() if gen is not None and not att["error"] else ""
         if text:
             produced = True

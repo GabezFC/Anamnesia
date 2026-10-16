@@ -5,8 +5,8 @@ exceptions, JSON/shape errors) to ONE of `ERROR_KINDS`, plus the HTTP status and
 seconds when the server sent one. Pure: no network, no secrets (only the exception *type*, the status
 code and a few fixed keywords of the body are inspected; the body is never stored).
 
-Kill-switch: `ANAMNESIA_PAID_CALLS=0|false|no|off` makes every non-local provider refuse to run
-(`PaidCallsDisabled`). Unset or any other value = allowed (default behaviour unchanged).
+Consent (ANAM-003): every non-local provider refuses to run (`PaidCallsDisabled`) unless
+`ANAMNESIA_PAID_CALLS=1|true|yes|on` is set EXPLICITLY. Unset/empty/0/other = no consent (default OFF).
 """
 from __future__ import annotations
 
@@ -19,16 +19,23 @@ ERROR_KINDS = ("auth", "rate_limit", "timeout", "context_overflow", "model_not_f
                "bad_output", "other")
 LOCAL_PROVIDERS = frozenset({"ollama", "vllm"})
 _OFF = {"0", "false", "no", "off"}
+_ON = {"1", "true", "yes", "on"}
 _CONTEXT_WORDS = ("context length", "context_length", "maximum context", "too many tokens", "context window",
                   "prompt is too long", "reduce the length", "token limit", "input is too long")
 
 
 class PaidCallsDisabled(RuntimeError):
-    """Raised instead of building/calling a non-local adapter while ANAMNESIA_PAID_CALLS is off."""
+    """Raised instead of building/calling a non-local adapter without explicit paid-call consent."""
+
+
+class BudgetExceeded(RuntimeError):
+    """ANAM-003: a paid call was refused BEFORE the network because it could exceed the run/day cap."""
 
 
 def paid_calls_enabled() -> bool:
-    return os.environ.get("ANAMNESIA_PAID_CALLS", "").strip().lower() not in _OFF
+    """ANAM-003: explicit consent only. Paid/egress calls need ANAMNESIA_PAID_CALLS=1|true|yes|on;
+    unset, empty or anything else = NOT consented (never switched on implicitly)."""
+    return os.environ.get("ANAMNESIA_PAID_CALLS", "").strip().lower() in _ON
 
 
 def is_local_provider(provider: str | None) -> bool:
@@ -40,7 +47,8 @@ def ensure_paid_allowed(provider: str | None) -> None:
         from app.services.offline import ensure_online  # ANA-224: OFFLINE=1 blocks every hosted provider
         ensure_online(f"provider:{provider}")
     if not is_local_provider(provider) and not paid_calls_enabled():
-        raise PaidCallsDisabled(f"ANAMNESIA_PAID_CALLS=0: chamada ao provedor '{provider}' bloqueada")
+        raise PaidCallsDisabled(f"ANAMNESIA_PAID_CALLS nao esta em 1 (consentimento explicito de egress/gasto "
+                                f"ausente): chamada ao provedor '{provider}' bloqueada")
 
 
 def kind_from_status(status: int | None, body: str = "") -> str:
@@ -107,7 +115,7 @@ def classify_exception(exc: BaseException) -> tuple[str, int | None, float | Non
     retry = parse_retry_after(headers.get("retry-after") if headers is not None else None)
     if isinstance(status, int):
         return kind_from_status(status, body), status, retry
-    if isinstance(exc, PaidCallsDisabled):
+    if isinstance(exc, (PaidCallsDisabled, BudgetExceeded)):
         return "other", None, None
     if "ConnectTimeout" in mro:        # could not even connect (Windows reports a closed port this way)
         return "provider_down", None, retry

@@ -109,3 +109,54 @@ Backend alternativo `JEV_BACKEND=ollama` (local, loopback). `GET {base}/v1/model
   Estados: `not_configured`, `configured`, `connected`, `auth_error` (401/403), `unavailable` (rede/timeout/404/429/5xx/resposta inválida), `blocked` (OFFLINE/PAID_CALLS=0).
   O resultado fica em `kv` (`jev.last_test`) com impressão digital da config: mudou a config, volta a "configurado".
 - Código: `app/services/jev_setup.py` (serviço), rotas em `app/api/workspace.py`, UI em `frontend/js/pages/workspace.js`. Testes: `tests/test_jev_setup.py`.
+
+## Memória: gerenciador de notas (ANAM-029)
+
+`#/memory` tem duas abas (padrão APG Tabs, `components/tabs.js`): **Notas** (padrão) e **Busca e diagnóstico**
+(a página anterior, inalterada). Código: `js/pages/memory.js` (abas), `js/pages/memory-notes.js` (aba Notas),
+textos em `js/i18n-memory.js` (PT/EN, mesclados em `I18N.memory`), cliente em `js/anamnesia-api.js` (`mem*`).
+
+| Ação | Rota (existente, localhost-only nas escritas) |
+|---|---|
+| listar / filtrar | `GET /api/memory/notes` (filtro textual, projeto, tipo e estado no cliente) |
+| criar / editar / excluir | `POST` / `PUT` / `DELETE /api/memory/notes[/{id}]` (exclusão = lixeira) |
+| histórico, comparar, restaurar versão | `GET .../history`, `GET .../diff`, `POST .../rollback` |
+| lixeira | `GET /api/memory/trash`, `POST /api/memory/trash/{id}/restore` |
+| exportar / importar JSONL | `GET /api/memory/export.jsonl`, `POST /api/memory/import?overwrite=` |
+| consolidar | `POST /api/memory/consolidate` `{apply:false}` (prévia) e depois `{apply:true}` |
+
+Nenhuma rota nova foi necessária. Comportamento:
+- **Estados**: carregando (skeleton), vazio, sem resultado do filtro, erro, offline (gateway inacessível) com "Tentar de novo".
+- **Destrutivo**: arquivar, excluir, restaurar versão e importar abrem `alertdialog` com foco inicial em *Cancelar*
+  (Esc/clique fora cancela). Consolidar sempre mostra a prévia (dry-run) e só aplica no botão "Aplicar (N)".
+  Importar valida o JSONL no cliente (linha inválida bloqueia o envio) e oferece "sobrescrever" (desligado por padrão).
+- **Teclado/a11y**: setas/Home/End nas abas; diálogos com `trapFocus` e retorno de foco; tabela com `<caption>`,
+  `scope`, botões com nome acessível por nota; contraste via tokens (estado e diff nunca dependem só de cor);
+  comando "Nova nota" na paleta (Ctrl+K). Sem handler/estilo inline (CSP `script-src 'self'`).
+- **Extensão (futura aba Decision Engine)**: acrescentar uma entrada em `TABS` de `memory.js`
+  (`{id, label, html, mount}`) e as chaves em `I18N.memory.tabs`; a navegação/ARIA é gerada a partir dessa lista.
+
+## Decision Engine (`#/decision`)
+
+Página própria (não é aba de `#/memory`), somente leitura, com abas APG: **Visão geral** (provider/estratégia ativos,
+presets Fast/Balanced/Quality — experimentais, health real, latência/cache/fallback), **Avaliação** (JEV × Laya × Hybrid ×
+Adaptive lado a lado), **Histórico** (paginado, filtro, export CSV/JSON só com hashes/IDs), **Calibração** (limiares
+somente leitura) e **Diagnóstico Laya** (Problema/Causa/Ação).
+
+- Rotas lidas: `GET /api/decision/{status,config,metrics,evaluation,history}`. **Não há rota de escrita** da config: presets e
+  limiares mudam por `MG_DECISION_*` / `MG_DECISION_CONFIG_FILE` + reinício; a UI mostra o comando e não grava nada.
+- Honestidade: JEV continua o padrão; Laya/híbridos levam selo EXPERIMENTAL; números levam rótulo MEDIDO/ESTIMADO/NÃO MEDIDO
+  (`{value,label}` do backend; valor nulo ou sem rótulo => NÃO MEDIDO). "JEV real: não medido" sempre visível; o JEV da tabela
+  de avaliação é proxy léxico. Disponibilidade do JEV nunca é sondada (seria paga) => "Não sondado". Dispositivo e inferência
+  do Laya não são expostos pela API => "NÃO MEDIDO".
+- Estados KEEP/REVIEW/DROP/BLOCKED(=QUARANTINE)/FALLBACK/UNCERTAIN(=UNJUDGED): ícone + texto + `title` + texto para leitor de
+  tela; decisão desconhecida vira UNCERTAIN, nunca KEEP. Estados de página: loading/empty/error/offline/partial.
+- Modo iniciante (presets + health + métricas) vs "Modo avançado" (estratégias, política de fallback, overrides; preferência em
+  `localStorage`). Sidebar: item dentro do grupo recolhível "Avançado" (principal continua com 5 itens). Paleta Ctrl+K:
+  "Ir para Decision Engine"; atalho `Alt+Shift+6` (sem conflito).
+- Arquivos: `js/pages/decision.js` (página/abas), `decision-ui.js` (loja, badges, estados), `decision-eval.js` (Avaliação e
+  Histórico), `decision-data.js` (funções puras testáveis), `js/i18n-decision.js`, `css/pages/decision.css`.
+- Testes: `tests/test_frontend_decision_ui.py`. E2E manual (Playwright) igual ao da Memória: porta 8766, `ANAMNESIA_HOME` temporário.
+
+Testes: `tests/test_frontend_memory_ui.py`. E2E manual (Playwright) usado na validação: servidor em porta 8766 com
+`ANAMNESIA_HOME` temporário, nunca a porta 8000 nem os dados do usuário.

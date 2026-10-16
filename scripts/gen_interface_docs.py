@@ -24,6 +24,7 @@ MCP_VARIANTS = (
     ("padrão (`MG_MCP_TOOLSET=minimal`)", {"MG_MCP_TOOLSET": "minimal", "MG_MCP_SAVE": "0"}),
     ("`MG_MCP_TOOLSET=full`", {"MG_MCP_TOOLSET": "full", "MG_MCP_SAVE": "0"}),
     ("`MG_MCP_SAVE=1` (opt-in)", {"MG_MCP_TOOLSET": "minimal", "MG_MCP_SAVE": "1"}),
+    ("`MG_MCP_DECISION=1` (opt-in)", {"MG_MCP_TOOLSET": "minimal", "MG_MCP_SAVE": "0", "MG_MCP_DECISION": "1"}),
 )
 
 _MCP_PROBE = r"""

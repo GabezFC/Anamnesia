@@ -22,6 +22,7 @@ MANIFEST = {
     "memory_benchmark": {"scope": "compute", "risk": "medium", "enabled_by": "MG_MCP_TOOLSET=full"},
     "memory_save": {"scope": "write", "risk": "medium", "enabled_by": "MG_MCP_SAVE=1"},
     "memory_feedback": {"scope": "write", "risk": "low", "enabled_by": "MG_MCP_SAVE=1"},
+    "decision_status": {"scope": "read", "risk": "low", "enabled_by": "MG_MCP_DECISION=1"},
 }
 PROFILES = {"restricted": ("memory_search",), "readonly": tuple(k for k, v in MANIFEST.items() if v["scope"] == "read")}
 

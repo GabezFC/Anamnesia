@@ -105,21 +105,53 @@ def reset_tracker(new: HealthTracker | None = None) -> HealthTracker:
 
 
 # ------------------------------------------------------------------ probes (opt-in, no tokens)
-def probe_ollama(base_url: str = "http://localhost:11434", http_get: Callable | None = None) -> dict:
+_PROBE_CACHE: dict = {}
+PROBE_TTL_S = 10.0
+
+
+def probe_ollama(base_url: str = "http://localhost:11434", http_get: Callable | None = None,
+                 model: str | None = None) -> dict:
+    """ANAM-032 / AUD-093: real Ollama health, no prompt sent. `GET /api/tags` = installed models,
+    `GET /api/ps` = models loaded in memory now (docs/api.md). Reports `runtime_running` (server answered),
+    `installed`/`models`, `loaded_models` and, if `model` is given, `model_installed`/`model_loaded`.
+    A failing /api/ps (older server) leaves loaded_models None (unknown), never a guess. Result cached 10 s
+    per (url, model) unless `http_get` is injected (tests)."""
     if not _on(PROBE_FLAG):
         return {"skipped": f"{PROBE_FLAG}!=1"}
+    cache_key = (base_url, model)
+    use_cache = http_get is None
     if http_get is None:
+        hit = _PROBE_CACHE.get(cache_key)
+        if hit and time.monotonic() - hit[0] < PROBE_TTL_S:
+            return dict(hit[1])
         import httpx
         http_get = httpx.get
     t0 = time.perf_counter()
     try:
-        r = http_get(base_url.rstrip("/") + "/api/tags", timeout=3)
+        from app.services.egress import check_egress  # ANAM-005
+        check_egress(base_url, "health_probe_ollama")
+        root = base_url.rstrip("/")
+        r = http_get(root + "/api/tags", timeout=3)
         r.raise_for_status()
-        n = len(r.json().get("models", []))
-        return {"ok": True, "models": n, "latency_ms": round((time.perf_counter() - t0) * 1000, 1)}
+        installed = [m.get("name") for m in r.json().get("models", [])]
+        loaded = None
+        try:
+            ps = http_get(root + "/api/ps", timeout=3)
+            ps.raise_for_status()
+            loaded = [m.get("name") for m in ps.json().get("models", [])]
+        except Exception:  # noqa: BLE001 - /api/ps unavailable: unknown, not "nothing loaded"
+            loaded = None
+        out = {"ok": True, "runtime_running": True, "models": len(installed), "installed": installed,
+               "loaded_models": loaded, "latency_ms": round((time.perf_counter() - t0) * 1000, 1)}
+        if model:
+            out["model_installed"] = model in installed
+            out["model_loaded"] = None if loaded is None else model in loaded
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": type(exc).__name__,
-                "latency_ms": round((time.perf_counter() - t0) * 1000, 1)}
+        out = {"ok": False, "runtime_running": False, "error": type(exc).__name__,
+               "latency_ms": round((time.perf_counter() - t0) * 1000, 1)}
+    if use_cache:
+        _PROBE_CACHE[cache_key] = (time.monotonic(), dict(out))
+    return out
 
 
 def probe_cloud(adapter: Any) -> dict:

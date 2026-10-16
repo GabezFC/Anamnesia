@@ -152,10 +152,28 @@ def _m3_backfill_cost_origin(conn: sqlite3.Connection) -> None:
     migration_apply(conn)
 
 
+def _m4_context_sha256_and_source_index(conn: sqlite3.Connection) -> None:
+    """ANAM-006 (aditiva): persiste o hash do contexto e indexa candidates(source_file). Idempotente."""
+    existing = {r[1] for r in conn.execute("PRAGMA table_info(runs)")}
+    if "context_sha256" not in existing:
+        conn.execute("ALTER TABLE runs ADD COLUMN context_sha256 TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_candidates_source_file ON candidates(source_file)")
+
+
+def _m5_trace_id_index(conn: sqlite3.Connection) -> None:
+    """ANAM-012 (aditiva): trace_id vive em runs.metrics_json; indice de expressao para buscar runs por trace."""
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS runs_trace_id ON runs(json_extract(metrics_json, '$.trace_id'))")
+    except sqlite3.Error:        # SQLite sem JSON1: sem indice, a consulta so fica mais lenta
+        pass
+
+
 BENCHMARK_MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline_schema", _m1_baseline),
     Migration(2, "drop_redundant_indexes", _m2_drop_redundant_indexes),
     Migration(3, "backfill_cost_origin", _m3_backfill_cost_origin),
+    Migration(4, "context_sha256_and_source_index", _m4_context_sha256_and_source_index),
+    Migration(5, "trace_id_index", _m5_trace_id_index),
 )
 
 

@@ -37,6 +37,8 @@ DESIGN RULES
 """
 from __future__ import annotations
 
+import math
+import os
 import re
 import threading
 import time
@@ -45,6 +47,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from config.optimizer import OptimizerConfig
+from app.gateway.vault_manifest import (diff_manifests, entry_is_affected, fold, is_small, read_touched,
+                                        reindex_incremental, scan_manifest)
 from app.schemas.models import Candidate
 from app.services.injection_screen import screen
 from app.services.near_dup import cluster_near_duplicates
@@ -72,6 +76,73 @@ class Plan:
     verdict_size_estimate: int | None = None
 
 
+def hotset_enabled() -> bool:
+    """ANAM-037: MG_HOTSET flag (see docs/bench/anam-036-037.md for the default and why)."""
+    return os.environ.get("MG_HOTSET", HOTSET_DEFAULT).strip().lower() in ("1", "true", "yes", "on")
+
+
+HOTSET_DEFAULT = "0"
+
+
+class HotSet:
+    """ANAM-037: hit counter with exponential decay, per canonical query and per note.
+
+    score(t) = value * 0.5 ** ((t - last) / half_life_s): a thing hit 10 times a week ago weighs less
+    than one hit twice a minute ago. In-process, bounded (`max_items`), thread-safe, zero I/O.
+    Used for (a) protecting hot cache entries from LRU eviction and (b) pre-warming the top-N
+    queries/notes after a vault change wipes the result cache. Clock is injectable for tests.
+    """
+
+    def __init__(self, half_life_s: float = 3600.0, top_n: int = 16, max_items: int = 2048, clock=time.time):
+        self.half_life_s = max(1.0, float(half_life_s))
+        self.top_n, self.max_items, self._clock = max(1, int(top_n)), max(8, int(max_items)), clock
+        self._q: dict[str, list] = {}      # canonical -> [value, last_ts, replay_args]
+        self._n: dict[str, list] = {}      # note file -> [value, last_ts]
+        self._lock = threading.Lock()
+
+    def _decayed(self, value: float, last: float, now: float) -> float:
+        return value * math.pow(0.5, max(0.0, now - last) / self.half_life_s)
+
+    def _bump(self, d: dict, key: str, now: float, extra=None) -> None:
+        cur = d.get(key)
+        val = (self._decayed(cur[0], cur[1], now) if cur else 0.0) + 1.0
+        keep = [extra] if extra is not None else (cur[2:] if cur else [])
+        d[key] = [val, now] + keep
+        if len(d) > self.max_items:   # drop the coldest 10%
+            cold = sorted(d, key=lambda k: self._decayed(d[k][0], d[k][1], now))[: max(1, len(d) // 10)]
+            for k in cold:
+                d.pop(k, None)
+
+    def touch_query(self, canonical: str, replay: tuple | None = None) -> None:
+        with self._lock:
+            self._bump(self._q, canonical, self._clock(), replay)
+
+    def touch_notes(self, files) -> None:
+        now = self._clock()
+        with self._lock:
+            for f in set(files):
+                self._bump(self._n, f, now)
+
+    def query_score(self, canonical: str) -> float:
+        with self._lock:
+            cur = self._q.get(canonical)
+            return self._decayed(cur[0], cur[1], self._clock()) if cur else 0.0
+
+    def top_queries(self, n: int | None = None) -> list[tuple[str, float, tuple | None]]:
+        now = self._clock()
+        with self._lock:
+            rows = [(k, self._decayed(v[0], v[1], now), v[2] if len(v) > 2 else None) for k, v in self._q.items()]
+        rows.sort(key=lambda r: -r[1])
+        return rows[: n or self.top_n]
+
+    def top_notes(self, n: int | None = None) -> list[tuple[str, float]]:
+        now = self._clock()
+        with self._lock:
+            rows = [(k, self._decayed(v[0], v[1], now)) for k, v in self._n.items()]
+        rows.sort(key=lambda r: -r[1])
+        return rows[: n or self.top_n]
+
+
 class ResultCache:
     """Small thread-safe LRU with TTL. In-process on purpose: the Gateway is one long-lived
     process per consumer (MCP stdio / uvicorn), and a persistent cache would have to solve vault
@@ -83,6 +154,9 @@ class ResultCache:
         self._lock = threading.Lock()
         self.hits = self.misses = 0
         self.stale_evictions = 0
+        self.selective_evictions = 0
+        self.score_fn = None   # ANAM-037: key -> hotness; None = plain LRU
+        self.protected_evictions = 0
 
     def get(self, key: tuple):
         with self._lock:
@@ -101,11 +175,27 @@ class ResultCache:
             self._d[key] = (time.time(), value)
             self._d.move_to_end(key)
             while len(self._d) > self.size:
-                self._d.popitem(last=False)
+                if self.score_fn is None:
+                    self._d.popitem(last=False)
+                    continue
+                # ANAM-037: among the 4 least-recently-used entries evict the coldest (ties -> oldest)
+                tail = list(self._d)[:4]
+                victim = min(tail, key=lambda k: self.score_fn(k))
+                self.protected_evictions += victim != tail[0]
+                self._d.pop(victim, None)
 
     def clear(self) -> None:
         with self._lock:
             self._d.clear()
+
+    def invalidate_where(self, pred) -> tuple[int, int]:
+        """ANAM-018: drop only the entries for which `pred(key, value)` is True -> (dropped, kept)."""
+        with self._lock:
+            doomed = [k for k, (_, v) in self._d.items() if pred(k, v)]
+            for k in doomed:
+                self._d.pop(k, None)
+            self.selective_evictions += len(doomed)
+            return len(doomed), len(self._d)
 
     def invalidate(self, key: tuple) -> None:
         """Drop one entry found stale on a hit; the earlier hit is reclassified as a miss."""
@@ -119,6 +209,7 @@ class ResultCache:
         total = self.hits + self.misses
         return {"entries": len(self._d), "hits": self.hits, "misses": self.misses,
                 "stale_evictions": self.stale_evictions,
+                "selective_evictions": self.selective_evictions,
                 "hit_rate": round(self.hits / total, 4) if total else None}
 
 
@@ -133,11 +224,53 @@ class MemoryOptimizer:
         self.cfg = cfg or OptimizerConfig()
         self.cache = ResultCache(self.cfg.cache_size, self.cfg.cache_ttl_s)
         self._vault_fp: tuple | None = None
+        self._manifest: dict | None = None   # ANAM-018: {rel: (mtime_ns, size)} the index was built from
+        self._cache_epoch = 0                # bumped only when the cache is wiped wholesale
         self._last_check = 0.0
         self._fp_lock = threading.Lock()
         self.index_rebuilds = 0
         self._prov: ProvenanceIndex | None = None
         self._prov_fp: tuple | None = None
+        # ANAM-037: decaying hit counters (flag MG_HOTSET); None = feature off, zero overhead.
+        self.hotset: HotSet | None = None
+        self._prewarming = threading.local()
+        self.prewarmed = 0
+        if hotset_enabled():
+            self.enable_hotset()
+
+    def enable_hotset(self, hotset: "HotSet | None" = None) -> HotSet:
+        self.hotset = hotset or HotSet(float(os.environ.get("MG_HOTSET_HALFLIFE_S", "3600") or 3600),
+                                       int(os.environ.get("MG_HOTSET_TOPN", "16") or 16))
+        self.cache.score_fn = lambda key: self.hotset.query_score(key[1]) if len(key) > 1 else 0.0
+        return self.hotset
+
+    def prewarm(self, gw) -> dict:
+        """ANAM-037: re-run the top-N hot queries (cache misses only) and touch the top-N hot notes so
+        their bytes sit in the OS page cache for the guard re-hash. Never raises."""
+        hs = self.hotset
+        if hs is None or getattr(self._prewarming, "on", False):
+            return {}
+        self._prewarming.on = True
+        done = read = 0
+        try:
+            for _canon, _score, replay in hs.top_queries():
+                if replay is None:
+                    continue
+                try:
+                    gw.search(replay[0], replay[1], replay[2], persist=False)
+                    done += 1
+                except Exception:  # noqa: BLE001 -- warming is best effort
+                    pass
+            for f, _s in hs.top_notes():
+                try:
+                    gw.vault.read(f)
+                    read += 1
+                except Exception:  # noqa: BLE001
+                    pass
+        finally:
+            self._prewarming.on = False
+        self.prewarmed += done
+        return {"hotset_prewarm_queries": done, "hotset_prewarm_notes": read}
 
     # -- provenance index --------------------------------------------------------------------------
     def provenance_index(self, gw) -> ProvenanceIndex | None:
@@ -180,28 +313,53 @@ class MemoryOptimizer:
             return {"vault_fingerprint_checked": False}
         with self._fp_lock:
             self._last_check = now
-            fp = gw.vault.fingerprint()
+            man = scan_manifest(gw.vault)           # ANAM-018: one scandir pass, no per-file stat
+            fp = man.fp if man is not None else gw.vault.fingerprint()
             if self._vault_fp is None:
-                self._vault_fp = fp
+                self._vault_fp, self._manifest = fp, (man.files if man else None)
                 return {"vault_fingerprint_checked": True, "index_rebuilt": False}
             if fp == self._vault_fp:
+                if self._manifest is None and man is not None:
+                    self._manifest = man.files
                 return {"vault_fingerprint_checked": True, "index_rebuilt": False}
             t0 = time.perf_counter()
-            gw.baseline.build()
-            self._vault_fp = fp
-            self.cache.clear()   # every cached answer may now be stale
+            m = self._apply_change(gw, man)
+            self._vault_fp, self._manifest = fp, (man.files if man else None)
             self.index_rebuilds += 1
-            return {"vault_fingerprint_checked": True, "index_rebuilt": True,
-                    "index_rebuild_ms": round((time.perf_counter() - t0) * 1000, 1)}
+            m.update({"vault_fingerprint_checked": True, "index_rebuilt": True,
+                      "index_rebuild_ms": round((time.perf_counter() - t0) * 1000, 1)})
+        if self.hotset is not None and not getattr(self._prewarming, "on", False):
+            m.update(self.prewarm(gw))   # outside _fp_lock; re-entrant searches see a settled fingerprint
+        return m
+
+    def _apply_change(self, gw, man) -> dict:
+        """ANAM-018: per-file reindex + selective cache invalidation when the diff is small and
+        provable; otherwise the original full rebuild + full cache clear (the safe path)."""
+        old = self._manifest
+        if man is not None and old is not None:
+            diff = diff_manifests(old, man.files)
+            if is_small(diff, len(man.files)):
+                texts = read_touched(gw.vault, diff.touched)
+                if texts is not None and reindex_incremental(gw.baseline, diff, texts, len(man.files)):
+                    folded = {r: fold(t) for r, t in texts.items()}
+                    dropped, kept = self.cache.invalidate_where(
+                        lambda k, v: entry_is_affected(k, v, diff, folded))
+                    return {"index_incremental": True, "index_files_touched": diff.size(),
+                            "cache_dropped": dropped, "cache_kept": kept}
+        gw.baseline.build()
+        self.cache.clear()   # every cached answer may now be stale
+        self._cache_epoch += 1
+        return {"index_incremental": False}
 
     @property
     def vault_version(self) -> tuple | None:
         return self._vault_fp
 
-    def mark_built(self, fp: tuple) -> None:
-        """Record the vault fingerprint an index was just built from."""
+    def mark_built(self, fp: tuple, manifest: dict | None = None) -> None:
+        """Record the vault fingerprint an index was just built from (and, when known, its manifest)."""
         with self._fp_lock:
             self._vault_fp = fp
+            self._manifest = manifest
             self._last_check = time.time()
 
     # -- analysis + routing --------------------------------------------------------------------
@@ -248,8 +406,12 @@ class MemoryOptimizer:
         canon = plan.profile.canonical if plan.profile else None
         if not canon:
             return None
+        if self.hotset is not None and not getattr(self._prewarming, "on", False):
+            replay = ((plan.profile.raw, plan.requested, int(max_results))
+                      if (scope or "global") == "global" and not jev_overrides and not budget else None)
+            self.hotset.touch_query(canon, replay)
         return (self.cfg.version, canon, plan.pipeline, int(max_results), scope or "global",
-                budget or 0, tuple(sorted((jev_overrides or {}).items())), self._vault_fp) + extra
+                budget or 0, tuple(sorted((jev_overrides or {}).items())), self._cache_epoch) + extra
 
     # -- ANA-021: effective-configuration digest ------------------------------------------------
     def config_digest(self, gw, plan: Plan) -> str:
@@ -374,6 +536,8 @@ class MemoryOptimizer:
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"injection_flag:{type(exc).__name__}")
 
+        if self.hotset is not None and not getattr(self._prewarming, "on", False):
+            self.hotset.touch_notes(c.source_file for c in cands if getattr(c, "source_file", None))
         m["opt_candidates_in"] = before
         m["opt_candidates_out"] = len(cands)
         m["opt_snippet_tokens_removed"] = tokens_before - sum(c.token_estimate or 0 for c in cands)

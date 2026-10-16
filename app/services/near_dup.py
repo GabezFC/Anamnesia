@@ -72,11 +72,15 @@ for.
 from __future__ import annotations
 
 import difflib
+import hashlib
 import re
+import zlib
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 from app.schemas.models import Candidate
 from app.services.query_fp import fold
+from config import env_bool
 
 SIMHASH_BITS = 64
 # Pairs compared with SequenceMatcher are truncated to this many tokens: the comparison is
@@ -97,14 +101,19 @@ def shingles(text: str, k: int = 4) -> set[str]:
     return {" ".join(ts[i:i + k]) for i in range(len(ts) - k + 1)}
 
 
+@lru_cache(maxsize=65536)
+def _term_vector(term: str, bits: int) -> tuple[int, ...]:
+    """+1/-1 por bit do hash estável do termo (blake2b; o hash() embutido é salgado por processo)."""
+    h = int.from_bytes(hashlib.blake2b(term.encode("utf-8"), digest_size=bits // 8).digest(), "big")
+    return tuple(1 if (h >> i) & 1 else -1 for i in range(bits))
+
+
 def simhash(text: str, bits: int = SIMHASH_BITS) -> int:
     """Charikar SimHash over token frequencies. Pure stdlib, stable across runs and machines.
 
     Python's builtin hash() is salted per process and must never be used here: the value ends up in
     cluster identity and (indirectly) in measurements, so it has to be reproducible.
     """
-    import hashlib
-
     ts = _tokens(text)
     if not ts:
         return 0
@@ -113,9 +122,7 @@ def simhash(text: str, bits: int = SIMHASH_BITS) -> int:
     for t in ts:
         freq[t] = freq.get(t, 0) + 1
     for term, w in freq.items():
-        h = int.from_bytes(hashlib.blake2b(term.encode("utf-8"), digest_size=bits // 8).digest(), "big")
-        for i in range(bits):
-            weights[i] += w if (h >> i) & 1 else -w
+        weights = [x + w * v for x, v in zip(weights, _term_vector(term, bits))]
     out = 0
     for i in range(bits):
         if weights[i] > 0:
@@ -176,12 +183,89 @@ class _UnionFind:
             self.p[rb] = ra
 
 
+# ANAM-017 (AUD-022): geração de pares por MinHash de partição única (OPH) sobre bigramas de palavras, em LSH
+# com bandas de _LSH_ROWS bins. O SimHash de 64 bits + gate de Jaccard em 4-gramas só enxerga edições <= ~5%
+# (detecção 55% a 8%, 10% a 12%, 0% a 20%); o OPH recupera os pares que o gerador antigo perdia.
+# Custo O(shingles) por documento (um crc32 por bigrama), sem as 64 permutações do MinHash clássico.
+_OPH_BINS = 32
+_LSH_ROWS = 2
+_LSH_MIN_EST = 0.15          # fração mínima de bins iguais (estima Jaccard de bigramas) para pagar o SequenceMatcher
+_LSH_MAX_BUCKET = 64
+NEAR_DUP_LSH_DEFAULT = True
+
+
+def minhash_signature(text: str) -> list[int | None]:
+    """One-permutation MinHash de bigramas: por bin (crc32 % bins) o menor valor; None = bin vazio."""
+    ts = _tokens(text)
+    bins: list[int | None] = [None] * _OPH_BINS
+    for a, b in set(zip(ts, ts[1:])):
+        h = zlib.crc32(f"{a} {b}".encode("utf-8"))
+        k, v = h % _OPH_BINS, h // _OPH_BINS
+        cur = bins[k]
+        if cur is None or v < cur:
+            bins[k] = v
+    return bins
+
+
+def _lsh_estimate(a: list[int | None], b: list[int | None]) -> float:
+    both = [(x, y) for x, y in zip(a, b) if x is not None and y is not None]
+    return sum(1 for x, y in both if x == y) / len(both) if both else 0.0
+
+
+def _bucket_pairs(buckets: dict) -> set[tuple[int, int]]:
+    out: set[tuple[int, int]] = set()
+    for idxs in buckets.values():
+        if len(idxs) < 2 or len(idxs) > _LSH_MAX_BUCKET:   # a huge bucket means the band carries no signal
+            continue
+        for a_pos in range(len(idxs)):
+            for b_pos in range(a_pos + 1, len(idxs)):
+                out.add((idxs[a_pos], idxs[b_pos]))        # idxs ascending => i < j
+    return out
+
+
+def _lsh_pairs(msigs: list[list[int | None]]) -> set[tuple[int, int]]:
+    buckets: dict[tuple, list[int]] = {}
+    for i, sig in enumerate(msigs):
+        for band in range(_OPH_BINS // _LSH_ROWS):
+            rows = sig[band * _LSH_ROWS:(band + 1) * _LSH_ROWS]
+            if None in rows:
+                continue
+            buckets.setdefault((band, *rows), []).append(i)
+    return _bucket_pairs(buckets)
+
+
+def _simhash_pairs(sigs: list[int], bands: int) -> set[tuple[int, int]]:
+    """Banded bucketing: split the 64-bit signature into `bands` chunks; only candidates sharing a chunk are
+    compared. Two signatures within `hamming_max` bits differ in at most hamming_max positions, so with enough
+    bands they almost certainly collide in at least one."""
+    width = max(1, SIMHASH_BITS // max(1, bands))
+    buckets: dict[tuple[int, int], list[int]] = {}
+    for i, sig in enumerate(sigs):
+        for b in range(bands):
+            chunk = (sig >> (b * width)) & ((1 << width) - 1)
+            buckets.setdefault((b, chunk), []).append(i)
+    return _bucket_pairs(buckets)
+
+
+def _confirm(i: int, j: int, texts: list[str], threshold: float,
+             confirmed: dict[tuple[int, int], float], uf: "_UnionFind") -> None:
+    sim = similarity(texts[i], texts[j])
+    if sim >= threshold:
+        confirmed[(i, j)] = sim
+        uf.union(i, j)
+
+
 def cluster_near_duplicates(cands: list[Candidate], threshold: float = 0.92,
-                            hamming_max: int = 12, bands: int = 8) -> tuple[list[Cluster], dict]:
+                            hamming_max: int = 12, bands: int = 8,
+                            lsh: bool | None = None) -> tuple[list[Cluster], dict]:
     """Group near-identical candidates. `cands` MUST already be in best-first order.
 
     Returns (clusters_in_input_order, metrics). The representative of each cluster is its
     best-ranked member, so clustering can never demote a candidate the ranker preferred.
+
+    `lsh` (ANAM-017): adds MinHash/LSH candidate pairs to the SimHash ones. The arbiter is still
+    `similarity() >= threshold`, so it only recovers duplicates the old generator missed; it never loosens
+    what counts as a duplicate. None -> env MG_NEAR_DUP_LSH.
     """
     n = len(cands)
     if n <= 1:
@@ -190,45 +274,27 @@ def cluster_near_duplicates(cands: list[Candidate], threshold: float = 0.92,
             "dedup_near_collapsed": 0, "dedup_near_pairs_compared": 0,
         }
 
-    sigs = [simhash(c.snippet or "") for c in cands]
-    shs = [shingles(c.snippet or "") for c in cands]
+    use_lsh = env_bool("MG_NEAR_DUP_LSH", NEAR_DUP_LSH_DEFAULT) if lsh is None else lsh
     texts = [c.snippet or "" for c in cands]
-
-    # Banded bucketing: split the 64-bit signature into `bands` chunks; only candidates sharing a
-    # chunk are compared. Two signatures within `hamming_max` bits differ in at most hamming_max
-    # positions, so with enough bands they almost certainly collide in at least one.
-    width = max(1, SIMHASH_BITS // max(1, bands))
-    buckets: dict[tuple[int, int], list[int]] = {}
-    for i, sig in enumerate(sigs):
-        for b in range(bands):
-            chunk = (sig >> (b * width)) & ((1 << width) - 1)
-            buckets.setdefault((b, chunk), []).append(i)
+    sigs = [simhash(t) for t in texts]
+    shs = [shingles(t) for t in texts]
+    sim_pairs = _simhash_pairs(sigs, bands)
+    msigs = [minhash_signature(t) for t in texts] if use_lsh else []
+    lsh_pairs = _lsh_pairs(msigs) if use_lsh else set()
 
     uf = _UnionFind(n)
-    pairs_checked: set[tuple[int, int]] = set()
     confirmed: dict[tuple[int, int], float] = {}
     # Jaccard pre-gate: deliberately far below `threshold`. Its only job is to reject pairs that are
     # nowhere near duplicates before paying for the sequence comparison; it must never be the reason
     # a real duplicate is missed, which is exactly what a tight Jaccard gate would cause.
     jaccard_gate = max(0.2, threshold - 0.35)
-    for idxs in buckets.values():
-        if len(idxs) < 2 or len(idxs) > 64:   # a huge bucket means the band carries no signal
-            continue
-        for a_pos in range(len(idxs)):
-            for b_pos in range(a_pos + 1, len(idxs)):
-                i, j = idxs[a_pos], idxs[b_pos]
-                key = (i, j) if i < j else (j, i)
-                if key in pairs_checked:
-                    continue
-                pairs_checked.add(key)
-                if hamming(sigs[i], sigs[j]) > hamming_max:
-                    continue
-                if jaccard(shs[i], shs[j]) < jaccard_gate:
-                    continue
-                sim = similarity(texts[i], texts[j])
-                if sim >= threshold:
-                    confirmed[key] = sim
-                    uf.union(i, j)
+    for i, j in sim_pairs:
+        if hamming(sigs[i], sigs[j]) <= hamming_max and jaccard(shs[i], shs[j]) >= jaccard_gate:
+            _confirm(i, j, texts, threshold, confirmed, uf)
+    for i, j in lsh_pairs - {k for k in confirmed}:
+        if _lsh_estimate(msigs[i], msigs[j]) >= _LSH_MIN_EST:
+            _confirm(i, j, texts, threshold, confirmed, uf)
+    pairs_compared = len(sim_pairs | lsh_pairs)
 
     groups: dict[int, list[int]] = {}
     for i in range(n):
@@ -252,7 +318,7 @@ def cluster_near_duplicates(cands: list[Candidate], threshold: float = 0.92,
         "dedup_near_in": n,
         "dedup_near_clusters": len(clusters),
         "dedup_near_collapsed": collapsed,
-        "dedup_near_pairs_compared": len(pairs_checked),
+        "dedup_near_pairs_compared": pairs_compared,
         "dedup_near_threshold": threshold,
         "dedup_near_tokens_saved_estimate": sum(
             m.token_estimate or 0 for cl in clusters for m in cl.members),

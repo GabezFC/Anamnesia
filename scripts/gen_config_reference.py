@@ -49,6 +49,7 @@ SYSTEM = {
     "GIT_TERMINAL_PROMPT": "definida pelo Gateway ao chamar git",
     "PYTHONIOENCODING": "definida pelo Gateway ao lançar subprocessos (UTF-8)",
     "PYTHONUTF8": "definida pelo Gateway ao lançar subprocessos (UTF-8)",
+    "PYTEST_CURRENT_TEST": "definida pelo pytest; o Gateway só a lê para recusar rede real em testes",
     "SHELL": "shell do usuário (Unix), usado para escolher o shell dos terminais",
     "XDG_DATA_HOME": "base XDG do diretório de dados no Linux",
 }

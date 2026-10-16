@@ -19,7 +19,10 @@
   gap: var(--space-5);
 }
 
+.config-tab-item:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; border-radius: var(--radius-sm); }
 .config-tab-item {
+  background: none;
+  border-top: 0; border-left: 0; border-right: 0;
   padding: 12px 6px;
   font-size: var(--text-sm);
   font-weight: var(--font-medium);

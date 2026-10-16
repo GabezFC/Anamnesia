@@ -18,6 +18,11 @@ import time
 import uuid
 from pathlib import Path
 
+# ANAM-020: prefixo estável + sufixo dinâmico, memória como DADO, snapshot de sessão congelado.
+from app.services.context_prompt import (  # noqa: F401 - re-exportado como API pública do pack
+    CachePrompt, build_cache_aware_prompt, freeze_snapshot, place_lost_in_middle, prefix_fingerprint,
+    retrieved_from_result, snapshot_drift, wrap_memory)
+
 PACK_VERSION = 1
 DEFAULT_TTL_S = 24 * 3600
 _ID_RE = re.compile(r"^[0-9a-f]{12}$")
@@ -63,8 +68,16 @@ def _sha(text: str) -> str:
 
 
 def build_pack(gateway, result, *, scope: str | None = None, token_budget: int | None = None,
-               ttl_s: int = DEFAULT_TTL_S, policy: dict | None = None) -> dict:
-    """Build (not save) the pack for a MemoryResult. `sources[*].sha256` = sha256 of the note text now."""
+               ttl_s: int = DEFAULT_TTL_S, policy: dict | None = None, snapshot: dict | None = None,
+               freeze: list[dict] | None = None, session_id: str | None = None) -> dict:
+    """Build (not save) the pack for a MemoryResult. `sources[*].sha256` = sha256 of the note text now.
+
+    ANAM-020: `freeze=[{path,text}]` (+`session_id`) congela o hotset num snapshot imutável; `snapshot=`
+    reutiliza um já congelado. O pack registra `snapshot_id`, `prefix_sha256` e `cache_breakpoint_index`
+    (índice do último bloco estável em `build_cache_aware_prompt`); o conteúdo do snapshot NÃO entra no
+    pack (continua sem guardar texto de nota)."""
+    if snapshot is None and freeze is not None:
+        snapshot = freeze_snapshot(freeze, session_id=session_id or "")
     vault = gateway.vault
     by_file = {}
     for c in getattr(result, "candidates", None) or []:
@@ -86,13 +99,18 @@ def build_pack(gateway, result, *, scope: str | None = None, token_budget: int |
                         "historical": bool(meta.get("historical")), "injection_flag": bool(meta.get("injection_flag")),
                         "tokens": s.tokens, "why": s.why or (explain_candidate(c) if c is not None else "")})
     budget = int(token_budget or getattr(getattr(gateway, "bench_cfg", None), "context_budget", 0) or 0) or None
-    return {
+    pack = {
         "pack_version": PACK_VERSION, "id": uuid.uuid4().hex[:12], "run_id": result.run_id, "query": result.query,
         "scope": scope, "pipeline": result.pipeline, "sources": sources,
         "token_budget": budget, "context_tokens": ctx_tokens,
         "policy": policy or {"optimizer": getattr(gateway.optimizer.cfg, "provenance_mode", None)},
         "created_at": time.time(), "ttl_s": int(ttl_s),
     }
+    if snapshot is not None:
+        pack.update({"snapshot_id": snapshot["id"], "prefix_sha256": snapshot["prefix_sha256"],
+                     "cache_breakpoint_index": 1 if snapshot["hot_text"] else 0,
+                     "snapshot_hotset": sorted(snapshot["hotset_sha"])})
+    return pack
 
 
 def save_pack(pack: dict) -> str:

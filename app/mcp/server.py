@@ -9,6 +9,7 @@ An MCP client re-sends every tool schema on EVERY model turn, and pays for every
 response. Measured: the 7 tool schemas cost ~743 tokens per turn, and `sources` + `metrics` were ~28%
 of each memory_search response while repeating what the <note source=...> blocks already say.
 
+  MG_MCP_DECISION=1 (opt-in, default 0) -> adds the read-only `decision_status` tool (Decision Engine, ANAM-043).
   MG_MCP_TOOLSET=minimal (default)  -> only `memory_search` (every pipeline still reachable through
                                        its `pipeline` argument). `full` restores all 7 tools.
   MG_MCP_RESPONSE=compact (default) -> context + run_id + 4 cost metrics. `full` restores sources and
@@ -33,7 +34,7 @@ from pydantic import ConfigDict  # noqa: E402
 
 from app.benchmark.runner import BenchmarkRunner, load_questions  # noqa: E402
 from app.benchmark.statistics import aggregate_stats  # noqa: E402
-from app.schemas.models import PIPELINES  # noqa: E402
+from app.schemas.models import DEFAULT_PIPELINES  # noqa: E402
 from app.services.offline import install_if_enabled  # noqa: E402
 from config import env_str  # noqa: E402
 
@@ -76,7 +77,7 @@ server = MCPServer(
     version="0.2.0",
 )
 _gateway = None
-PipelineT = Literal[("auto",) + PIPELINES]
+PipelineT = Literal[("auto",) + DEFAULT_PIPELINES]
 COMPACT_METRICS = ("pipeline", "context_tokens", "total_tokens_spent", "total_latency_ms",
                    "result_cache_hit", "error")
 
@@ -85,7 +86,7 @@ def gateway():
     global _gateway
     if _gateway is None:
         from app.gateway.memory_gateway import MemoryGateway
-        _gateway = MemoryGateway()
+        _gateway = MemoryGateway(async_persist=True)    # ANAM-019: flushed by atexit/close()
         from app.memory_store.index import attach_saved_context
         attach_saved_context(_gateway)  # no-op while data/saved_context is empty
         _gateway.warm()
@@ -137,9 +138,16 @@ def gate_save_project(project: str | None) -> tuple[str | None, str | None, dict
     return None, f"memory_save recusado: project deve ser o escopo desta sessão ({own})", {}
 
 
-def _search(query: str, pipeline: str, max_results: int, scope: str | None = None,
-            response: str | None = None, client: str | None = None, mode: str = "context",
-            budget: int | None = None, pack: bool = False) -> dict:
+def _search(*args, **kwargs) -> dict:
+    """ANAM-012: one trace_id per MCP tool call (search, answer/delegate model call, cost) via request_scope."""
+    from app.core.request_context import request_scope
+    with request_scope():
+        return _search_traced(*args, **kwargs)
+
+
+def _search_traced(query: str, pipeline: str, max_results: int, scope: str | None = None,
+                   response: str | None = None, client: str | None = None, mode: str = "context",
+                   budget: int | None = None, pack: bool = False) -> dict:
     max_results = max(1, min(int(max_results), 20))
     scope = enforce_scope(scope)
     if budget is not None:  # ANA-151: first-class context budget, same bounds as the REST API
@@ -240,6 +248,19 @@ if TOOLSET == "full":
     def memory_stats() -> dict:
         """Estatísticas agregadas dos benchmarks (latência, tokens, custo, falsos negativos) por pipeline/consumidor."""
         return aggregate_stats(gateway().db)
+
+
+DECISION_ENABLED = env_str("MG_MCP_DECISION", "0").strip().lower() in ("1", "true", "yes", "on")
+
+if DECISION_ENABLED:
+    # OPT-IN (default OFF; uma tool a mais no schema de todo turno): estado do Decision Engine, READ-ONLY.
+    # Não decide, não chama JEV/Laya, não devolve texto: só config efetiva, saúde e medições rotuladas.
+    @server.tool(annotations=READ_ONLY)
+    def decision_status() -> dict:
+        """Estado do Anamnésia Decision Engine: provider ativo (padrão JEV-only), saúde de Laya/JEV, política de
+        fallback, cache e medições com rótulo MEASURED/ESTIMATED/UNKNOWN. Somente leitura."""
+        from app.decision import get_engine
+        return get_engine().status()
 
 
 SAVE_ENABLED = env_str("MG_MCP_SAVE", "0").strip().lower() in ("1", "true", "yes", "on")

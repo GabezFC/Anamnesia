@@ -15,6 +15,7 @@ import { gatewayState } from '../live.js';
 import { call, getSettings, putSettings, costBudget, costByRole, isUnavailable, fmtUsd } from '../anamnesia-api.js';
 import { skeletonCard, loadingBlock } from '../components/skeleton.js';
 import { emptyState } from '../components/empty-state.js';
+import { handleTablistKey, tabId, panelId } from '../components/tabs.js';
 import { renderKeyRows, handleKeyAction, refreshKeyStatus } from './connections.js';
 
 /* ------------------------------------------------------------------ helpers puros (testáveis) */
@@ -292,12 +293,14 @@ export function render() {
         </div>
       </div>
 
-      <nav class="config-tabs-nav" role="tablist">
+      <nav class="config-tabs-nav" role="tablist" aria-label="${esc(I18N.a11y.configTabs)}" data-bind="config-tablist">
         ${tabs.map(([id, label]) => `
-          <button class="config-tab-item ${activeTab === id ? 'is-active' : ''}" role="tab" aria-selected="${activeTab === id}" data-action="switch-config-tab" data-tab="${id}">${label}</button>`).join('')}
+          <button type="button" class="config-tab-item ${activeTab === id ? 'is-active' : ''}" role="tab" id="${tabId('config', id)}" aria-selected="${activeTab === id}" aria-controls="${panelId('config')}" tabindex="${activeTab === id ? '0' : '-1'}" data-action="switch-config-tab" data-tab="${id}">${label}</button>`).join('')}
       </nav>
 
-      ${body(t)}
+      <div role="tabpanel" id="${panelId('config')}" aria-labelledby="${tabId('config', activeTab)}" tabindex="0">
+        ${body(t)}
+      </div>
     </div>`;
 }
 
@@ -514,9 +517,9 @@ function renderGatewayTab(t) {
       ${sectionHead(t.gwTitle, t.gwDesc)}
 
       <div class="input-group">
-        <label class="input-label">${t.gatewayVaultLabel}</label>
+        <label class="input-label" for="cfg-vault-path">${t.gatewayVaultLabel}</label>
         <div class="input-control">
-          <input type="text" value="${esc(gatewayConfig.vaultPath)}" data-bind="vault-path-input" />
+          <input id="cfg-vault-path" type="text" value="${esc(gatewayConfig.vaultPath)}" data-bind="vault-path-input" />
         </div>
         <div class="vault-scaffold-row">
           <button class="btn btn-secondary" data-action="scaffold-vault">${t.vaultScaffoldBtn}</button>
@@ -525,9 +528,9 @@ function renderGatewayTab(t) {
       </div>
 
       <div class="input-group">
-        <label class="input-label">${t.gatewayModelKeyLabel}</label>
+        <label class="input-label" for="cfg-model-key">${t.gatewayModelKeyLabel}</label>
         <div class="input-control">
-          <input type="password" value="" readonly autocomplete="new-password" placeholder="${esc(gatewayConfig.modelKey || t.gwNoKey)}" />
+          <input id="cfg-model-key" type="password" value="" readonly autocomplete="new-password" placeholder="${esc(gatewayConfig.modelKey || t.gwNoKey)}" />
         </div>
       </div>
 
@@ -599,6 +602,19 @@ async function saveGateway(root) {
   }, { okMessage: I18N.config.gwSaved });
 }
 
+/** Troca a aba ativa (clique ou setas) e dispara o refresh de dados da aba; `focus` devolve o foco à aba. */
+function switchConfigTab(root, id, { focus = false } = {}) {
+  if (!id) return;
+  activeTab = id;
+  inlineError = '';
+  const repaint = () => paint(root);
+  repaint();
+  if (focus) root.querySelector(`#${tabId('config', id)}`)?.focus();
+  if (activeTab === 'economy') refreshByRole().then(() => activeTab === 'economy' && repaint());
+  if (activeTab === 'budget') refreshBudget().then(() => activeTab === 'budget' && repaint());
+  if (activeTab === 'keys') refreshKeyStatus().then(() => activeTab === 'keys' && repaint());
+}
+
 export function mount(root) {
   activeRoot = root;
   inlineError = '';
@@ -627,12 +643,7 @@ export function mount(root) {
     const repaint = () => paint(root);
 
     if (action === 'switch-config-tab') {
-      activeTab = target.getAttribute('data-tab');
-      inlineError = '';
-      repaint();
-      if (activeTab === 'economy') refreshByRole().then(() => activeTab === 'economy' && repaint());
-      if (activeTab === 'budget') refreshBudget().then(() => activeTab === 'budget' && repaint());
-      if (activeTab === 'keys') refreshKeyStatus().then(() => activeTab === 'keys' && repaint());
+      switchConfigTab(root, target.getAttribute('data-tab'));
     } else if (action === 'select-preset') {
       const id = target.getAttribute('data-preset-id');
       if (id !== selectedPresetId()) saveSettings(root, { subagent_preset: { name: id } }, { okMessage: I18N.config.presetChanged });
@@ -668,10 +679,16 @@ export function mount(root) {
     }
   };
 
+  const onKey = (e) => {
+    const list = e.target.closest && e.target.closest('[data-bind="config-tablist"]');
+    if (list) handleTablistKey(e, list, '[role="tab"]', (tab) => switchConfigTab(root, tab.getAttribute('data-tab'), { focus: true }));
+  };
   root.addEventListener('click', onClick);
+  root.addEventListener('keydown', onKey);
   root.addEventListener('change', onChange);
   root._configCleanup = () => {
     root.removeEventListener('click', onClick);
+    root.removeEventListener('keydown', onKey);
     root.removeEventListener('change', onChange);
     if (activeRoot === root) activeRoot = null;
   };

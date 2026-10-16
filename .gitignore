@@ -134,3 +134,11 @@ spikes/**/run*.log
 
 # private-vault derived artifact (found by the publication scan): keep local only
 docs/jev_snippet_check.json
+
+# ANAM-031: pesos de modelos locais nunca no Git
+data/local_ai/models/
+
+# Local-only: runtime embutido, material de design, clone de referencia do Colibri (173 GiB de modelo)
+/Python/
+/_studio/
+/Example Colibri/

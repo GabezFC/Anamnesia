@@ -33,6 +33,10 @@ class RoutingDecision:
     router_tokens: int = 0
     max_escalations: int = 0
     features: dict = field(default_factory=dict)            # audit: each feature value 0..1
+    # ANAM-033: private data -> only local (loopback) models; `allowed_models` is the permitted id set that
+    # escalation must stay inside (None = no privacy restriction).
+    private: bool = False
+    allowed_models: list | None = None
 
 
 def _sat(value: float, saturation: float) -> float:
@@ -107,8 +111,24 @@ def _level(value: float, cutoffs) -> int:
     return sum(1 for c in cutoffs if value >= c)
 
 
+def privacy_allowed(entry) -> bool:
+    """ANAM-033: may private data go to this registry entry? Only entries flagged `local` (loopback runtime:
+    ollama, vllm, colibri/openai-compat). Rented/remote servers (`local: false`) and hosted providers are out.
+    The adapter re-checks the real base_url (providers.ensure_private_safe): defence in depth."""
+    return bool(getattr(entry, "local", False)) and not getattr(entry, "planned", False)
+
+
+def _privacy_gate(models, reasons, private):
+    """ANAM-033: restrict `models` to local ones when `private`; returns (models, allowed_ids|None)."""
+    if not private:
+        return models, None
+    reasons.append("privacy_private")
+    models = [m for m in models if privacy_allowed(m)]
+    return models, [m.id for m in models]
+
+
 def route(query, context_tokens, task_kind, risk, registry, policy, available_providers=None,
-          vocab=None) -> RoutingDecision:
+          vocab=None, private: bool = False) -> RoutingDecision:
     reg_v = registry.version_hash() if registry is not None else ""
     pol_v = policy.version_hash()
     reasons: list[str] = []
@@ -116,7 +136,8 @@ def route(query, context_tokens, task_kind, risk, registry, policy, available_pr
 
     def miss(code: str, diff: float = 0.0, feats=None, verify="NONE") -> RoutingDecision:
         return RoutingDecision(None, None, None, verify, diff, reasons + [code], reg_v, pol_v,
-                               [], "unavailable", 0, policy.max_escalations, feats or {})
+                               [], "unavailable", 0, policy.max_escalations, feats or {},
+                               private=bool(private), allowed_models=[] if private else None)
 
     if not policy.enabled:
         return miss("routing_disabled")
@@ -138,6 +159,10 @@ def route(query, context_tokens, task_kind, risk, registry, policy, available_pr
 
     models = [] if registry is None else registry.eligible(
         capabilities=caps, available_providers=available_providers)
+    models, allowed_ids = _privacy_gate(models, reasons, private)   # ANAM-033: BEFORE tier/chain; fail closed
+    if private and not models:
+        reasons.append("privacy_blocked_no_local_model")
+        return miss("no_eligible_model", diff, feats, verify)
     if not models:
         return miss("no_eligible_model", diff, feats, verify)
 
@@ -157,7 +182,7 @@ def route(query, context_tokens, task_kind, risk, registry, policy, available_pr
     at_target = [m for m in models if m.tier >= target_tier]
     fitting = [m for m in at_target if ctx == 0 or (m.context_window is not None and m.context_window >= ctx)]
     if not fitting:
-        return _ctx_miss(reasons, diff, feats, verify, reg_v, pol_v, policy)
+        return _ctx_miss(reasons, diff, feats, verify, reg_v, pol_v, policy, private)
     chosen = fitting[0]
     if chosen is not at_target[0]:
         reasons.append("context_window_escalation")   # cheaper candidates did not fit the context
@@ -178,10 +203,12 @@ def route(query, context_tokens, task_kind, risk, registry, policy, available_pr
 
     # status comes from the registry; never a money estimate here
     return RoutingDecision(chosen.id, chosen.tier, effort, verify, diff, reasons, reg_v, pol_v,
-                           chain, registry.price_status(chosen.id), 0, policy.max_escalations, feats)
+                           chain, registry.price_status(chosen.id), 0, policy.max_escalations, feats,
+                           private=bool(private), allowed_models=allowed_ids)
 
 
-def _ctx_miss(reasons, diff, feats, verify, reg_v, pol_v, policy) -> RoutingDecision:
+def _ctx_miss(reasons, diff, feats, verify, reg_v, pol_v, policy, private=False) -> RoutingDecision:
     return RoutingDecision(None, None, None, verify, diff,
                            reasons + ["no_eligible_model", "context_window_unfit"], reg_v, pol_v,
-                           [], "unavailable", 0, policy.max_escalations, feats)
+                           [], "unavailable", 0, policy.max_escalations, feats,
+                           private=bool(private), allowed_models=[] if private else None)

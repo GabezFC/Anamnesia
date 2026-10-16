@@ -21,6 +21,9 @@ const keyStatus = {};
 const tKeys = () => I18N.config || {};
 const fmtMsg = (m, vars) => String(m).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
 
+/** Id de DOM seguro (a11y: associa <label for> ao campo). */
+const domId = (v) => String(v).replace(/[^A-Za-z0-9_-]/g, '-');
+
 /** Linhas de chave (uma por variável de ambiente) de uma conexão. Input password sempre vazio. */
 export function renderKeyRows(item) {
   const t = I18N.connections;
@@ -29,9 +32,9 @@ export function renderKeyRows(item) {
   if (!envKeys.length) {
     return `
       <div class="connection-key-section">
-        <label class="input-label">${t.apiKeyLabel}</label>
+        <label class="input-label" for="key-${domId(item.id)}">${t.apiKeyLabel}</label>
         <div class="input-control">
-          <input type="password" autocomplete="new-password" value="" placeholder="${t.apiKeyPlaceholder}" readonly disabled data-bind="masked-key-input" />
+          <input id="key-${domId(item.id)}" type="password" autocomplete="new-password" value="" placeholder="${t.apiKeyPlaceholder}" readonly disabled data-bind="masked-key-input" />
         </div>
       </div>`;
   }
@@ -41,11 +44,12 @@ export function renderKeyRows(item) {
     const masked = st ? st.masked : item.masked_key;
     return `
       <div class="connection-key-section" data-env-key="${esc(env)}">
-        <label class="input-label">${t.apiKeyLabel} · <span class="tabular">${esc(env)}</span>
+        <label class="input-label" for="key-${domId(item.id)}-${domId(env)}">${t.apiKeyLabel} · <span class="tabular">${esc(env)}</span>
           <span class="chip ${has ? 'chip-configured' : 'chip-unconfigured'}">${has ? c.keyConfigured : c.keyMissing}</span>
         </label>
         <div class="input-control config-key-row">
           <input
+            id="key-${domId(item.id)}-${domId(env)}"
             type="password"
             autocomplete="new-password"
             value=""

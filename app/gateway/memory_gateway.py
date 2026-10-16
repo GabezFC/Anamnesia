@@ -9,10 +9,15 @@ metrics()       aggregate statistics from SQLite
 """
 from __future__ import annotations
 
+import atexit
 import contextvars
+import json
+import queue
+import threading
 import time
 import os
 import uuid
+import weakref
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
@@ -22,6 +27,7 @@ from config.jev import JevConfig
 from config.optimization import OptimizationConfig, OptionalStagesConfig
 from config.optimizer import OptimizerConfig
 from config.retrieval import RetrievalConfig
+from app.core.request_context import install_log_trace, request_scope, run_scope, trace_metrics
 from app.database.db import Database
 from app.gateway.budget_guard import BudgetGuard
 from app.gateway.context_builder import ModelContextBuilder
@@ -56,12 +62,58 @@ _active_scope_var: contextvars.ContextVar["Scope | None"] = contextvars.ContextV
     "mg_active_scope", default=None)
 
 
+def _env_on(name: str, default: str = "1") -> bool:
+    return os.environ.get(name, default).strip().lower() in ("1", "true", "yes", "on")
+
+
+class _BenchLog:
+    """ANAM-019: append of the benchmark jsonl line off the request path (one writer thread, ordered)."""
+
+    def __init__(self, log) -> None:
+        self._q: queue.Queue = queue.Queue()
+        self._log = log
+        self._t = threading.Thread(target=self._loop, name="anamnesia-benchlog", daemon=True)
+        self._t.start()
+
+    def put(self, record: dict) -> None:
+        self._q.put(record)
+
+    def _loop(self) -> None:
+        while True:
+            rec = self._q.get()
+            try:
+                if rec is None:
+                    return
+                jsonl("benchmark", rec)
+            except Exception as exc:  # noqa: BLE001 - a failed log line never kills the writer
+                self._log.warning("benchmark.jsonl async write failed: %s", type(exc).__name__)
+            finally:
+                self._q.task_done()
+
+    def flush(self, timeout: float = 10.0) -> bool:
+        end = time.monotonic() + timeout
+        while self._q.unfinished_tasks and time.monotonic() < end:
+            time.sleep(0.001)
+        return not self._q.unfinished_tasks
+
+    def stop(self) -> None:
+        self._q.put(None)
+        self._t.join(timeout=5)
+
+
+def _flush_at_exit(ref: "weakref.ref[MemoryGateway]") -> None:
+    gw = ref()
+    if gw is not None:
+        gw.flush_persistence()
+
+
 class MemoryGateway:
     def __init__(self, retrieval_cfg: RetrievalConfig | None = None, jev_cfg: JevConfig | None = None,
                  bench_cfg: BenchmarkConfig | None = None, db: Database | None = None,
                  jev_backend=None, graphify_service: GraphifyService | None = None,
                  opt_cfg: OptimizationConfig | None = None, optimizer_cfg: OptimizerConfig | None = None,
-                 optional_stages_cfg: OptionalStagesConfig | None = None):
+                 optional_stages_cfg: OptionalStagesConfig | None = None,
+                 async_persist: bool | None = None):
         self.retrieval_cfg = retrieval_cfg or RetrievalConfig()
         self.jev_cfg = jev_cfg or JevConfig()
         self.bench_cfg = bench_cfg or BenchmarkConfig()
@@ -86,7 +138,19 @@ class MemoryGateway:
         self.vault = ObsidianVault(self.retrieval_cfg.vault_path, self.retrieval_cfg.excluded_dirs)
         if not self.vault.exists():
             raise FileNotFoundError(f"Vault não encontrado: {self.vault.root}")
-        self.db = db or Database(self.bench_cfg.db_path, compress_context=self.bench_cfg.db_compress_context)
+        # ANAM-019: write-behind persistence (db writer thread + jsonl thread), flushed on close()/atexit and
+        # before any read (Database.query flushes). Opt-in: entry points that serve requests (REST lifespan, MCP
+        # server) pass async_persist=True; library/test/CLI use stays synchronous unless
+        # ANAMNESIA_GATEWAY_ASYNC_PERSIST=1. ANAMNESIA_GATEWAY_ASYNC_PERSIST=0 forces sync everywhere.
+        env = os.environ.get("ANAMNESIA_GATEWAY_ASYNC_PERSIST", "").strip().lower()
+        self._async_persist = False if env in ("0", "false", "no", "off") else (
+            bool(async_persist) or env in ("1", "true", "yes", "on"))
+        self.db = db or Database(self.bench_cfg.db_path, compress_context=self.bench_cfg.db_compress_context,
+                                 async_writes=True if self._async_persist else None)
+        self._persist_max_queue = int(os.environ.get("ANAMNESIA_PERSIST_MAX_QUEUE", "1000") or 1000)
+        self._bench_log = _BenchLog(self.log) if self._async_persist else None
+        self._atexit_cb = atexit.register(_flush_at_exit, weakref.ref(self))
+        install_log_trace(self.log)           # ANAM-012: "[trace=<id>]" prefix in application.log
         db_path = Path(self.db.path).resolve()
         if self.vault.root in db_path.parents:
             raise PermissionError("benchmark.db não pode ficar dentro do vault (§58)")
@@ -207,6 +271,17 @@ class MemoryGateway:
                jev_overrides: dict[str, Any] | None = None, context_budget: int | None = None,
                persist: bool = True, run_meta: dict[str, Any] | None = None,
                scope: str | None = None) -> MemoryResult:
+        """Public entry. ANAM-012: opens (or joins) the request scope so one trace_id covers the whole search."""
+        meta = dict(run_meta or {})
+        meta["run_id"] = meta.get("run_id") or uuid.uuid4().hex[:12]
+        with request_scope(), run_scope(meta["run_id"]):
+            return self._search_impl(query, pipeline, max_results, jev_overrides, context_budget,
+                                     persist, meta, scope)
+
+    def _search_impl(self, query: str, pipeline: str = "auto", max_results: int = 10,
+                     jev_overrides: dict[str, Any] | None = None, context_budget: int | None = None,
+                     persist: bool = True, run_meta: dict[str, Any] | None = None,
+                     scope: str | None = None) -> MemoryResult:
         if pipeline != "auto" and pipeline not in PIPELINES:
             raise ValueError(f"pipeline inválido: {pipeline}. Use um de {('auto',) + PIPELINES}")
         max_results = max(1, min(int(max_results), 50))
@@ -279,6 +354,17 @@ class MemoryGateway:
         # -- MEMORY OPTIMIZATION LAYER: post-retrieval (adaptive cut, near-dup, security flag,
         #    temporality, conflict demotion). The last two read the note frontmatter (read-only).
         cands, post = opt.post_filter(cands, plan, gw=self, query=query)
+        rank_on = False
+        if pipeline != "graphify_jev":          # ANAM-013: MG_MEMORY_RANK=v2 (default v1 = no-op, frozen pipeline untouched)
+            try:
+                from app.memory_store import model as _mm
+                if _mm.rank_mode() == "v2":
+                    from app.memory_store.store import get_store
+                    cands, rm = _mm.rerank_candidates(get_store(), cands)
+                    post.update(rm)
+                    rank_on = True
+            except Exception as exc:  # noqa: BLE001 — ranking is advisory; keep retrieval order on failure
+                post.setdefault("optimizer_errors", []).append(f"memory_rank:{type(exc).__name__}")
         # -- OPTIONAL STAGES (§1.4/§5.5): reranking/compression/dedup/spotlighting, all off by
         # default. Never runs on graphify_jev (frozen reference pipeline).
         if pipeline != "graphify_jev":
@@ -333,6 +419,7 @@ class MemoryGateway:
             # Who actually called (Hermes, Claude Code, Codex…), distinct from `agent` (the
             # interface: mcp/rest/cli). Optional, caller-supplied, never inferred (§5.1).
             "client": meta.get("client"),
+            **trace_metrics(),              # ANAM-012: trace_id/request_id additive in metrics_json
         })
         if is_jev:
             # ANA-023: fallback = judge failure signal (see app/services/judge_health.py)
@@ -354,6 +441,10 @@ class MemoryGateway:
                 opt.cache.put(ckey, (context, list(sources), list(cands), dict(m), guard))
             else:
                 m["result_cache_skipped"] = why or "no_guard"
+        if rank_on and persist and sources:   # ANAM-013: usage feeds rank v2 (only behind the flag; never raises)
+            from app.memory_store import model as _mm
+            from app.memory_store.store import get_store
+            m["memory_usage_recorded"] = _mm.record_delivered_usage(get_store(), sources, run_id=run_id)
         if persist:
             self._persist(result, jcfg, meta, error, all_judged)
         return result
@@ -405,7 +496,7 @@ class MemoryGateway:
                   "retrieval_latency_ms": 0.0, "judge_tokens": 0, "jev_tokens": 0, "jev_cost": 0.0,
                   "total_tokens_spent": m.get("context_tokens", 0),
                   # A cache hit reuses an earlier run's context but the CALLER can differ.
-                  "client": meta.get("client")})
+                  "client": meta.get("client"), **trace_metrics()})
         m.pop("error", None)
         result = MemoryResult(query=query, pipeline=plan.pipeline, context=context, sources=list(sources),
                               metrics=m, run_id=run_id, candidates=list(cands))
@@ -431,9 +522,44 @@ class MemoryGateway:
         }
         # store every candidate JEV saw (incl. dropped) so false negatives can be marked later (§25)
         cands = [c.to_dict() for c in (all_judged if all_judged is not None else r.candidates)]
+        line = {k: row[k] for k in ("session_id", "run_id", "question_id", "agent", "provider",
+                                    "model", "pipeline")} | {"total_latency_ms": r.metrics.get("total_latency_ms"),
+                                                              **trace_metrics()}
+        if self._bench_log is not None and getattr(self.db, "_writer", None) is not None:
+            self._persist_async(row, cands, line)
+        else:
+            self.db.save_run(row, cands)
+            jsonl("benchmark", line)
+
+    def _persist_async(self, row: dict, cands: list[dict], line: dict) -> None:
+        """ANAM-019: enqueue (snapshot of metrics_json taken now: callers may mutate r.metrics afterwards)."""
+        row["metrics_json"] = json.dumps(row["metrics_json"], default=str, ensure_ascii=False)
+        if self.db._writer._q.qsize() >= self._persist_max_queue:   # backpressure instead of unbounded growth
+            self.db.flush(5.0)
         self.db.save_run(row, cands)
-        jsonl("benchmark", {k: row[k] for k in ("session_id", "run_id", "question_id", "agent", "provider",
-                                                "model", "pipeline")} | {"total_latency_ms": r.metrics.get("total_latency_ms")})
+        self._bench_log.put(line)
+
+    def flush_persistence(self, timeout: float = 30.0) -> bool:
+        """Block until every enqueued run / jsonl line is on disk (read-your-writes, shutdown, tests)."""
+        try:
+            ok = bool(self.db.flush(timeout))
+            if self._bench_log is not None:
+                ok = self._bench_log.flush(timeout) and ok
+            return ok
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("flush_persistence failed: %s", type(exc).__name__)
+            return False
+
+    def close(self) -> None:
+        """Flush and stop the background writers (idempotent)."""
+        self.flush_persistence()
+        if self._bench_log is not None:
+            self._bench_log.stop()
+            self._bench_log = None
+        try:
+            atexit.unregister(self._atexit_cb)
+        except Exception:  # noqa: BLE001
+            pass
 
     def metrics(self) -> dict:
         from app.benchmark.statistics import aggregate_stats

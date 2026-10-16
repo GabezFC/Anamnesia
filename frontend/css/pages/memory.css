@@ -29,3 +29,29 @@
   .memory-section .table { min-width: 480px; }
   .memory-section, .memory-context { overflow-x: auto; }
 }
+
+/* ANAM-029 — aba Notas (tokens do tema; sem segundo design system) */
+.memory-tabpanel { display: flex; flex-direction: column; gap: var(--space-4); }
+.memory-tabpanel[hidden] { display: none; }
+.mem-notes-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.mem-notes-toolbar { margin-bottom: var(--space-3); }
+.mem-notes-filters { margin-bottom: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; }
+.mem-note-title { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--text-primary); text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-default); text-underline-offset: 3px; }
+.mem-note-title:hover { text-decoration-color: currentColor; }
+.mem-note-sub { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px; }
+.mem-tag { font-family: var(--font-mono); }
+.mem-note-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.mem-dialog-wide { max-width: 760px; }
+.mem-textarea { width: 100%; min-height: 160px; resize: vertical; font-family: var(--font-mono); font-size: var(--text-sm); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-surface); color: var(--text-primary); }
+.mem-textarea:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+.mem-form-row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.mem-form-row .input-group { flex: 1 1 180px; }
+.mem-form-error { color: var(--danger-text); font-size: var(--text-sm); margin: 0; min-height: 1.2em; }
+.mem-check { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.mem-plan { margin: 0; padding-left: var(--space-5); font-size: var(--text-sm); display: flex; flex-direction: column; gap: var(--space-2); }
+.mem-diff { max-height: 280px; }
+.mem-diff span { display: block; }
+.mem-diff-add { background: var(--success-muted, var(--bg-surface-subtle)); color: var(--text-primary); }
+.mem-diff-del { background: var(--danger-muted); color: var(--danger-text); }
+.mem-diff-hunk, .mem-diff-meta { color: var(--text-secondary); font-weight: 600; }
+@media (max-width: 640px) { .mem-notes-filters { flex-direction: column; align-items: stretch; } .mem-note-actions { flex-direction: column; } }

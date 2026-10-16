@@ -31,6 +31,8 @@ from pathlib import Path
 from config import env_bool, env_int
 from config.paths import saved_context_dir
 
+from app.memory_store.filelock import FileLock, replace_with_retry
+
 DEFAULT_MAX_BYTES = 64 * 1024
 DEFAULT_RATE_PER_MIN = 30
 ID_RE = re.compile(r"^[0-9a-f]{10}$")
@@ -40,7 +42,7 @@ _NAME_RE = re.compile(r"^[a-z0-9-]+-([0-9a-f]{10})\.md$")
 # ANA-145: schema v2 vocabulary
 KINDS = ("decision", "fact", "preference", "task", "episodic")
 DEFAULT_KIND = "episodic"      # least assertive kind when the caller does not say
-NOTE_STATUSES = ("active", "superseded", "archived")
+from app.memory_store.model import STATES as NOTE_STATUSES  # ANAM-013: candidate|active|reinforced|stale|archived|superseded|deleted
 SCHEMA_VERSION = 2
 FEEDBACK_VERDICTS = ("useful", "wrong", "stale")
 
@@ -186,6 +188,12 @@ class SavedNote:
     feedback_useful: int = 0           # ANA-158 counters
     feedback_wrong: int = 0
     feedback_stale: int = 0
+    # -- ANAM-013 (all optional, additive; absent == derived default, see model.effective_scope) ------
+    scope: str | None = None           # global | agent | project | session | task
+    scope_id: str | None = None        # project slug / agent / session / task id the scope refers to
+    visibility: str | None = None      # private | shared
+    owner: str | None = None           # who may read a private note (default: source_agent)
+    importance: float | None = None    # 0..1, ONLY when declared
 
     def is_expired(self, now: datetime | None = None) -> bool:
         exp = _parse_dt(self.expires_at)
@@ -263,6 +271,11 @@ def _render_v2(note: SavedNote) -> list[str]:
     for k in ("feedback_useful", "feedback_wrong", "feedback_stale"):
         if getattr(note, k):
             out.append(f"{k}: {int(getattr(note, k))}")
+    for k in ("scope", "scope_id", "visibility", "owner"):  # ANAM-013
+        if getattr(note, k):
+            out.append(f"{k}: {_q(getattr(note, k))}")
+    if note.importance is not None:
+        out.append(f"importance: {float(note.importance):g}")
     return out
 
 
@@ -299,7 +312,8 @@ def parse(text: str, file: str = "") -> SavedNote:
         source=meta.get("source"), supersedes=meta.get("supersedes"),
         superseded_by=meta.get("superseded_by"), content_sha256=meta.get("content_sha256"),
         feedback_useful=_int(meta.get("feedback_useful"), 0), feedback_wrong=_int(meta.get("feedback_wrong"), 0),
-        feedback_stale=_int(meta.get("feedback_stale"), 0))
+        feedback_stale=_int(meta.get("feedback_stale"), 0), scope=meta.get("scope"), scope_id=meta.get("scope_id"),
+        visibility=meta.get("visibility"), owner=meta.get("owner"), importance=_float(meta.get("importance")))
 
 
 def _int(v, default: int = 0) -> int:
@@ -317,7 +331,7 @@ def _float(v) -> float | None:
 
 
 def _replace(src, dst) -> None:  # indirection so tests can simulate a crash between temp and replace
-    os.replace(src, dst)
+    replace_with_retry(src, dst)  # ANAM-007: retry curto em PermissionError/WinError 5
 
 
 class SavedContextStore:
@@ -331,7 +345,7 @@ class SavedContextStore:
         # ANA-150/157: history, trash, backups and the feedback log live NEXT TO the notes folder
         # (never inside it), so the folder the index mounts only ever contains live notes.
         self.state_dir = self.root.parent / (self.root.name + "_state")
-        self._lock = threading.RLock()
+        self._lock = FileLock(self.state_dir / ".store.lock", timeout=float(env_int("MG_STORE_LOCK_TIMEOUT_S", 30)))  # ANAM-007: lock entre processos
         self._hits: deque[float] = deque()
 
     # -- helpers ---------------------------------------------------------------------------
@@ -422,10 +436,35 @@ class SavedContextStore:
         src = (source or "").strip() or (f"agent:{source_agent}" if source_agent else "manual")
         return {"kind": kind or DEFAULT_KIND, "expires_at": exp, "confidence": conf, "source": src}
 
+    @staticmethod
+    def _model_fields(project, scope, scope_id, visibility, owner, importance, initial_status) -> dict:
+        """ANAM-013: valida escopo/visibilidade/owner/importance/estado inicial (candidate|active)."""
+        from app.memory_store import model
+        try:
+            out = model.validate_scope(scope, scope_id, visibility, owner, project)
+        except model.ModelError as e:
+            raise InvalidNote(str(e)) from None
+        if importance is not None:
+            try:
+                imp = float(importance)
+            except (TypeError, ValueError):
+                raise InvalidNote("importance inválida") from None
+            if not 0.0 <= imp <= 1.0:
+                raise InvalidNote("importance deve estar entre 0 e 1")
+            out["importance"] = imp
+        if initial_status is not None:
+            st = str(initial_status).strip().lower()
+            if st not in ("candidate", "active"):
+                raise InvalidNote("initial_status deve ser candidate ou active")
+            out["status"] = st
+        return out
+
     def save(self, title: str, content: str, tags: list[str] | None = None, project: str | None = None,
              source_agent: str | None = None, trust: str | None = None, *, kind: str | None = None,
              expires_at: str | None = None, ttl_days: float | None = None, confidence: float | None = None,
-             source: str | None = None, supersedes: str | None = None) -> str:
+             source: str | None = None, supersedes: str | None = None, scope: str | None = None,
+             scope_id: str | None = None, visibility: str | None = None, owner: str | None = None,
+             importance: float | None = None, initial_status: str | None = None) -> str:
         """Validate, then write one note atomically. Returns the note id.
 
         ANA-145: with MG_MEMORY_SCHEMA_V2 on (default) the note is written as schema 2 -- kind, status,
@@ -439,6 +478,9 @@ class SavedContextStore:
         source_agent = (source_agent or "").strip() or None
         self._validate(title, content, tags, project, source_agent, source)
         v2 = schema_v2_enabled()
+        mm = self._model_fields(project, scope, scope_id, visibility, owner, importance, initial_status) if v2 else {}
+        if not v2 and any(x is not None for x in (scope, scope_id, visibility, owner, importance, initial_status)):
+            raise InvalidNote("campos do modelo de memória recusados: MG_MEMORY_SCHEMA_V2=0")
         extra = self._v2_fields(kind, expires_at, ttl_days, confidence, source, source_agent) if v2 else {}
         if not v2 and any(x is not None for x in (kind, expires_at, ttl_days, confidence, supersedes)):
             raise InvalidNote("campos do esquema v2 recusados: MG_MEMORY_SCHEMA_V2=0")
@@ -463,6 +505,8 @@ class SavedContextStore:
                 note.content_sha256 = content_digest(content)
                 note.supersedes = supersedes or None
                 for k, val in extra.items():
+                    setattr(note, k, val)
+                for k, val in mm.items():
                     setattr(note, k, val)
             self._write_atomic(dest, render(note))
             if old is not None and old.id != note_id:
@@ -528,9 +572,13 @@ class SavedContextStore:
                                 source or cur.source, cur.source_agent)
             ch.update(f, schema=SCHEMA_VERSION, status=cur.status or "active")
             if status is not None:
-                if status not in NOTE_STATUSES:
-                    raise InvalidNote(f"status inválido (use {', '.join(NOTE_STATUSES)})")
-                ch["status"] = status
+                from app.memory_store import model  # ANAM-013: transições validadas
+                try:
+                    ch["status"] = model.validate_transition(cur.status, status)
+                except model.ModelError as e:
+                    raise InvalidNote(str(e)) from None
+                if model.normalize_status(cur.status) == "superseded" and ch["status"] != "superseded":
+                    ch["superseded_by"] = None
         with self._lock:
             self._check_rate()
             return self._mutate(note_id, **ch)
@@ -577,7 +625,7 @@ class SavedContextStore:
         d = self.state_dir / "trash"
         d.mkdir(parents=True, exist_ok=True)
         dest = d / f"{time.time_ns()}__{p.name}"
-        os.replace(p, dest)
+        replace_with_retry(p, dest)
         return dest
 
     def export_zip(self) -> bytes:

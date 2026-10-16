@@ -580,6 +580,7 @@ def test_doctor_prints_level_and_json(capsys, monkeypatch):
     monkeypatch.delenv("OFFLINE", raising=False)
     monkeypatch.delenv("ANAMNESIA_OFFLINE", raising=False)
     monkeypatch.setenv("ANAMNESIA_PAID_CALLS", "1")
+    monkeypatch.delenv("TYPESAFE_BASE_URL", raising=False)   # ANAM-041: juiz em loopback muda o nivel (L2 so com juiz externo)
     assert cli.main(["doctor"]) == 0
     out = capsys.readouterr().out
     assert "local-first: L2" in out and "jev_judge" in out and "SECRET123" not in out

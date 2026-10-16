@@ -1,0 +1,11 @@
+Anamnesia / Memory Gateway
+Copyright (c) the Anamnesia contributors. Licensed under the MIT License (see LICENSE).
+
+This product depends on, or can optionally integrate with, third-party components that are
+NOT bundled in this repository and keep their own licenses. Summary (details and the
+dependency table: THIRD_PARTY_NOTICES.md and THIRD_PARTY_LICENSES.md):
+
+  - Colibri (local inference runtime)  - Apache License 2.0
+  - Laya (decision models)             - Apache License 2.0
+  - ds4                                - MIT License
+  - Provence reranker (optional)       - CC BY-NC-ND 4.0, non-commercial, off by default

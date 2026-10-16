@@ -16,6 +16,7 @@ import os
 
 import httpx
 
+from app.services.egress import check_egress
 from app.services.offline import ensure_online
 
 COMPACT_METRICS = ("pipeline", "context_tokens", "total_tokens_spent", "total_latency_ms",
@@ -42,6 +43,7 @@ def bridge_search(payload: dict, *, url: str | None = None, token: str | None = 
     if not base:
         raise RuntimeError("MG_MCP_BRIDGE_URL não definido")
     ensure_online("mcp-bridge", base)
+    check_egress(base, "mcp-bridge")  # ANAM-005: allow-list (token e queries viajam para este host)
     post = client.post if client is not None else httpx.post
     try:
         r = post(f"{base}/memory/search", json=payload, headers=auth_headers(token), timeout=timeout_s)

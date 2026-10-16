@@ -37,7 +37,7 @@ def local_ip() -> str:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    g = MemoryGateway()
+    g = MemoryGateway(async_persist=True)    # ANAM-019: write-behind; flushed in g.close() below
     from app.memory_store.index import attach_saved_context  # ANA-078: saved notes searchable
     attach_saved_context(g)  # no-op while data/saved_context is empty
     info = g.warm()
@@ -67,11 +67,29 @@ async def lifespan(_app: FastAPI):
     except Exception as exc:  # noqa: BLE001 - recovery must never block startup
         g.log.warning("orphan recovery failed: %s", type(exc).__name__)
     yield
+    try:  # ANAM-019: runs confirmed to the client must reach the disk before the process ends
+        g.close()
+    except Exception as exc:  # noqa: BLE001
+        g.log.warning("gateway close failed: %s", type(exc).__name__)
     try:  # never leave PTY child processes behind when the server stops
         from app.api.workspace import get_manager
         get_manager().close_all()
     except Exception:  # noqa: BLE001
         pass
+
+
+def _install_trace_middleware(app: FastAPI) -> None:
+    """ANAM-012: one trace_id per REST request (client X-Trace-Id honoured if safe) in a ContextVar scope and
+    echoed in the X-Trace-Id / X-Request-Id response headers. Added last => outermost (also covers 401/413/429)."""
+    from app.core.request_context import request_scope, get_trace_id
+
+    @app.middleware("http")
+    async def _trace_scope(request, call_next):
+        with request_scope(request.headers.get("x-request-id"), request.headers.get("x-trace-id")) as rid:
+            resp = await call_next(request)
+            resp.headers["X-Trace-Id"] = get_trace_id() or ""
+            resp.headers["X-Request-Id"] = rid
+            return resp
 
 
 _CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; "
@@ -134,6 +152,7 @@ def create_app() -> FastAPI:
             resp.headers.setdefault("Content-Security-Policy", _CSP)
         return resp
 
+    _install_trace_middleware(app)
     app.include_router(routes.router)
     from app.api import costs as costs_api  # Anamnesia costs ledger (read-only + guarded budget)
     app.include_router(costs_api.router)
@@ -157,6 +176,8 @@ def create_app() -> FastAPI:
     app.include_router(connections_api.router)
     app.include_router(orchestration_api.router)
     app.include_router(workspace_api.router)
+    from app.api import decision as decision_api  # ANAM-043: /api/decision/* (loopback-only)
+    app.include_router(decision_api.router)
     if FRONTEND.exists():
         app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 

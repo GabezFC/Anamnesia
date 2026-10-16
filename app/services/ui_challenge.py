@@ -1,6 +1,6 @@
 """ANA-040 / ANA-042: UI challenge (cookie) and human confirmation for shell sessions.
 
-Modes (env, default `warn` = log only, keeps UI/MCP/CLI integrations working):
+Modes (env, default `enforce` since ANAM-001; `warn` = log only, `off` = disabled):
   MG_TOKEN_COOKIE=warn|enforce|off   /config/token requires the HttpOnly SameSite=Strict cookie issued on `GET /`
   MG_SHELL_CONFIRM=warn|enforce|off  shell/PowerShell session creation requires header X-MG-Confirm == cookie value
 Rollback: set the variable to `off`.
@@ -15,13 +15,15 @@ import secrets
 COOKIE_NAME = "mg_ui"
 CONFIRM_HEADER = "x-mg-confirm"
 SHELL_PROFILES = {"shell", "powershell", "pwsh", "cmd", "bash"}
+DEFAULT_MODE = "enforce"  # ANAM-001 (D-2): was "warn"; MG_TOKEN_COOKIE/MG_SHELL_CONFIRM=warn restores old behaviour
 _log = logging.getLogger("anamnesia.security")
 _UI_SECRET = secrets.token_urlsafe(24)  # per-process; issued only with the page load
 
 
 def mode(var: str) -> str:
-    v = os.environ.get(var, "warn").strip().lower()
-    return v if v in {"warn", "enforce", "off"} else "warn"
+    """ANAM-001: default is `enforce` (fail closed). Transition: set the variable to `warn` or `off`."""
+    v = os.environ.get(var, DEFAULT_MODE).strip().lower()
+    return v if v in {"warn", "enforce", "off"} else DEFAULT_MODE
 
 
 def ui_cookie_value() -> str:

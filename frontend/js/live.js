@@ -13,6 +13,7 @@ import {
 import * as A from './anamnesia-api.js';
 import { call } from './anamnesia-api.js';
 import { SessionTerminal } from './terminals.js';
+import { isAppShortcut } from './commands.js';
 import { fmtTime } from './format.js';
 
 export const live = { demo: new Set(), projects: false, sessions: false, health: { state: 'unknown', ms: null, warnings: [] }, alerts: [] };
@@ -227,7 +228,7 @@ function attachTerminals() {
     if (!s || !s.real) return;
     let t = terms.get(sid);
     if (!t) {
-      t = new SessionTerminal(sid, {});
+      t = new SessionTerminal(sid, { interceptKey: isAppShortcut });
       terms.set(sid, t);
       t.start();
     }

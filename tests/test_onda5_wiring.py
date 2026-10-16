@@ -237,7 +237,7 @@ def test_pty_harden_adds_verified_flag_only_for_read_only_role(monkeypatch):
 # ---------------------------------------------------------------- ANA-192: profile filters the live server
 def _tools(profile):
     env = {k: v for k, v in os.environ.items() if k != "ANAMNESIA_TOOL_PROFILE"}
-    env.update(MG_MCP_SAVE="1", MG_MCP_TOOLSET="full")
+    env.update(MG_MCP_SAVE="1", MG_MCP_TOOLSET="full", MG_MCP_DECISION="1")   # ANAM-043: opt-in read-only tool
     if profile:
         env["ANAMNESIA_TOOL_PROFILE"] = profile
     code = "from app.mcp import server;print(sorted(t.name for t in server.server._tool_manager.list_tools()))"
@@ -250,7 +250,7 @@ def _tools(profile):
 @pytest.mark.parametrize("profile,expected", [
     ("restricted", {"memory_search"}),
     ("readonly", {"memory_search", "memory_search_baseline", "memory_search_graphify", "memory_search_graphify_jev",
-                  "memory_get_run", "memory_stats"}),
+                  "memory_get_run", "memory_stats", "decision_status"}),
     ("bogus", {"memory_search"}),                                   # unknown => fail closed
     ("", set(tm.MANIFEST)),                                          # unset => untouched (rollback)
 ])

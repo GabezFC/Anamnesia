@@ -8,9 +8,12 @@
   python -m memory_gateway vault-check [--save FILE | --compare FILE]
   python -m memory_gateway vault-lint [--vault PATH] [--json]
   python -m memory_gateway memory-audit [--vault PATH] [--db benchmark.db] [--json] [-v]
+  python -m memory_gateway decision status|test|history [--json]   (Decision Engine, ANAM-043)
   python -m memory_gateway index
   python -m memory_gateway db-maintenance [--older-than-days N] [--db PATH] [--apply] [--vacuum]
   python -m memory_gateway db-prune --keep-days N [--keep-sessions s1,s2] [--dry-run] [--vacuum]
+  python -m memory_gateway backup-create --out FILE [--db PATH] [--memory-dir DIR] [--force]
+  python -m memory_gateway backup-restore FILE [--db PATH] [--memory-dir DIR] [--force] [--verify-only]
 """
 from __future__ import annotations
 
@@ -18,7 +21,7 @@ import argparse
 import json
 import sys
 
-from app.schemas.models import PIPELINES
+from app.schemas.models import DEFAULT_PIPELINES, PIPELINES
 from app.services.vault_lint import MAX_NOTE_CHARS as MAX_NOTE_CHARS_LITERAL
 
 
@@ -44,12 +47,15 @@ def cmd_search(a):
     if a.threshold is not None:
         ov["relevance_threshold"] = a.threshold
         ov["review_threshold"] = min(a.threshold, g.jev_cfg.review_threshold)
-    r = g.search(a.query, a.pipeline, a.max_results, jev_overrides=ov or None, run_meta={"kind": "cli", "agent": "cli"})
-    mode = getattr(a, "mode", "context")
-    extras = {}
-    if mode != "context":
-        from app.routing.answer import apply_mode, merge_mode
-        extras = apply_mode(g, r, mode, risk=getattr(a, "risk", "medium"))
+    from app.core.request_context import request_scope      # ANAM-012: CLI invocation = one trace
+    with request_scope():
+        r = g.search(a.query, a.pipeline, a.max_results, jev_overrides=ov or None, run_meta={"kind": "cli", "agent": "cli"})
+        mode = getattr(a, "mode", "context")
+        extras = {}
+        if mode != "context":
+            from app.routing.answer import apply_mode
+            extras = apply_mode(g, r, mode, risk=getattr(a, "risk", "medium"))
+    from app.routing.answer import merge_mode
     if _print(merge_mode(r.to_dict(), extras) if extras else r.to_dict(), a.json):
         return
     m = r.metrics
@@ -78,7 +84,7 @@ def cmd_benchmark(a):
     if a.questions:
         qs = [q for q in qs if q["id"] in set(a.questions)]
     consumers = [{"agent": a.agent, "provider": a.provider, "model": a.model}] if a.agent else []
-    pipelines = a.pipeline or list(PIPELINES)
+    pipelines = a.pipeline or list(DEFAULT_PIPELINES)
     plan = estimate_plan(len(qs), pipelines, consumers, a.repetitions)
     print(f"plano: {plan}", file=sys.stderr)
     if a.dry_run:
@@ -140,6 +146,35 @@ def cmd_info(a):
     from app.gateway.memory_gateway import MemoryGateway
     info = MemoryGateway().system_info()
     print(json.dumps(info, ensure_ascii=False, indent=2, default=str))
+
+
+def cmd_decision(a):
+    """ANAM-043: Decision Engine. `status` e `history` não chamam provider; `test` usa itens SINTÉTICOS embutidos
+    (nunca o vault) e, com JEV remoto configurado, só gasta se --provider/--strategy o acionarem."""
+    from app.decision import DecisionRequest, Item, get_engine
+    eng = get_engine()
+    if a.action == "status":
+        out = eng.status()
+    elif a.action == "history":
+        from app.decision.telemetry import DecisionHistory, default_history_path
+        out = {"records": DecisionHistory.read_persisted(default_history_path(), a.limit, a.project),
+               "privacy": "IDs/hashes apenas"}
+    else:
+        items = [Item("demo-1", "Durnathil 5.73.1 replaced the old parser in the retrieval layer.", "demo"),
+                 Item("demo-2", "Weekly grocery list: apples, rice and coffee.", "demo")]
+        res = eng.decide(DecisionRequest("What replaced the old parser: Durnathil?", items, a.op, a.project or ""),
+                         provider=a.provider, strategy=a.strategy)
+        out = res.to_public()
+    if a.json or a.action != "status":
+        print(json.dumps(out, ensure_ascii=False, indent=2, default=str))
+        return
+    print(f"Decision Engine ({out['stage']}): provider ativo = {out['active_provider']}"
+          f"{' [JEV-only, padrão]' if out['default_is_jev_only'] else ''}; pipeline padrão = {out['default_pipeline']}")
+    for n, h in out["providers"].items():
+        print(f"  {n:<6} disponível={h.get('available')} ({h.get('label')}) {h.get('reason', '')}")
+    print(f"  cache: {out['cache']}")
+    print(f"  fallback: {out['fallback_policy']}")
+    print(f"  JEV real: {out['measurements']['jev_real']['label']}; Laya vs lexical: {out['measurements']['laya_vs_lexical']['value']}")
 
 
 def cmd_vault_check(a):
@@ -253,19 +288,52 @@ def cmd_index(a):
 
 
 def cmd_db_prune(a):
-    """§5.3: delete old runs (and their candidates) to keep benchmark.db small.
+    """§5.3 + ANAM-006: delete old runs (cascade, no orphans) after a mandatory backup.
 
     --keep-days is required (no silent default retention window). Sessions listed in
-    --keep-sessions are never deleted, regardless of age.
+    --keep-sessions are never deleted, regardless of age. Without --dry-run, asks for confirmation
+    unless --yes. A ``<db>.bak-v<N>`` copy is written next to the DB before deleting (restore =
+    copy it back over the DB). --purge-text [DAYS] also blanks query/context/answer of old runs
+    (default DAYS from ANAMNESIA_RUNS_TEXT_RETENTION_DAYS, 30 - decisão D-4 pendente, revisável).
     """
     from app.database.db import Database
     from config.benchmark import BenchmarkConfig
 
     bc = BenchmarkConfig()
-    db = Database(bc.db_path, compress_context=bc.db_compress_context)
+    db = Database(getattr(a, "db", None) or bc.db_path, compress_context=bc.db_compress_context)
+    try:
+        _db_prune_run(a, db)
+    finally:
+        db.close()
+
+
+def _db_prune_run(a, db):
     keep_sessions = [s.strip() for s in a.keep_sessions.split(",") if s.strip()] if a.keep_sessions else []
-    result = db.prune(a.keep_days, keep_sessions, dry_run=a.dry_run)
-    if a.vacuum and not a.dry_run:
+    purge = getattr(a, "purge_text", None)
+    if purge is not None and purge < 0:           # flag given without a value -> env/default
+        purge = db.runs_text_retention_days()
+    result = db.prune(a.keep_days, keep_sessions, dry_run=True)
+    result["dry_run"] = a.dry_run
+    if purge:
+        result["would_purge_text"] = db.purge_run_text(purge, keep_sessions, dry_run=True)["would_purge"]
+    if a.dry_run:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if not getattr(a, "yes", False):
+        try:
+            ans = input(f"Apagar {result['would_delete']} run(s) de {db.path}? Um backup será criado antes. [s/N] ")
+        except EOFError:
+            ans = ""
+        if ans.strip().lower() not in {"s", "sim", "y", "yes"}:
+            print(json.dumps({"aborted": True, "reason": "sem confirmação (use --yes)", **result},
+                             ensure_ascii=False, indent=2))
+            return
+    backup = db.backup_before_prune()
+    result = db.prune(a.keep_days, keep_sessions, dry_run=False)
+    result["backup"] = backup
+    if purge:
+        result["text_purged"] = db.purge_run_text(purge, keep_sessions)["purged"]
+    if a.vacuum:
         db.vacuum()
         result["vacuumed"] = True
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -295,6 +363,87 @@ def cmd_db_maintenance(a):
         print("dry-run: nada foi alterado. Use --apply para executar (--vacuum só vale com --apply).")
     elif not a.vacuum:
         print("espaço só é devolvido ao disco com --vacuum.")
+
+
+def cmd_backup_create(a):
+    """ANAM-026: zip com manifest sha256 de benchmark.db (+ memory store). Não altera a origem."""
+    from pathlib import Path
+
+    from app.services.backup import BackupError, create_backup
+    from config.paths import benchmark_db_path, saved_context_dir
+
+    db = None if a.no_db else (a.db or benchmark_db_path())
+    mem = None if a.no_memory else (a.memory_dir or saved_context_dir())
+    if mem is not None and not Path(mem).is_dir():
+        mem = None                                   # memory store ainda não criado: só o banco
+    try:
+        print(json.dumps(create_backup(a.out, db, mem, force=a.force), ensure_ascii=False, indent=2))
+    except BackupError as exc:
+        print(f"erro: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_backup_restore(a):
+    """ANAM-026: valida sha256 e restaura; nunca sobrescreve sem --force."""
+    from app.services.backup import BackupError, restore_backup, verify_backup
+    from config.paths import benchmark_db_path, saved_context_dir
+
+    try:
+        if a.verify_only:
+            m = verify_backup(a.archive)
+            print(json.dumps({"ok": True, "files": len(m["files"])}, indent=2))
+            return
+        print(json.dumps(restore_backup(a.archive, a.db or benchmark_db_path(),
+                                        a.memory_dir or saved_context_dir(), force=a.force),
+                         ensure_ascii=False, indent=2))
+    except BackupError as exc:
+        print(f"erro: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _add_backup_parsers(sub) -> None:
+    bc = sub.add_parser("backup-create", help="backup (zip + sha256) de benchmark.db e do memory store")
+    bc.add_argument("--out", required=True, help="arquivo .zip de saída")
+    bc.add_argument("--db", help="caminho do banco (padrão: config)")
+    bc.add_argument("--memory-dir", help="pasta do memory store (padrão: saved_context)")
+    bc.add_argument("--no-db", action="store_true")
+    bc.add_argument("--no-memory", action="store_true")
+    bc.add_argument("--force", action="store_true", help="sobrescreve o .zip se existir")
+    bc.set_defaults(fn=cmd_backup_create)
+    br = sub.add_parser("backup-restore", help="restaura um backup verificando sha256 (sem --force não sobrescreve)")
+    br.add_argument("archive")
+    br.add_argument("--db", help="destino do banco (padrão: config)")
+    br.add_argument("--memory-dir", help="destino do memory store (padrão: saved_context)")
+    br.add_argument("--force", action="store_true", help="permite sobrescrever destinos existentes")
+    br.add_argument("--verify-only", action="store_true", help="só valida a integridade")
+    br.set_defaults(fn=cmd_backup_restore)
+
+
+def _add_db_prune_parser(sub) -> None:
+    dp = sub.add_parser("db-prune", help="remove runs antigas de benchmark.db (nunca as sessões protegidas)")
+    dp.add_argument("--keep-days", type=int, required=True, help="idade máxima (dias) das runs mantidas")
+    dp.add_argument("--keep-sessions", help="session_ids (separados por vírgula) que nunca são apagados")
+    dp.add_argument("--dry-run", action="store_true", help="só conta quantas runs seriam apagadas")
+    dp.add_argument("--vacuum", action="store_true", help="roda VACUUM após apagar (ignora com --dry-run)")
+    dp.add_argument("--yes", action="store_true", help="não pergunta confirmação (ANAM-006)")
+    dp.add_argument("--purge-text", nargs="?", type=float, const=-1, default=None, metavar="DAYS",
+                    help="também apaga query/context/answer de runs mais velhas que DAYS "
+                         "(padrão: env ANAMNESIA_RUNS_TEXT_RETENTION_DAYS, 30; decisão D-4 revisável)")
+    dp.add_argument("--db", help="caminho do banco (padrão: config)")
+    dp.set_defaults(fn=cmd_db_prune)
+
+
+def _add_decision_parser(sub) -> None:
+    """Subcomando `decision` (ANAM-043)."""
+    dc = sub.add_parser("decision", help="Decision Engine (ANAM-043): status | test (itens sintéticos) | history (IDs/hashes)")
+    dc.add_argument("action", choices=["status", "test", "history"])
+    dc.add_argument("--provider", choices=["jev", "laya", "hybrid", "adaptive"], help="test: força o provider")
+    dc.add_argument("--strategy", choices=["laya_then_jev", "jev_then_laya", "ensemble"], help="test: estratégia do hybrid")
+    dc.add_argument("--op", choices=["retrieval", "memory", "security"], default="retrieval")
+    dc.add_argument("--project", help="isolamento por projeto (limiares/cache/histórico)")
+    dc.add_argument("--limit", type=int, default=20)
+    dc.add_argument("--json", action="store_true")
+    dc.set_defaults(fn=cmd_decision)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -339,6 +488,7 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--save")
     v.add_argument("--compare")
     v.set_defaults(fn=cmd_vault_check)
+    _add_decision_parser(sub)
     sub.add_parser("index").set_defaults(fn=cmd_index)
     dm = sub.add_parser("db-maintenance", help="retenção opt-in de benchmark.db (dry-run por padrão; --apply altera)")
     dm.add_argument("--older-than-days", type=int, default=90, help="idade (dias) a partir da qual limpar (padrão 90)")
@@ -346,12 +496,7 @@ def build_parser() -> argparse.ArgumentParser:
     dm.add_argument("--apply", action="store_true", help="executa de fato (sem isso só relata)")
     dm.add_argument("--vacuum", action="store_true", help="VACUUM após aplicar (exige --apply)")
     dm.set_defaults(fn=cmd_db_maintenance)
-    dp = sub.add_parser("db-prune", help="remove runs antigas de benchmark.db (nunca as sessões protegidas)")
-    dp.add_argument("--keep-days", type=int, required=True, help="idade máxima (dias) das runs mantidas")
-    dp.add_argument("--keep-sessions", help="session_ids (separados por vírgula) que nunca são apagados")
-    dp.add_argument("--dry-run", action="store_true", help="só conta quantas runs seriam apagadas")
-    dp.add_argument("--vacuum", action="store_true", help="roda VACUUM após apagar (ignora com --dry-run)")
-    dp.set_defaults(fn=cmd_db_prune)
+    _add_db_prune_parser(sub)
     ma = sub.add_parser("memory-audit",
                         help="inventário somente leitura da memória persistente (contagens, sem conteúdo)")
     ma.add_argument("--vault", help="caminho do vault")
@@ -374,6 +519,7 @@ def build_parser() -> argparse.ArgumentParser:
     vl.add_argument("-v", "--verbose", action="store_true",
                     help="lista todos os itens em vez do resumo por categoria")
     vl.set_defaults(fn=cmd_vault_lint)
+    _add_backup_parsers(sub)
     return p
 
 

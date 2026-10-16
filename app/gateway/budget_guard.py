@@ -1,8 +1,11 @@
 """Budget guard (T6.4): optionally degrade paid pipelines to the free baseline once the ceiling is hit.
 
-ENFORCEMENT is OFF by default. ANA-180: WARN mode is ON by default -- for paid plans the budget state is only
-recorded in the metrics (never blocks, never changes the plan); `ANAMNESIA_BUDGET_WARN=0` restores the old inert path.
-Free plans never read the DB.
+ENFORCEMENT is ON by default (ANAM-003): unset ANAMNESIA_BUDGET_ENFORCE/DEGRADE == enforce. Without a configured
+ceiling nothing can be "exceeded", so a user with no budget sees no change; set `ANAMNESIA_BUDGET_ENFORCE=0` (or
+`ANAMNESIA_BUDGET_DEGRADE=0`) to opt out explicitly. Per-run/per-day USD ceilings for the answer/escalation loop
+live in app/routing/spend.py (ANAMNESIA_BUDGET_RUN_USD / ANAMNESIA_BUDGET_DAY_USD).
+ANA-180: with enforcement explicitly off, WARN mode (default) only records the budget state in the metrics;
+`ANAMNESIA_BUDGET_WARN=0` restores the old inert path. Free plans never read the DB.
 
 With `ANAMNESIA_BUDGET_ENFORCE=1`, and only for a plan whose pipeline spends paid tokens (the JEV
 pipelines: graphify_jev, graphify_jev_opt):
@@ -41,12 +44,12 @@ def has_ceiling(budgets: dict | None) -> bool:
 
 def enforcement_enabled(budgets: dict | None = None) -> bool:
     """T6.4: ANAMNESIA_BUDGET_DEGRADE (explicit 0/1) wins, then the legacy ANAMNESIA_BUDGET_ENFORCE.
-    Unset -> ON only when a day/month ceiling (>0) is configured (`budgets`); empty/0 = no ceiling = OFF."""
+    ANAM-003: unset -> ON (a missing ceiling simply never triggers; `budgets` kept for signature compatibility)."""
     for flag in (DEGRADE_FLAG, ENV_FLAG):
         raw = os.environ.get(flag, "").strip().lower()
         if raw:
             return raw in ("1", "true", "yes", "on")
-    return has_ceiling(budgets)
+    return True
 
 
 def warn_enabled() -> bool:

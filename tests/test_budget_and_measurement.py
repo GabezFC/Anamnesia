@@ -68,6 +68,7 @@ def plan(p):
 
 def test_enforcement_off_and_warn_off_is_identity_and_never_reads_db(monkeypatch):
     monkeypatch.setenv(bg.WARN_FLAG, "0")      # ANA-180: warn mode is now default ON; =0 restores the inert path
+    monkeypatch.setenv(bg.ENV_FLAG, "0")       # ANAM-003: enforcement is default ON; explicit opt-out
     class Boom:
         def __getattr__(self, k):
             raise AssertionError("db must not be touched when enforcement is off")

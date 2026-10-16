@@ -112,6 +112,7 @@ register_pipeline("graphify", run_graphify)
 register_pipeline("graphify_jev", run_graphify_jev)
 
 from app.retrieval import pipelines_opt as _pipelines_opt  # noqa: E402  (registers graphify_jev_opt)
+from app.retrieval import pipelines_laya as _pipelines_laya  # noqa: E402,F401  (ANAM-042: graphify_laya, graphify_laya_jev)
 
 assert set(PIPELINE_FUNCS) == set(PIPELINES), (
     "PIPELINE_FUNCS must register exactly the pipelines in app.schemas.models.PIPELINES")

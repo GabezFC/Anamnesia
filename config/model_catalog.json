@@ -1,0 +1,888 @@
+{
+  "schema_version": 1,
+  "source": "model_catalog_seed (auditoria 2026-10-15), apenas verified_fields",
+  "generated": "2026-10-15",
+  "rules": "UNVERIFIED não alimenta produção; modo comercial bloqueia licença não verificada/non-commercial; pesos nunca no Git (data/local_ai/models/)",
+  "models": [
+    {
+      "id": "qwen3.5-9b",
+      "family": "Qwen3.5",
+      "kind": "llm",
+      "repo": "Qwen/Qwen3.5-9B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 9.65,
+      "active_params_b": null,
+      "context_tokens": 262144,
+      "size_gb": 7.6,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/Qwen/Qwen3.5-9B",
+        "https://ollama.com/library/qwen3.5/tags"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params_total",
+        "context",
+        "license",
+        "ollama_size (tags page)"
+      ]
+    },
+    {
+      "id": "qwen3.5-4b",
+      "family": "Qwen3.5",
+      "kind": "llm",
+      "repo": "Qwen/Qwen3.5-4B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 4.66,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": 4.0,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/Qwen/Qwen3.5-4B",
+        "https://ollama.com/library/qwen3.5/tags"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params_total",
+        "license",
+        "ollama_size"
+      ]
+    },
+    {
+      "id": "qwen3.5-27b",
+      "family": "Qwen3.5",
+      "kind": "llm",
+      "repo": "Qwen/Qwen3.5-27B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 27.78,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": 20.0,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/Qwen/Qwen3.5-27B",
+        "https://ollama.com/library/qwen3.5/tags"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params_total",
+        "license",
+        "ollama_size"
+      ]
+    },
+    {
+      "id": "qwen3.5-35b-a3b",
+      "family": "Qwen3.5",
+      "kind": "llm",
+      "repo": "Qwen/Qwen3.5-35B-A3B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 35.95,
+      "active_params_b": 3,
+      "context_tokens": 262144,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/Qwen/Qwen3.5-35B-A3B"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "active",
+        "experts",
+        "context",
+        "license"
+      ]
+    },
+    {
+      "id": "qwen3.6-35b-a3b",
+      "family": "Qwen3.6",
+      "kind": "llm",
+      "repo": "Qwen/Qwen3.6-35B-A3B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": null,
+      "license_status": "UNVERIFIED",
+      "commercial_use": null,
+      "params_b": 35,
+      "active_params_b": 3,
+      "context_tokens": 262144,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/Qwen/Qwen3.6-35B-A3B"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "active",
+        "experts",
+        "context"
+      ],
+      "unverified_reason": "licença não verificada na fonte"
+    },
+    {
+      "id": "gemma-4-e4b",
+      "family": "Gemma 4",
+      "kind": "llm",
+      "repo": "google/gemma-4-E4B-it",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": null,
+      "license_status": "UNVERIFIED",
+      "commercial_use": null,
+      "params_b": 8.0,
+      "active_params_b": null,
+      "context_tokens": 131072,
+      "size_gb": 9.5,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/google/gemma-4-E4B-it",
+        "https://ollama.com/library/gemma4/tags",
+        "https://ai.google.dev/gemma/terms"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "context",
+        "license",
+        "ollama_size"
+      ],
+      "unverified_reason": "D-3: Llama/Gemma marcados UNVERIFIED (termos próprios divergentes/não lidos)"
+    },
+    {
+      "id": "gemma-4-12b",
+      "family": "Gemma 4",
+      "kind": "llm",
+      "repo": "google/gemma-4-12B-it",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": null,
+      "license_status": "UNVERIFIED",
+      "commercial_use": null,
+      "params_b": 11.96,
+      "active_params_b": null,
+      "context_tokens": 262144,
+      "size_gb": 8.0,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/google/gemma-4-12B-it",
+        "https://ollama.com/library/gemma4/tags"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "context",
+        "license",
+        "ollama_size"
+      ],
+      "unverified_reason": "D-3: Llama/Gemma marcados UNVERIFIED (termos próprios divergentes/não lidos)"
+    },
+    {
+      "id": "gemma-4-26b-a4b",
+      "family": "Gemma 4",
+      "kind": "llm",
+      "repo": "google/gemma-4-26B-A4B-it",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": null,
+      "license_status": "UNVERIFIED",
+      "commercial_use": null,
+      "params_b": 25.2,
+      "active_params_b": 3.8,
+      "context_tokens": 262144,
+      "size_gb": 19.0,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/google/gemma-4-26B-A4B-it",
+        "https://ollama.com/library/gemma4/tags"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "active",
+        "context",
+        "license",
+        "ollama_size"
+      ],
+      "unverified_reason": "D-3: Llama/Gemma marcados UNVERIFIED (termos próprios divergentes/não lidos)"
+    },
+    {
+      "id": "gemma-4-31b",
+      "family": "Gemma 4",
+      "kind": "llm",
+      "repo": "google/gemma-4-31B-it",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": null,
+      "license_status": "UNVERIFIED",
+      "commercial_use": null,
+      "params_b": 30.7,
+      "active_params_b": null,
+      "context_tokens": 262144,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/google/gemma-4-31B-it"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "context",
+        "license"
+      ],
+      "unverified_reason": "D-3: Llama/Gemma marcados UNVERIFIED (termos próprios divergentes/não lidos)"
+    },
+    {
+      "id": "gpt-oss-20b",
+      "family": "gpt-oss",
+      "kind": "llm",
+      "repo": "openai/gpt-oss-20b",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 20.9,
+      "active_params_b": 3.6,
+      "context_tokens": null,
+      "size_gb": 14.0,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": 16,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/openai/gpt-oss-20b",
+        "https://ollama.com/library/gpt-oss/tags",
+        "https://arxiv.org/abs/2508.10925"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "active (3.6B, cartão)",
+        "license",
+        "'run within 16GB of memory' (cartão)",
+        "ollama_size"
+      ]
+    },
+    {
+      "id": "gpt-oss-120b",
+      "family": "gpt-oss",
+      "kind": "llm",
+      "repo": "openai/gpt-oss-120b",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 116.8,
+      "active_params_b": 5.1,
+      "context_tokens": null,
+      "size_gb": 65.0,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/openai/gpt-oss-120b",
+        "https://ollama.com/library/gpt-oss/tags"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "active",
+        "license",
+        "ollama_size"
+      ]
+    },
+    {
+      "id": "phi-4",
+      "family": "Phi",
+      "kind": "llm",
+      "repo": "microsoft/phi-4",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "mit",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 14.66,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/microsoft/phi-4"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license"
+      ]
+    },
+    {
+      "id": "mistral-small-3.2-24b",
+      "family": "Mistral",
+      "kind": "llm",
+      "repo": "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 24.01,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license",
+        "~55GB GPU RAM em bf16/fp16 (cartão, VENDOR-REPORTED)"
+      ]
+    },
+    {
+      "id": "mistral-7b-instruct-v0.3",
+      "family": "Mistral",
+      "kind": "llm",
+      "repo": "mistralai/Mistral-7B-Instruct-v0.3",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 7.25,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license"
+      ]
+    },
+    {
+      "id": "deepseek-r1-distill-qwen-14b",
+      "family": "DeepSeek-R1-Distill",
+      "kind": "llm",
+      "repo": "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "mit",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 14.77,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license",
+        "recomendações: temp 0.5-0.7, sem system prompt (cartão)"
+      ]
+    },
+    {
+      "id": "deepseek-r1-0528-qwen3-8b",
+      "family": "DeepSeek-R1-Distill",
+      "kind": "llm",
+      "repo": "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "mit",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 8.19,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license"
+      ]
+    },
+    {
+      "id": "deepseek-v4-flash",
+      "family": "DeepSeek-V4",
+      "kind": "llm",
+      "repo": "deepseek-ai/DeepSeek-V4-Flash",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "mit",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 290.9,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params_total (safetensors)",
+        "license"
+      ]
+    },
+    {
+      "id": "llama-3.3-70b-instruct",
+      "family": "Llama",
+      "kind": "llm",
+      "repo": "meta-llama/Llama-3.3-70B-Instruct",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": null,
+      "license_status": "UNVERIFIED",
+      "commercial_use": null,
+      "params_b": 70.55,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license tag",
+        "gated=manual"
+      ],
+      "unverified_reason": "D-3: Llama/Gemma marcados UNVERIFIED (termos próprios divergentes/não lidos)"
+    },
+    {
+      "id": "llama-3.1-8b-instruct",
+      "family": "Llama",
+      "kind": "llm",
+      "repo": "meta-llama/Llama-3.1-8B-Instruct",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": null,
+      "license_status": "UNVERIFIED",
+      "commercial_use": null,
+      "params_b": 8.03,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license tag",
+        "gated"
+      ],
+      "unverified_reason": "D-3: Llama/Gemma marcados UNVERIFIED (termos próprios divergentes/não lidos)"
+    },
+    {
+      "id": "qwen3-embedding-0.6b",
+      "family": "Qwen3-Embedding",
+      "kind": "embedding",
+      "repo": "Qwen/Qwen3-Embedding-0.6B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 0.596,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": 0.639,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B",
+        "https://ollama.com/library/qwen3-embedding/tags"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license",
+        "ollama size/context"
+      ]
+    },
+    {
+      "id": "qwen3-embedding-8b",
+      "family": "Qwen3-Embedding",
+      "kind": "embedding",
+      "repo": "Qwen/Qwen3-Embedding-8B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": null,
+      "license_status": "UNVERIFIED",
+      "commercial_use": null,
+      "params_b": null,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": 4.7,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://ollama.com/library/qwen3-embedding/tags"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "ollama size/context"
+      ],
+      "unverified_reason": "licença não verificada na fonte"
+    },
+    {
+      "id": "qwen3-reranker-0.6b",
+      "family": "Qwen3-Reranker",
+      "kind": "reranker",
+      "repo": "Qwen/Qwen3-Reranker-0.6B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 0.596,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/Qwen/Qwen3-Reranker-0.6B"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license"
+      ]
+    },
+    {
+      "id": "bge-reranker-v2-m3",
+      "family": "BGE",
+      "kind": "reranker",
+      "repo": "BAAI/bge-reranker-v2-m3",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 0.568,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/BAAI/bge-reranker-v2-m3"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license"
+      ]
+    },
+    {
+      "id": "bge-m3",
+      "family": "BGE",
+      "kind": "embedding",
+      "repo": "BAAI/bge-m3",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "mit",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": null,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/BAAI/bge-m3"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "license"
+      ]
+    },
+    {
+      "id": "nomic-embed-text-v1.5",
+      "family": "Nomic",
+      "kind": "embedding",
+      "repo": "nomic-ai/nomic-embed-text-v1.5",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 0.137,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": 0.274,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5",
+        "https://ollama.com/library/nomic-embed-text"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license",
+        "ollama size/context"
+      ]
+    },
+    {
+      "id": "embeddinggemma-300m",
+      "family": "Gemma",
+      "kind": "embedding",
+      "repo": "google/embeddinggemma-300m",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": null,
+      "license_status": "UNVERIFIED",
+      "commercial_use": null,
+      "params_b": 0.303,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/google/embeddinggemma-300m",
+        "https://ai.google.dev/gemma/terms"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license tag",
+        "gated"
+      ],
+      "unverified_reason": "D-3: Llama/Gemma marcados UNVERIFIED (termos próprios divergentes/não lidos)"
+    },
+    {
+      "id": "granite-3.3-8b-instruct",
+      "family": "Granite",
+      "kind": "llm",
+      "repo": "ibm-granite/granite-3.3-8b-instruct",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "params_b": 8.17,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": null,
+      "size_basis": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://huggingface.co/ibm-granite/granite-3.3-8b-instruct"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "params",
+        "license"
+      ]
+    },
+    {
+      "id": "qwen3.5-122b-a10b",
+      "family": "Qwen3.5",
+      "kind": "llm",
+      "repo": "Qwen/Qwen3.5-122B-A10B",
+      "revision_sha": null,
+      "revision_status": "UNVERIFIED",
+      "license": null,
+      "license_status": "UNVERIFIED",
+      "commercial_use": null,
+      "params_b": null,
+      "active_params_b": null,
+      "context_tokens": null,
+      "size_gb": 81.0,
+      "size_basis": "VENDOR-REPORTED ollama.com tags (2026-10-15)",
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "source_urls": [
+        "https://ollama.com/library/qwen3.5/tags",
+        "https://huggingface.co/Qwen/Qwen3.5-122B-A10B"
+      ],
+      "accessed": "2026-10-15",
+      "verified_fields": [
+        "existência",
+        "ollama size 81GB",
+        "'A10B' no nome"
+      ],
+      "unverified_reason": "licença não verificada na fonte"
+    },
+    {
+      "id": "laya-multilingual",
+      "repo": "convaiinnovations/laya-multilingual",
+      "revision_sha": "1720e3e3357cfe1e281542e223f8273b0890ca34",
+      "params_b": 0.322,
+      "size_gb": 0.644,
+      "size_basis": "MEDIDO: model.safetensors 643,835,514 B (HfApi files_metadata 2026-10-15); encoder mmBERT-base, 100+ línguas (README do modelo)",
+      "source_urls": [
+        "https://huggingface.co/convaiinnovations/laya-multilingual",
+        "https://pypi.org/project/laya/"
+      ],
+      "verified_fields": [
+        "license (HF card_data apache-2.0)",
+        "revision_sha (HfApi.model_info)",
+        "size (files_metadata)",
+        "params_total (README: 322M)",
+        "API Router.predict (execução local)"
+      ],
+      "local_dir": "data/local_ai/models/laya-multilingual",
+      "family": "Laya",
+      "kind": "decider",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "active_params_b": null,
+      "context_tokens": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "revision_status": "VERIFIED",
+      "accessed": "2026-10-15",
+      "publisher": "Convai Innovations",
+      "runtime": "pypi:laya==0.4.8 (in-process) | laya-serve"
+    },
+    {
+      "id": "laya-english",
+      "repo": "convaiinnovations/laya",
+      "revision_sha": "7b928d828b7b0e022f929d9bd2e44165aa270148",
+      "params_b": 0.421,
+      "size_gb": 0.843,
+      "size_basis": "MEDIDO: model.safetensors 842,609,210 B (HfApi files_metadata 2026-10-15); encoder ModernBERT-large (README do modelo)",
+      "source_urls": [
+        "https://huggingface.co/convaiinnovations/laya",
+        "https://pypi.org/project/laya/"
+      ],
+      "verified_fields": [
+        "license (HF card_data apache-2.0)",
+        "revision_sha (HfApi.model_info)",
+        "size (files_metadata)",
+        "params_total (README: 421M)",
+        "API Router.predict (execução local)"
+      ],
+      "local_dir": "data/local_ai/models/laya-english",
+      "family": "Laya",
+      "kind": "decider",
+      "license": "apache-2.0",
+      "license_status": "VERIFIED",
+      "commercial_use": true,
+      "active_params_b": null,
+      "context_tokens": null,
+      "min_vram_gb": null,
+      "min_ram_gb": null,
+      "requirements_status": "UNVERIFIED",
+      "revision_status": "VERIFIED",
+      "accessed": "2026-10-15",
+      "publisher": "Convai Innovations",
+      "runtime": "pypi:laya==0.4.8 (in-process) | laya-serve"
+    }
+  ],
+  "unverified_ids_excluded": [
+    "gpt-oss-safeguard-20b",
+    "qwen3guard-gen-8b"
+  ]
+}
