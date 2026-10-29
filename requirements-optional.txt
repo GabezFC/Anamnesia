@@ -27,7 +27,7 @@ mxbai-rerank==0.1.6             # mxbai_rerank_base_v2 (model mixedbread-ai/mxba
 # in transformers 5.x (verified: AttributeError on 5.18.0, works on 4.57.6).
 transformers==4.57.6
 huggingface-hub==0.36.2
-tokenizers==0.22.2
+tokenizers==0.23.3
 accelerate==1.15.0
 numpy==2.4.6
 psutil==7.2.2                   # scripts/bench_stages.py RAM column
