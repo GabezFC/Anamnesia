@@ -15,7 +15,7 @@ license-files = ["LICENSE"]
 # ANA-121: THIS table is the source of truth. requirements.txt / requirements-dev.txt mirror it and
 # tests/test_ci_consistency.py fails on any divergence (`make deps-check`).
 dependencies = [
-    "typesafe-sdk==0.7.1",
+    "typesafe-sdk==0.7.4",
     "fastapi==0.141.1",
     "uvicorn[standard]==0.53.0",
     "mcp==2.2.0",
