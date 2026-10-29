@@ -1,7 +1,7 @@
 """Onda 10 (ANA-239..246): itens REJEITADOS ficam fora do codigo ate haver evidencia.
 
 Estes testes sao guardas de regressao de escopo, nao de funcionalidade: se alguem introduzir um dos itens rejeitados,
-o teste falha e obriga a reabrir a decisao (docs/reports/ONDA10_REJEITADOS.md) com evidencia.
+o teste falha e obriga a reabrir a decisao (nota ONDA10_REJEITADOS.md no Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24)) com evidencia.
 """
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def test_ana246_no_automatic_routing_policy_promotion():  # HOLD medido na Onda 
     pat = re.compile(r"\b(auto_promote|autopromote|promote_policy_automatically)\b", re.I)
     assert [f.name for f, s in _py() if pat.search(_code_only(s))] == []
     import json
-    rep = ROOT / "docs" / "reports" / "ONDA4_ROUTING_REAL.json"
+    rep = ROOT / "data" / "reports-out" / "ONDA4_ROUTING_REAL.json"
     if rep.exists():
         assert "HOLD" in json.dumps(json.loads(rep.read_text(encoding="utf-8")))
 

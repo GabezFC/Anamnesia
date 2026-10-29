@@ -5,7 +5,7 @@ in CATALOG is a stage the interactive configuration page lists with a toggle. St
 (OmniRoute, RECOMP/Selective Context, GPTCache/RedisVL) are informational only — REJECTED has no toggle
 and the frontend must never render one for them.
 
-MEDIDO (benchmark M2, 2026-10-02 — docs/OPTIONAL_STAGES_BENCHMARK.md, reports/stages_benchmark_2026-10-01.json):
+MEDIDO (benchmark M2, 2026-10-02 — Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/OPTIONAL_STAGES_BENCHMARK.md), reports/stages_benchmark_2026-10-01.json):
 corpus sintético (120 consultas, pipeline `graphify`, sem JEV) e vault real (12 perguntas, pipeline
 `graphify_jev_opt`, JEV pago uma vez e reaproveitado em cache), RTX 3060 12 GB, torch 2.6.0+cu124.
 Cada estágio isolado contra o MESMO baseline. Percentuais = tokens totais (judge + contexto) vs baseline;

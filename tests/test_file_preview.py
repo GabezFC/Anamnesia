@@ -1,7 +1,45 @@
 """GET /api/projects/{id}/file — pré-visualização somente leitura (confinada, sem segredos)."""
 from __future__ import annotations
 
-from tests.test_terminals_api import H, add_project, ctx, env  # noqa: F401  (fixtures)
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.api import workspace as ws_api
+from app.terminals.projects import ProjectRegistry
+
+TOKEN = "test-token-abc123"
+ORIGIN = "http://127.0.0.1:8000"
+H = {"X-MG-Token": TOKEN}
+
+
+@pytest.fixture
+def env(monkeypatch):
+    monkeypatch.setenv("MG_LOCAL_TOKEN", TOKEN)
+    monkeypatch.delenv("MG_HOST", raising=False)
+    monkeypatch.delenv("HOST", raising=False)
+
+
+@pytest.fixture
+def ctx(env, tmp_path):
+    """App mínimo só com o router de workspace + registro de projetos temporário."""
+    reg = ProjectRegistry(tmp_path / "anamnesia.db")
+    app = FastAPI()
+    app.include_router(ws_api.router)
+    app.dependency_overrides[ws_api.get_registry] = lambda: reg
+    proj_dir = tmp_path / "work"
+    (proj_dir / "src").mkdir(parents=True)
+    (proj_dir / "src" / "main.py").write_text("x")
+    (proj_dir / "README.md").write_text("x")
+    client = TestClient(app, client=("127.0.0.1", 51234), base_url=ORIGIN)
+    remote = TestClient(app, client=("192.168.1.50", 51234), base_url=ORIGIN)
+    yield type("Ctx", (), dict(app=app, client=client, remote=remote, reg=reg, proj_dir=proj_dir))
+
+
+def add_project(c):
+    r = c.client.post("/api/projects", json={"name": "w", "path": str(c.proj_dir)}, headers=H)
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
 
 
 def _get(c, pid, path):

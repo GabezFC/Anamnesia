@@ -26,6 +26,7 @@ export const lab = {
   error: '',
   stats: null,
   runs: [],
+  dbPath: '',
   alerts: null,
   loadedAt: 0,
 };
@@ -48,6 +49,9 @@ export function ensureLab(force = false) {
       lab.runs = Array.isArray(runs) ? runs : [];
       lab.status = (lab.stats.total_runs || 0) > 0 ? 'ready' : 'empty';
       lab.error = '';
+      lab.dbPath = '';
+      // Fase 13: "0 runs" pode ser banco diferente (ANAMNESIA_HOME) -- mostra QUAL banco este servidor lê.
+      if (lab.status === 'empty') { try { lab.dbPath = (await call('GET', '/system/info'))?.db || ''; } catch { lab.dbPath = ''; } }
     } catch (e) {
       lab.stats = null; lab.runs = [];
       lab.status = isUnavailable(e) ? 'unavailable' : 'error';

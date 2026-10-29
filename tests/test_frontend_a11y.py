@@ -1,6 +1,6 @@
 """ANAM-027/028 (AUD-001,033..044,049): guardas estáticas e unitárias de acessibilidade do frontend.
 
-Sem rede/browser. A execução real por teclado (Playwright) está em docs/bench/anam-027-028-a11y.md.
+Sem rede/browser. A execução real por teclado (Playwright) está na nota anam-027-028-a11y.md no Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24).
 """
 from __future__ import annotations
 
@@ -71,9 +71,8 @@ def test_single_global_keydown_dispatcher_and_terminal_hook():
     app = read(JS / "app.js")
     assert "installShortcutDispatcher" in app
     assert "handleKeyboardShortcuts" not in app
-    assert "interceptKey: isAppShortcut" in read(JS / "live.js")
     cmd = read(JS / "commands.js")
-    for needle in ("isComposing", "xterm", "isContentEditable", "registerCommand"):
+    for needle in ("isComposing", "isContentEditable", "registerCommand"):
         assert needle in cmd, needle
 
 
@@ -99,7 +98,7 @@ def test_config_tabs_follow_apg():
 
 def test_workspace_tabs_projects_sessions_are_buttons():
     ws = read(JS / "pages" / "workspace.js")
-    assert 'role="tab" id="term-tab-' in ws and "<button" in ws.split('role="tab" id="term-tab-')[0][-120:]
+    assert 'role="tab" class="wio-tab' in ws
     assert 'role="tabpanel"' in ws
     assert '<div class="project-item' not in ws and '<div class="session-mini-item' not in ws
     assert 'button type="button" class="project-item' in ws

@@ -3,7 +3,7 @@
 
 # Referência de variáveis de ambiente (gerada)
 
-294 variáveis lidas pelo código (`app/`, `config/`, `anamnesia/`, `memory_gateway/`).
+307 variáveis lidas pelo código (`app/`, `config/`, `anamnesia/`, `memory_gateway/`).
 Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo comentado para copiar: [`.env.example`](../.env.example).
 
 **Tipo**: `user` = você define; `interna` = escrita/derivada pelo próprio Gateway; `sistema` = do SO/git.
@@ -12,8 +12,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 
 | Variável | Tipo | Default no código | Descrição | Lida em |
 | --- | --- | --- | --- | --- |
-| `ANAMNESIA_ALLOW_NETWORK_TEST` | user | — | [user] Permite o botão "testar conexão" fazer chamadas de rede reais (1). Padrão: teste estrutural offline. | `app/api/connections.py` |
-| `ANAMNESIA_ALLOW_REMOTE_TERMINALS` | user | `''` | Permite terminais PTY via WebSocket vindos de clientes não-loopback (padrão: bloqueado). | `app/api/workspace.py` |
+| `ANAMNESIA_ALLOW_NETWORK_TEST` | user | — | [user] Permite o botão "testar conexão" verificar a chave no provedor (1). Padrão: offline; o estado fica "configurado/não testado", nunca "conectado". | `app/connections/verify.py` |
 | `ANAMNESIA_ANSWER_REQUIRE_JEV_STRICT` | user | `''` | [user] mode=answer exige JEV strict na recuperação (1). | `app/routing/answer.py` |
 | `ANAMNESIA_BUDGET_ENFORCE` | user | `''` | Orçamento: 1 faz o guard degradar plano pago para baseline quando estoura (padrão: não impõe). | `app/routing/spend.py` |
 | `ANAMNESIA_BUDGET_WARN` | user | `''` | Aviso de orçamento (modo warn): ligado por padrão; 0/off silencia. | `app/gateway/budget_guard.py` |
@@ -40,6 +39,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `ANAMNESIA_OLLAMA_KEEP_ALIVE` | user | — | Ollama: keep_alive e janela de contexto (num_ctx) enviados às chamadas. | `app/adapters/models/providers.py` |
 | `ANAMNESIA_OLLAMA_NUM_CTX` | user | `''` | — | `app/adapters/models/providers.py` |
 | `ANAMNESIA_PAID_CALLS` | user | `''` | Kill-switch de chamadas pagas: 0/off/false bloqueia provedores pagos. | `app/adapters/models/errors.py`, `app/services/local_first.py` |
+| `ANAMNESIA_PATH_MAP` | user | `''` | [user] Mapa host->contêiner das raízes de projetos (Docker): 'C:/Projetos=/projects;D:/Dados=/projects2'. | `app/terminals/path_map.py` |
 | `ANAMNESIA_PERSIST_MAX_QUEUE` | user | `'1000'` | — | `app/gateway/memory_gateway.py` |
 | `ANAMNESIA_POLICY` | user | `''` | Modo do motor de políticas (vazio/0/off = desligado). | `app/policy/engine.py` |
 | `ANAMNESIA_POLICY_AUDIT` | user | — | Caminho do arquivo de auditoria do motor de políticas. | `app/policy/engine.py` |
@@ -61,6 +61,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `ANAMNESIA_STEP_DIR` | interna | — | diretório do passo, exportado pelo orquestrador | `app/orchestration/launchers.py` |
 | `ANAMNESIA_TOKEN_CALIBRATION` | user | `''` | Calibração de estimativa de tokens (opt-in; vazio = desligado). | `app/services/token_calibration.py`, `app/services/token_estimate.py` |
 | `ANAMNESIA_TOOL_PROFILE` | user | `''`, `'default'` | Perfil de ferramentas MCP: restricted\|readonly oculta ferramentas fora do perfil (vazio = todas). | `app/mcp/server.py`, `app/policy/tools_manifest.py` |
+| `ANAMNESIA_VERIFY_TTL_S` | user | — | [user] Validade (segundos) de uma verificação de conexão antes de virar "expirada". Padrão: 86400. | `app/connections/verify.py` |
 
 ## JEV / TypeSafe
 
@@ -84,8 +85,8 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `JEV_SECOND_PASS` | user | `False` | Run a second judging pass over surviving candidates. | `config/jev.py` |
 | `JEV_STATE_BUDGET` | user | `28000` | Max tokens allotted to the JEV `state` payload. | `config/jev.py` |
 | `JEV_TIMEOUT_S` | user | `30.0` | Per-request JEV HTTP timeout, in seconds. | `config/jev.py` |
-| `TYPESAFE_API_KEY` | user | — | Secret: TypeSafe API key. Leave empty here; set it only in your local .env. | `anamnesia/cli.py`, `app/api/routes.py`, `app/services/jev.py`, `app/services/jev_setup.py` |
-| `TYPESAFE_BASE_URL` | user | — | Optional: JEV endpoint (default https://api.typesafe.ai). https only (http allowed for localhost). | `app/api/routes.py`, `app/services/jev.py`, `app/services/jev_setup.py` |
+| `TYPESAFE_API_KEY` | user | — | Secret: TypeSafe API key. Leave empty here; set it only in your local .env. | `anamnesia/cli.py`, `app/api/routes.py`, `app/decision/providers.py`, `app/services/jev.py`, `app/services/jev_setup.py` |
+| `TYPESAFE_BASE_URL` | user | — | Optional: JEV endpoint (default https://api.typesafe.ai). https only (http allowed for localhost). | `app/api/routes.py`, `app/decision/providers.py`, `app/services/jev.py`, `app/services/jev_setup.py` |
 | `TYPESAFE_LOCAL_API_KEY` | user | — | Chave opcional para o backend JEV local (loopback); TYPESAFE_API_KEY é dispensada nesse caso. | `app/services/jev.py` |
 
 ## MG_*
@@ -94,7 +95,14 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | --- | --- | --- | --- | --- |
 | `MG_ALLOWED_HOSTS` | user | `''` | [user] Hosts extras aceitos no cabeçalho Host (proteção contra DNS rebinding), separados por vírgula. | `app/main.py` |
 | `MG_ALLOW_REMOTE_PROVIDERS` | user | `''` | — | `app/services/hardening.py` |
+| `MG_COLIBRI_ALLOW_DOCKER_HOST` | user | `False` | Permite o Colibri alcançar host.docker.internal quando o Gateway roda em Docker (1/0). | `config/colibri.py` |
+| `MG_COLIBRI_API_KEY` | user | `''` | — | `app/services/colibri.py`, `config/colibri.py` |
+| `MG_COLIBRI_ENABLED` | user | `False` | — | `config/colibri.py` |
 | `MG_COLIBRI_HOME` | user | — | — | `app/services/local_ai/colibri.py` |
+| `MG_COLIBRI_MAX_RETRIES` | user | `1` | — | `config/colibri.py` |
+| `MG_COLIBRI_MODEL` | user | `'jev-latest'` | — | `config/colibri.py` |
+| `MG_COLIBRI_TIMEOUT_S` | user | `30.0` | — | `config/colibri.py` |
+| `MG_COLIBRI_URL` | user | — | — | `config/colibri.py` |
 | `MG_CONTEXT_NONCE` | user | `'0'` | [user] Nonce por contexto (delimitadores não adivinháveis) nos pipelines não congelados (1 liga). | `app/gateway/memory_gateway.py` |
 | `MG_DECISION_CACHE_SIZE` | user | `'2048'` | Entradas do cache de decisões em memória (0 = desliga). | `app/decision/config.py` |
 | `MG_DECISION_CONFIG_FILE` | user | — | JSON com limiares por provider e por projeto (isolados): {"thresholds": {...}, "projects": {"slug": {...}}}. | `app/decision/config.py` |
@@ -119,12 +127,16 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `MG_EXP_SEMANTIC_RRF` | user | `False` | Experimento de recuperação: fusão semântica via RRF. | `app/retrieval/experiments.py` |
 | `MG_EXP_STEM_PREFIX` | user | `False` | Experimento de recuperação: stemming por prefixo. | `app/retrieval/experiments.py` |
 | `MG_EXP_UNIFIED_TOKENS` | user | `False` | Experimento de recuperação: contagem unificada de tokens. | `app/retrieval/experiments.py` |
-| `MG_HOST` | user | `'0.0.0.0'` | Interface the API server binds to. Loopback by default (§5.4 da proposta 2026-09-28): endpoints | `app/api/workspace.py`, `config/benchmark.py` |
+| `MG_HOST` | user | — | Interface the API server binds to. Loopback by default (§5.4 da proposta 2026-09-28): endpoints | `config/benchmark.py` |
 | `MG_HOTSET` | user | — | Hot set de notas recentes no otimizador: liga, meia-vida (s) e tamanho. | `app/gateway/optimizer.py` |
 | `MG_HOTSET_HALFLIFE_S` | user | `'3600'` | — | `app/gateway/optimizer.py` |
 | `MG_HOTSET_TOPN` | user | `'16'` | — | `app/gateway/optimizer.py` |
 | `MG_INCREMENTAL_INDEX` | user | `''` | — | `app/retrieval/incremental_index.py` |
+| `MG_IN_DOCKER` | user | — | Força o modo Docker da Central de Importação/Exportação (1): pastas do host só existem se montadas no contêiner. | `app/terminals/path_map.py`, `app/workspace_io/tasks.py` |
+| `MG_LAYA_API_KEY` | user | `''` | — | `app/services/laya_decider.py` |
 | `MG_LAYA_BATCH_SIZE` | user | `16` | Tamanho de lote do predict_batch. | `config/laya.py` |
+| `MG_LAYA_BREAKER_COOLDOWN_S` | user | `30.0` | — | `config/laya.py` |
+| `MG_LAYA_BREAKER_FAILURES` | user | `3` | — | `config/laya.py` |
 | `MG_LAYA_CALIBRATION_FILE` | user | `''` | Arquivo opcional de calibração (reservado; vazio = usa MG_LAYA_TEMPERATURE). | `config/laya.py` |
 | `MG_LAYA_DEVICE` | user | `'cpu'` | Dispositivo do torch para o Laya in-process. | `config/laya.py` |
 | `MG_LAYA_DROP_THRESHOLD` | user | `0.1` | Relevância < limiar => DROP; entre os dois => REVIEW/escalona ao JEV na cascata. | `config/laya.py` |
@@ -133,6 +145,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `MG_LAYA_FORCE_MODEL` | user | `''` | Força um checkpoint (multilingual evita carregar o inglês, ~0,8 GB a menos de RAM); vazio = por idioma. | `config/laya.py` |
 | `MG_LAYA_INJECTION_THRESHOLD` | user | `0.9` | Limiar de injeção/lixo do Laya (sinal adicional ao injection_screen). | `config/laya.py` |
 | `MG_LAYA_KEEP_THRESHOLD` | user | `0.25` | Relevância >= limiar => KEEP (limiar experimental, ver docs/bench/anam-042-laya.md). | `config/laya.py` |
+| `MG_LAYA_LOAD_TIMEOUT_S` | user | `120.0` | — | `config/laya.py` |
 | `MG_LAYA_MAX_STATE_CHARS` | user | `1500` | Máximo de caracteres do snippet enviado ao Laya. | `config/laya.py` |
 | `MG_LAYA_MIN_CONFIDENCE` | user | `0.0` | Cascata: confidence do Laya abaixo disto escalona o candidato ao JEV. | `config/laya.py` |
 | `MG_LAYA_MODE` | user | `'auto'` | Modo do decisor Laya: auto\|inproc\|serve\|off (auto = inproc se 'laya' importável, senão serve, senão off explícito). | `config/laya.py` |
@@ -140,6 +153,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `MG_LAYA_MULTILINGUAL_DIR` | user | `''` | Diretório do checkpoint laya-multilingual (vazio = <MODELS_DIR>/laya-multilingual). | `config/laya.py` |
 | `MG_LAYA_PRIVACY_FAILURE` | user | `'fail_closed'` | Laya ligado mas caiu: fail_closed (trata como privado) ou rules_only. | `config/laya.py` |
 | `MG_LAYA_PRIVACY_THRESHOLD` | user | `0.1` | Limiar do classificador de privacidade (>= => só provider local). | `config/laya.py` |
+| `MG_LAYA_PYTHON` | user | `''` | worker (NOVO): processo-filho no Python que tem laya+torch (padrao: autodetecta data/local_ai/venv*) | `config/laya.py` |
 | `MG_LAYA_SERVE_URL` | user | `''` | URL loopback do laya-serve (modo serve; nunca a porta 8000 do Gateway). | `config/laya.py` |
 | `MG_LAYA_TEMPERATURE` | user | `1.0` | Temperatura de calibração (refit por dados próprios; 1.0 = sem refit). | `config/laya.py` |
 | `MG_LAYA_THREADS` | user | `0` | Threads intra-op do torch (0 = padrão). | `config/laya.py` |
@@ -167,7 +181,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `MG_MEMORY_TRASH_DAYS` | user | `30.0` | Dias que memórias expiradas ficam na lixeira antes da remoção. | `app/memory_store/lifecycle.py` |
 | `MG_METRICS_ONLY` | user | `''` | — | `app/api/costs.py`, `app/api/memory_context.py` |
 | `MG_NEAR_DUP_LSH` | user | — | Deduplicação quase-duplicada via LSH (1/0). | `app/services/near_dup.py` |
-| `MG_OPTIMIZER` | user | `True` | Full reference: docs/OPTIMIZATION_LAYER.md. false = exact pre-layer behaviour. | `config/optimizer.py` |
+| `MG_OPTIMIZER` | user | `True` | Full reference: Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/OPTIMIZATION_LAYER.md). false = exact pre-layer behaviour. | `config/optimizer.py` |
 | `MG_OPT_ADAPTIVE_CUT` | user | `True` | Drop results scoring < RATIO x best (SIMPLE/MEDIUM only), never fewer than FLOOR. Calibrated knee. | `config/optimizer.py` |
 | `MG_OPT_CACHE_SIZE` | user | `256` | — | `config/optimizer.py` |
 | `MG_OPT_CACHE_TTL_S` | user | `900.0` | — | `config/optimizer.py` |
@@ -207,6 +221,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `MG_STORE_LOCK_TIMEOUT_S` | user | `30` | Timeout (s) do lock entre processos do memory store. | `app/memory_store/store.py` |
 | `MG_TERMINAL_MCP` | user | `'1'` | [user] Injeta o MCP do Gateway nos agentes dos terminais (1 = sim, padrão). | `app/terminals/mcp_inject.py` |
 | `MG_TERMINAL_SESSION` | interna | — | id da sessão de terminal, exportado pelo Gateway ao PTY | `app/database/db.py` |
+| `MG_TRUSTED_LOCAL_CLIENTS` | user | `''` | [user] Docker: IPs de cliente tratados como "esta máquina" (gateway da rede do compose, ex. 172.29.240.1). Vazio = só loopback. | `app/services/security.py` |
 | `MG_VAULT_REFRESH_S` | user | `5.0` | Seconds between vault change checks; the index rebuilds when notes change. -1 = never. | `config/optimizer.py` |
 | `MG_VERDICT_ENABLED` | user | `False` | [user] Veredito por escopo (desligado): liga e limiares de tamanho de escopo. | `config/optimizer.py` |
 | `MG_VERDICT_LARGE_MIN` | user | `50` | — | `config/optimizer.py` |
@@ -230,8 +245,6 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `DB_COMPRESS_CONTEXT` | user | `False` | [user] Comprime runs.context com zlib ao gravar (ferramentas que leem o SQLite direto veriam base64). | `config/benchmark.py` |
 | `DB_PATH` | user | — | [user] Caminho do SQLite de métricas e do arquivo de perguntas do benchmark (default: <raiz dos dados>). | `config/benchmark.py` |
 | `DEDUP_MAX_PER_NOTE` | user | `1` | Max snippets kept per source note after dedup. | `config/retrieval.py` |
-| `GIT_OPTIONAL_LOCKS` | sistema | — | definida pelo Gateway ao chamar git | `app/terminals/worktrees.py` |
-| `GIT_TERMINAL_PROMPT` | sistema | — | definida pelo Gateway ao chamar git | `app/terminals/worktrees.py` |
 | `GRAPHIFY_BIN` | user | `'graphify'` | Graphify executable name or path (must be on PATH if unqualified). | `config/retrieval.py` |
 | `GRAPHIFY_GRAPH_EXPAND` | user | `15` | Number of extra nodes reached by expanding graph edges from the seeds. | `config/retrieval.py` |
 | `GRAPHIFY_HYBRID` | user | `True` | Hybrid Graphify retrieval: BM25 body text + graph edges. false = old CLI traversal. | `config/retrieval.py` |
@@ -251,7 +264,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `OBSIDIAN_VAULT_PATH` | user | `''` | Linux/macOS example:   MEMORY_GATEWAY_VAULT=/home/user/notes | `config/retrieval.py` |
 | `OFFLINE` | user | — | Alias de ANAMNESIA_OFFLINE (modo offline). | `anamnesia/cli.py` |
 | `OLLAMA_BASE_URL` | user | `'http://localhost:11434'` | Base URL of a local Ollama server. | `config/agents.py` |
-| `OLLAMA_HOST` | user | — | [user] Alias do endpoint do Ollama usado pelo teste de conexão (a config principal é OLLAMA_BASE_URL). | `app/api/connections.py` |
+| `OLLAMA_HOST` | user | — | [user] Alias do endpoint do Ollama usado pelo teste de conexão (a config principal é OLLAMA_BASE_URL). | `app/connections/verify.py` |
 | `OPENAI_API_KEY` | user | `''` | Secret: OpenAI API key. Leave empty unless using the OpenAI consumer. | `app/adapters/models/providers.py`, `app/adapters/registry.py`, `app/benchmark/local_bench.py` |
 | `OPENAI_BASE_URL` | user | `'http://localhost:11434/v1'` | Base URL OpenAI-compatível usada pelo benchmark local (padrão http://localhost:11434/v1). | `app/benchmark/local_bench.py` |
 | `OPENAI_COMPAT_API_KEY` | user | — | Secret: API key for that OpenAI-compatible endpoint, if it requires one. | `app/adapters/registry.py` |
@@ -269,7 +282,7 @@ Hierarquia de precedência: [CONFIGURATION.md](guides/CONFIGURATION.md). Modelo 
 | `OPT_EARLY_STOPPING` | user | `False` | — | `config/optimization.py` |
 | `OPT_EARLY_STOP_MAX_ACCEPT_RANK` | user | `3` | — | `config/optimization.py` |
 | `OPT_EARLY_STOP_MIN_STRONG` | user | `1` | — | `config/optimization.py` |
-| `OPT_ENABLED` | user | `False` | e docs/reports/OPTIONAL_STAGES_BENCHMARK.md). Estágios com modelo exigem extras opcionais. --- | `config/optimization.py` |
+| `OPT_ENABLED` | user | `False` | e Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/OPTIONAL_STAGES_BENCHMARK.md)). Estágios com modelo exigem extras opcionais. --- | `config/optimization.py` |
 | `OPT_LAYERED_CACHE` | user | `False` | — | `config/optimization.py` |
 | `OPT_NEAR_DEDUP` | user | `False` | — | `config/optimization.py` |
 | `OPT_NEAR_DEDUP_HAMMING` | user | `12` | — | `config/optimization.py` |

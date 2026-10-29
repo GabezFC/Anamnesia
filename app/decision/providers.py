@@ -19,6 +19,32 @@ JEV_DECISION_VERSION = "jev-decision-v1"
 LAYA_DECISION_VERSION = "laya-decision-v1"
 
 
+def jev_static_checks() -> dict:
+    """Pre-requisitos do JEV verificaveis SEM rede e SEM custo (a sonda real e uma chamada paga/remota e so roda
+    com consentimento: POST /api/decision/decision ou /api/local-ai/colibri/test para o backend local).
+    Deterministico: chave ausente em backend remoto => INDISPONIVEL (nao 'nao sondado')."""
+    import os
+    from config.jev import JevConfig
+    from app.services.jev import is_local_base_url, sdk_version
+    cfg = JevConfig()
+    base = os.environ.get("TYPESAFE_BASE_URL") or ""
+    local = is_local_base_url(base) or cfg.backend == "ollama"
+    key = bool(os.environ.get("TYPESAFE_API_KEY"))
+    sdk = sdk_version()
+    checks = {"backend": cfg.backend, "api_key_set": key, "local_backend": local, "sdk_version": sdk,
+              "probe": "paid_not_run" if not local else "local_probe_available"}
+    if cfg.backend == "typesafe" and not local and not key:
+        return {**checks, "available": False, "label": "UNAVAILABLE",
+                "reason": "TYPESAFE_API_KEY ausente e backend remoto: JEV indisponível (sem chamada; defina a chave ou use "
+                          "JEV_BACKEND=ollama / TYPESAFE_BASE_URL loopback)"}
+    if cfg.backend == "typesafe" and sdk is None:
+        return {**checks, "available": False, "label": "UNAVAILABLE",
+                "reason": "pacote typesafe_sdk não instalado neste Python"}
+    why = ("pré-requisitos locais presentes; conectividade/qualidade NÃO sondadas "
+           + ("(backend local: use a sonda gratuita)" if local else "(sonda real é chamada paga; exige ANAMNESIA_PAID_CALLS=1)"))
+    return {**checks, "reason": why}
+
+
 def to_candidates(items: list[Item]) -> list[Candidate]:
     return [Candidate(candidate_id=i.candidate_id, source_file=i.source or i.candidate_id, section=i.section,
                       snippet=i.text, content_hash=i.content_hash) for i in items]
@@ -28,12 +54,14 @@ class JEVDecisionProvider(DecisionProvider):
     """Juiz JEV (TypeSafe ou Colibrì local) via `JevService.evaluate`. Pago quando o backend é remoto."""
 
     def __init__(self, cfg: DecisionConfig, jev: Any | None = None, jev_factory: Callable[[], Any] | None = None,
-                 label: str = "jev"):
-        self.cfg, self._jev, self._factory, self._label = cfg, jev, jev_factory, label
+                 label: str = "jev", name: str = "jev", health_fn: Callable[[], dict] | None = None):
+        # `name` identifica o provider no engine/cache ("jev" pago ou "colibri" local); `label` é só exibição.
+        self.cfg, self._jev, self._factory, self._label, self._name, self._health_fn = \
+            cfg, jev, jev_factory, label, name, health_fn
 
     @property
     def provider_name(self) -> str:
-        return "jev"
+        return self._name
 
     @property
     def version(self) -> str:
@@ -55,24 +83,37 @@ class JEVDecisionProvider(DecisionProvider):
         return self._jev
 
     def capabilities(self) -> dict:
-        strict = getattr(getattr(self._jev, "cfg", None), "mode", "") == "strict"
+        strict = False
+        if self._jev is not None or self._factory is not None:
+            try:
+                strict = getattr(getattr(self._service(), "cfg", None), "mode", "") == "strict"
+            except Exception:  # noqa: BLE001 — indisponibilidade não muda as capacidades declaradas
+                pass
         return {"ops": [OP_RETRIEVAL] + ([OP_SECURITY] if strict else []), "batch": True, "local": None,
                 "paid": None, "provides_confidence": False,
                 "notes": "memory não suportado; security só com jev_mode=strict; custo/local depende de TYPESAFE_BASE_URL"}
 
     def health(self) -> dict:
+        if self._health_fn is not None:
+            try:
+                return self._health_fn()
+            except Exception as exc:  # noqa: BLE001 — sondagem nunca derruba o status
+                return {"provider": self._name, "configured": True, "available": False,
+                        "label": "UNAVAILABLE", "reason": f"{type(exc).__name__}: {exc}"[:160], "backend": self._label}
         configured = self._jev is not None or self._factory is not None
-        return {"provider": "jev", "configured": configured, "available": None,
-                "label": UNKNOWN, "reason": "não sondado: status não faz chamada ao JEV (nem paga)",
-                "backend": self._label}
+        out = {"provider": self._name, "configured": configured, "available": None, "label": UNKNOWN,
+               "reason": "não sondado: status não faz chamada ao JEV (nem paga)", "backend": self._label}
+        if self._name == "jev":
+            out.update(jev_static_checks())
+        return out
 
     def decide(self, request: DecisionRequest) -> DecisionResult:
         if request.op not in self.capabilities()["ops"] and request.op != OP_SECURITY:
             raise ProviderUnavailable(f"JEV não suporta op={request.op}")
         svc = self._service()
         if request.op == OP_SECURITY and getattr(getattr(svc, "cfg", None), "mode", "") != "strict":
-            raise ProviderUnavailable("JEV security exige jev_mode=strict")
-        th = self.cfg.thresholds_for("jev", request.project)
+            raise ProviderUnavailable(f"{self._name} security exige jev_mode=strict")
+        th = self.cfg.thresholds_for("colibri" if self._name == "colibri" else "jev", request.project)
         cands = to_candidates(request.items)
         t0 = time.perf_counter()
         try:
@@ -92,10 +133,10 @@ class JEVDecisionProvider(DecisionProvider):
             else:
                 d = QUARANTINE if c.decision == QUARANTINE else th.band(c.relevance)
                 score = c.relevance
-            out.append(ItemDecision(it.candidate_id, it.content_hash, d, score, None, "jev",
+            out.append(ItemDecision(it.candidate_id, it.content_hash, d, score, None, self._name,
                                     reason="" if d != UNJUDGED else "sem resposta do JEV"))
         res = DecisionResult(request.request_id, request.op, "jev", project=request.project, items=out,
-                             latency_ms=lat, calls={"jev": len(out)}, errors=errs[:3],
+                             latency_ms=lat, calls={self._name: len(out)}, errors=errs[:3],
                              jev_requests=int(getattr(m, "request_count", 1) or 0))
         return res
 

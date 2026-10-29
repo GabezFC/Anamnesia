@@ -32,7 +32,7 @@ So `extract` must be called with a budget that is `min(policy_budget, what_the_c
 and the caller must keep the original whenever extraction did not come out smaller. That rule lives in
 `fit_or_keep` below so no call site can forget it.
 
-SAME PRICE, WRONG SECTION (snip-v2, measured 2026-10-01, docs/QUALITY_5_5.md Parte 2/2b)
+SAME PRICE, WRONG SECTION (snip-v2, measured 2026-10-01, Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/QUALITY_5_5.md) Parte 2/2b)
 ------------------------------------------------------------------------------------------
 The ceiling above (`effective = min(budget, current_cost)`) means `extract` can never cost more than
 `current` already does -- but "never cheaper" is not the same question as "never better". q05/q07/q10
@@ -128,7 +128,7 @@ def extract(text: str, query: str, max_tokens: int, heading: str = "") -> Snippe
     # Reserve room for the heading and the elision marker before choosing the window. The heading
     # repeats metadata the judge already receives as its own `section` field (see
     # JevClient.candidate_payload), so on a small budget it is not worth the tokens: measured
-    # 2026-10-01 (docs/QUALITY_5_5.md Parte 2b), an unconditional heading prefix consumed the ENTIRE
+    # 2026-10-01 (Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/QUALITY_5_5.md) Parte 2b), an unconditional heading prefix consumed the ENTIRE
     # budget on q05/q07/q10 (15-63 tokens) and silently starved the window search down to the
     # heading itself, which is exactly the "wrong section" failure this function exists to prevent.
     # Dropped once it alone would cost more than half of what is actually available.

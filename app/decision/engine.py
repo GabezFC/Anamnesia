@@ -26,6 +26,7 @@ from app.decision.telemetry import DecisionHistory, build_record, default_histor
 from app.decision.types import (MAX_BATCH, MAX_ITEMS, MAX_TEXT_CHARS, MEASURED, OP_MEMORY, OP_RETRIEVAL, OP_SECURITY,
                                 QUARANTINE, REVIEW, UNJUDGED, UNKNOWN, DecisionRequest, DecisionResult,
                                 ItemDecision, ProviderUnavailable, labeled)
+from app.services.metrics import redact
 
 SLUG = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 FALLBACK = {OP_RETRIEVAL: (UNJUDGED, "allow"), OP_MEMORY: (REVIEW, "review"), OP_SECURITY: (QUARANTINE, "block")}
@@ -58,8 +59,13 @@ class DecisionEngine:
         self.cfg = (cfg or load_config()).validate()
         self.jev_provider = JEVDecisionProvider(self.cfg, jev=jev)
         self.laya_provider = LayaDecisionProvider(self.cfg, service=laya_service)
+        # Colibri (IA local por API, ANAM-041/046): JEV-decision com backend loopback MG_COLIBRI_URL, custo 0.
+        # A fábrica levanta indisponibilidade explícita quando MG_COLIBRI_ENABLED=off ou servidor fora do ar.
+        from app.services.colibri import colibri_provider_factory, colibri_status
+        self.colibri_provider = JEVDecisionProvider(self.cfg, jev_factory=colibri_provider_factory(),
+                                                    label="colibri", name="colibri", health_fn=colibri_status)
         self.providers: dict[str, DecisionProvider] = {
-            "jev": self.jev_provider, "laya": self.laya_provider,
+            "jev": self.jev_provider, "laya": self.laya_provider, "colibri": self.colibri_provider,
             "hybrid": HybridDecisionProvider(self.cfg, self.jev_provider, self.laya_provider),
             "adaptive": AdaptiveDecisionProvider(self.cfg, self.jev_provider, self.laya_provider)}
         self.cache = DecisionCache(self.cfg.cache_size)
@@ -92,7 +98,8 @@ class DecisionEngine:
                                               checkpoint=prov.checkpoint, version=prov.version, policy=policy)
         hits = {cid: self.cache.get(k) for cid, k in keys.items()}
         todo = [it for it in req.items if hits[it.candidate_id] is None]
-        res = DecisionResult(req.request_id, req.op, pname, strategy=pstrat if pname == "hybrid" else "", project=req.project)
+        res = DecisionResult(req.request_id, req.op, pname, strategy=pstrat if pname == "hybrid" else "", project=req.project,
+                             model=str(prov.checkpoint or ""))
         fresh: dict[str, ItemDecision] = {}
         if todo:
             sub = DecisionRequest(req.query, todo, req.op, req.project, req.schema, req.request_id)
@@ -103,7 +110,7 @@ class DecisionEngine:
                 fresh = {d.candidate_id: d for d in r.items}
                 res.calls, res.errors, res.jev_requests, res.strategy = r.calls, r.errors, r.jev_requests, r.strategy or res.strategy
             except Exception as exc:  # noqa: BLE001 — QUALQUER falha vira fallback explícito do tipo de operação
-                why = f"{pname} indisponível: {type(exc).__name__}: {exc}"
+                why = redact(f"{pname} indisponível: {type(exc).__name__}: {exc}")  # Fase 7: erro de credencial nunca vaza a chave
                 res.errors.append(why[:200])
                 fresh = {it.candidate_id: fallback_item(req.op, it.candidate_id, it.content_hash, why, pname) for it in todo}
             for it in todo:  # item não julgado individualmente (UNJUDGED sem flag) também recebe fallback explícito
@@ -134,7 +141,7 @@ class DecisionEngine:
             "version": "decision-engine-v1", "stage": "EXPERIMENTAL",
             "active_provider": pname, "active_strategy": pstrat if pname == "hybrid" else None,
             "default_pipeline": "graphify_jev_opt", "default_is_jev_only": pname == DEFAULT_PROVIDER,
-            "providers": {n: p.health() for n, p in self.providers.items() if n in ("jev", "laya")},
+            "providers": {n: p.health() for n, p in self.providers.items() if n in ("jev", "laya", "colibri")},
             "capabilities": {n: p.capabilities() for n, p in self.providers.items()},
             "cache": self.cache.stats(), "history": {"records": self.history.total, "persist": self.history.persist},
             "fallback_policy": FALLBACK_POLICY,

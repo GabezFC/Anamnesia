@@ -1,0 +1,53 @@
+# Anamnésia + Laya — imagem SEPARADA DE TESTE (anamnesia:laya-test). NÃO substitui nem altera `anamnesia:local`.
+# Preparada, NÃO construída nesta rodada. Contexto de build = raiz do repositório:
+#   docker build -f docker/Dockerfile.laya-test -t anamnesia:laya-test .      (ou: python scripts/mglaya.py up)
+#
+# Diferenças deliberadas em relação ao ./Dockerfile:
+#   - base python:3.12-slim (a 3.14 da imagem de produção não tem wheel de torch garantida; o host da Laya é 3.12);
+#   - laya==0.4.8 + torch 2.14.1 CPU (mesmas versões da venv312 do host);
+#   - os PESOS (~1,5 GB) NÃO entram na imagem: são montados SOMENTE LEITURA em /models (ver docker-compose.laya-test.yml).
+# Base fixada por digest (índice multi-arch de python:3.12-slim lido no registry Docker Hub em 2026-10-24 via
+# HEAD /v2/library/python/manifests/3.12-slim). O digest congela a camada; não recebe patches sozinho.
+FROM python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    ANAMNESIA_HOME=/data \
+    MG_HOST=0.0.0.0 \
+    # Sem rede para o Hugging Face: o encoder vem de /models/*/encoder (config) e o tokenizer de /models/*/tokenizer.
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_HOME=/data/hf
+
+ARG GIT_COMMIT=unknown
+ARG FRONTEND_SHA=unknown
+ARG TORCH_CPU_INDEX=https://download.pytorch.org/whl/cpu
+
+# Camada 1 (cara, raramente muda): torch CPU. Índice CPU SOMENTE para o torch e suas dependências diretas.
+RUN pip install --index-url "${TORCH_CPU_INDEX}" "torch==2.14.1"
+
+WORKDIR /app
+COPY . /app
+# Camada 2: o app + Laya, com as MESMAS versões da venv312 do host (comparabilidade). torch já está satisfeito.
+RUN pip install . \
+        "laya==0.4.8" \
+        "transformers==5.20.1" "huggingface-hub==2.2.0" "tokenizers==0.23.3" \
+        "safetensors==0.8.0" "numpy==2.5.4" \
+    && rm -rf /app/* \
+    && useradd --create-home --uid 10001 anamnesia \
+    && mkdir /data /models && chown anamnesia:anamnesia /data
+
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}" \
+      io.anamnesia.frontend-sha256="${FRONTEND_SHA}" \
+      io.anamnesia.variant="laya-test" \
+      io.anamnesia.laya.pin="laya==0.4.8 torch==2.14.1+cpu"
+
+USER anamnesia
+VOLUME ["/data"]
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"
+
+CMD ["anamnesia", "start"]

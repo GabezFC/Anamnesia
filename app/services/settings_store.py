@@ -29,7 +29,7 @@ class BudgetPatch(BaseModel):
 class Settings(BaseModel):
     subagent_preset: dict[str, Any] = Field(default_factory=dict)
     prefilter_cache: dict[str, Any] = Field(default_factory=dict)
-    terminal_layout: dict[str, Any] = Field(default_factory=dict)
+    workspace_layout: dict[str, Any] = Field(default_factory=dict)  # X04: antes `terminal_layout`
     language: Literal["pt-BR", "en"] = "pt-BR"
     budget: BudgetSettings = Field(default_factory=BudgetSettings)
     max_tokens_per_query: int | None = Field(None, ge=1, le=1_000_000)
@@ -45,7 +45,8 @@ class SettingsPatch(BaseModel):
     model_config = {"extra": "forbid"}
     subagent_preset: dict[str, Any] | None = None
     prefilter_cache: dict[str, Any] | None = None
-    terminal_layout: dict[str, Any] | None = None
+    workspace_layout: dict[str, Any] | None = None
+    terminal_layout: dict[str, Any] | None = None  # alias deprecado de workspace_layout (aceito por ≥1 versão)
     language: Literal["pt-BR", "en"] | None = None
     budget: BudgetPatch | None = None
     max_tokens_per_query: int | None = Field(None, ge=1, le=1_000_000)  # explicit null clears the cap
@@ -71,9 +72,24 @@ def _stored(db) -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
+def _migrate_layout_key(db, stored: dict) -> dict:
+    """X04: `terminal_layout` -> `workspace_layout`. Só o nome antigo no armazenamento: copia o dado para o novo
+    nome e persiste (sem perder nada). Os dois presentes: o novo vence e o antigo é descartado."""
+    if "terminal_layout" not in stored:
+        return stored
+    migrated = {k: v for k, v in stored.items() if k != "terminal_layout"}
+    if "workspace_layout" not in migrated and isinstance(stored["terminal_layout"], dict):
+        migrated["workspace_layout"] = stored["terminal_layout"]
+    try:
+        db.set_kv(KV_KEY, migrated)
+    except Exception:  # noqa: BLE001 - leitura nunca falha por causa da migração; tenta de novo na próxima
+        pass
+    return migrated
+
+
 def load_settings(db) -> Settings:
     """Stored settings (invalid/legacy keys ignored -> defaults) with the live budget ceilings."""
-    raw = dict(_stored(db))
+    raw = dict(_migrate_layout_key(db, _stored(db)))
     raw.pop("budget_ceilings", None)
     try:
         s = Settings.model_validate(raw)
@@ -88,7 +104,12 @@ def load_settings(db) -> Settings:
 def save_patch(db, patch: SettingsPatch) -> Settings:
     """Merge `patch` (only fields_set) into the stored settings and persist. Returns the result."""
     current = load_settings(db).model_dump()
-    sent = patch.model_fields_set
+    sent = set(patch.model_fields_set)
+    if "terminal_layout" in sent:  # alias deprecado: vale como workspace_layout, salvo se o novo nome também veio
+        if "workspace_layout" not in sent:
+            patch = patch.model_copy(update={"workspace_layout": patch.terminal_layout})
+            sent.add("workspace_layout")
+        sent.discard("terminal_layout")
     for key in sent:
         if key == "budget":
             continue

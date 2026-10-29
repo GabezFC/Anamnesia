@@ -5,7 +5,9 @@ Opt-in (`ANAMNESIA_DELEGATE=1`, checked by app.routing.answer). The run executes
 time so tests can inject a FakeLauncher-backed orchestrator.
 
 Launcher selection (default orchestrator): `ANAMNESIA_DELEGATE_LAUNCHER=terminal` -> TerminalLauncher over the
-workspace Terminal Manager (profile `ANAMNESIA_DELEGATE_PROFILE`, default `shell`); anything else -> the headless
+internal PTY manager (app.orchestration.pty_launcher; no UI/routes). `ANAMNESIA_DELEGATE_PROFILE` is REQUIRED and must
+be a profile with kind=agent (ANA-195): unset/`shell`/unknown is refused with `profile_not_agent`/`profile_unknown`
+(there is no usable default); anything else -> the headless
 in-process launcher of `app.api.orchestration.get_orchestrator`.
 """
 from __future__ import annotations
@@ -88,7 +90,7 @@ def get_orchestrator():
     mode = os.getenv("ANAMNESIA_DELEGATE_LAUNCHER", "").strip().lower()
     if mode in ("terminal", "agent_cli"):
         global _term_orch
-        profile = os.getenv("ANAMNESIA_DELEGATE_PROFILE", "").strip() or "shell"
+        profile = os.getenv("ANAMNESIA_DELEGATE_PROFILE", "").strip() or "shell"   # empty -> refused below (shell is kind=shell)
         _agent_profile(profile)                       # ANA-195: validated on EVERY call, never cached past a bad env
         with _lock:
             if _term_orch is not None and getattr(_term_orch, "_delegate_key", None) != (mode, profile):
@@ -102,7 +104,7 @@ def get_orchestrator():
                 if mode == "agent_cli":    # ANA-194: one headless CLI call per step (usage JSON), no PTY
                     launcher = AgentCliLauncher(registry=reg)
                 else:
-                    launcher = TerminalLauncher(_provide("terminal_manager", "app.api.workspace", "get_manager"),
+                    launcher = TerminalLauncher(_provide("terminal_manager", "app.orchestration.pty_launcher", "get_manager"),
                                                 default_profile_id=profile)
                 _term_orch = Orchestrator(launcher, registry=reg, profile_id=profile,
                                           available_providers={m.provider for m in usable.models})

@@ -6,11 +6,12 @@ file (never inside the vault). `build()` stats every searchable note, re-reads o
 removed notes. The query side is inherited unchanged (same `sec` table, same bm25 weights).
 
 Enabled only with `MG_INCREMENTAL_INDEX=1` via `make_baseline_index()`; the default path keeps the
-in-memory `BaselineIndex`. Verdict (PROMOTE/HOLD) lives in docs/reports/ANA102_INCREMENTAL_INDEX_*.md.
+in-memory `BaselineIndex`. Verdict (PROMOTE/HOLD) lives in Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/ANA102_INCREMENTAL_INDEX_*.md).
 """
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import sqlite3
 from pathlib import Path
@@ -35,6 +36,18 @@ class IncrementalBaselineIndex(BaselineIndex):
         self.db_path = Path(db_path)
         self.last_stats: dict = {}
 
+    def _corpus_identity(self) -> str:
+        """Bind persisted rows to the resolved corpus, not just relative note stats."""
+        def canonical(path: Path) -> str:
+            return os.path.normcase(str(Path(path).resolve()))
+
+        return json.dumps({
+            "root": canonical(self.vault.root),
+            "extra_roots": {prefix: canonical(root)
+                            for prefix, root in self.vault.extra_roots.items()},
+            "excluded_dirs": sorted(self.vault.excluded_dirs),
+        }, sort_keys=True, ensure_ascii=False)
+
     def _open(self) -> sqlite3.Connection:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
@@ -42,13 +55,21 @@ class IncrementalBaselineIndex(BaselineIndex):
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute(_META)
         row = conn.execute("SELECT v FROM meta WHERE k='schema'").fetchone()
-        if row is not None and row[0] != SCHEMA_VERSION:  # incompatible file: start over
+        identity = self._corpus_identity()
+        corpus = conn.execute("SELECT v FROM meta WHERE k='corpus'").fetchone()
+        has_index = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name IN ('sec', 'notes') LIMIT 1"
+        ).fetchone() is not None
+        if (corpus is not None and corpus[0] != identity) or (corpus is None and has_index):
             conn.close()
-            self.db_path.unlink(missing_ok=True)
-            return self._open()
+            raise ValueError("Persistent index corpus identity mismatch or missing; use a new index database")
+        if row is not None and row[0] != SCHEMA_VERSION:
+            conn.close()
+            raise ValueError("Persistent index schema mismatch; use a new index database")
         conn.execute(_FTS)
         conn.execute(_NOTES)
         conn.execute("INSERT OR REPLACE INTO meta VALUES ('schema', ?)", (SCHEMA_VERSION,))
+        conn.execute("INSERT OR REPLACE INTO meta VALUES ('corpus', ?)", (identity,))
         return conn
 
     def _stat(self, rel: str) -> tuple[int, int]:

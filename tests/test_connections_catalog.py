@@ -29,7 +29,8 @@ def test_shipped_catalog_contents():
     entries = {c.id: c for c in load_catalog()}
     assert {"hermes", "claude-code", "codex", "opencode", "anthropic", "openai", "ollama",
             "openrouter", "huggingface", "nvidia", "memory-gateway"} <= set(entries)
-    for cid in ("openrouter", "huggingface", "nvidia"):
+    assert entries["openrouter"].status == "available"  # única entrada central de OpenRouter
+    for cid in ("huggingface", "nvidia"):
         assert entries[cid].status == "planned"
     assert entries["memory-gateway"].type == "mcp"
     assert entries["memory-gateway"].command == "python -m app.mcp.server"

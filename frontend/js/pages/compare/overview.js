@@ -66,7 +66,7 @@ function body() {
         { label: t.colCand, num: true, html: (r) => vTok(r.cand) },
         { label: t.colLatMean, num: true, html: (r) => vMs(r.latMean) },
         { label: t.colLatP95, num: true, html: (r) => vMs(r.latP95) },
-        { label: t.colCost, num: true, html: (r) => vCost(r.cost) },
+        { label: t.colCost, num: true, html: (r) => vCost(r.cost) + (r.costKind && t.costKind ? ` <small class="lab-note">(${esc(t.costKind[r.costKind] || r.costKind)})</small>` : '') },
       ],
       rows: rs })}</div>`;
 }

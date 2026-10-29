@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT))
 
 
 def _load(name):
-    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / ("experiments" if name == "analyze_onda4e" else ".") / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -91,12 +91,14 @@ def test_openrouter_invalid_model_400_is_model_not_found():
 @pytest.mark.skipif(not (ROOT / "data" / "onda4e_bench.json").exists(), reason="raw run data is gitignored")
 def test_real_report_is_fresh():
     an = _load("analyze_onda4e")
+    if not an.OUT_MD.exists():  # local-only report (data/reports-out/, ignored by Git): generate with --write
+        pytest.skip("data/reports-out/ONDA4_ROUTING_REAL.md absent: run scripts/experiments/analyze_onda4e.py --write")
     assert an.main(["--check"]) == 0
 
 
 def test_real_report_has_no_secret_shapes():
     import re
     for f in ("ONDA4_ROUTING_REAL.md", "ONDA4_ROUTING_REAL.json"):
-        p = ROOT / "docs" / "reports" / f
+        p = ROOT / "data" / "reports-out" / f
         if p.exists():
             assert not re.search(r"sk-or-[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._-]{20,}", p.read_text(encoding="utf-8"))

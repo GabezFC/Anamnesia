@@ -183,6 +183,14 @@ def _a1_projects(conn: sqlite3.Connection) -> None:
                  " path TEXT NOT NULL UNIQUE, created_at REAL NOT NULL)")
 
 
+def _a2_project_host_path(conn: sqlite3.Connection) -> None:
+    """Caminho original do host (exibição) ao lado do caminho do contêiner (acesso), em `path`."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(projects)")}
+    if "host_path" not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN host_path TEXT NOT NULL DEFAULT ''")
+
+
 ANAMNESIA_MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "projects_registry", _a1_projects),
+    Migration(2, "project_host_path", _a2_project_host_path),
 )

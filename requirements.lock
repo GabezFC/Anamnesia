@@ -20,7 +20,6 @@ anyio==4.15.1 \
     #   httpx
     #   httpx2
     #   mcp
-    #   openai
     #   sse-starlette
     #   starlette
     #   watchfiles
@@ -356,7 +355,6 @@ httpx2==2.13.1 \
     # via
     #   anthropic
     #   mcp
-    #   openai
     #   typesafe-sdk
 idna==3.20 \
     --hash=sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44 \
@@ -485,9 +483,7 @@ jiter==0.17.0 \
     --hash=sha256:fd7790aa79c8b518e512ebcdfce9f11d8ef5f30efd43720c8a19a548b39fa489 \
     --hash=sha256:fe15ddf316f1f1f643347d3a474e74ce61880c79a11ec5dca53df20c071bd3e8 \
     --hash=sha256:ffa0380ad091de7d3fc33e17a97ff479851ee18a0a2a3ee56ff3215cdc886656
-    # via
-    #   anthropic
-    #   openai
+    # via anthropic
 jsonschema==4.26.0 \
     --hash=sha256:0c26707e2efad8aa1bfc5b7ce170f3fccc2e4918ff85989ba9ffa9facb2be326 \
     --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
@@ -504,10 +500,6 @@ mcp-types==2.2.0 \
     --hash=sha256:d3ed53703ddd10d9c6399f29d322bb66f3f67ab41348ac8556ba23e07fedefad \
     --hash=sha256:ea476b73ee86709ab5abc9452385ed36cc05907e582355622e294595c9a04f13
     # via mcp
-openai==3.19.2 \
-    --hash=sha256:66247fcd07266e72536e90656dc27f3b0bb1e9d8696d4013fc55402c0b96a5c2 \
-    --hash=sha256:de185f9834ad064d965ec42bd0766731cf66bceea16a7670294a835d207019e6
-    # via -r requirements.txt
 opentelemetry-api==1.45.1 \
     --hash=sha256:aa38ed19bcc084ba42782a73255b3582283eced7ad6dddbd6695189e69adfb75 \
     --hash=sha256:b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb
@@ -525,7 +517,6 @@ pydantic==2.13.5 \
     #   fastapi
     #   mcp
     #   mcp-types
-    #   openai
     #   typesafe-sdk
 pydantic-core==2.46.5 \
     --hash=sha256:013d6f3483d81e02e7c328831808f336c8596ee33b4bd4026b9ffb1e960b8942 \
@@ -906,9 +897,7 @@ rpds-py==2026.9.1 \
 sniffio==1.3.1 \
     --hash=sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2 \
     --hash=sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc
-    # via
-    #   anthropic
-    #   openai
+    # via anthropic
 sse-starlette==3.5.0 \
     --hash=sha256:3e6e1070df3f0f5d9cea81496de92dbb72f6721871d99748ece67441dd8b7997 \
     --hash=sha256:75de713aa8a9441513cc283220826da079d982770965b951e9437720e8bafdb2
@@ -944,7 +933,6 @@ typing-extensions==4.16.0 \
     #   httpx2
     #   mcp
     #   mcp-types
-    #   openai
     #   opentelemetry-api
     #   pydantic
     #   pydantic-core

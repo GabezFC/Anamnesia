@@ -3,9 +3,9 @@
 
 # Interfaces do Anamnésia / Memory Gateway (geradas do código)
 
-Contrato único de REST, CLI e MCP. Contexto e semântica: [README](../README.md) · [MEMORY_SEARCH_MODES](guides/MEMORY_SEARCH_MODES.md) · [SECURITY](guides/SECURITY.md).
+Contrato único de REST, CLI e MCP. Contexto e semântica: [README](../README.md) · Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/MEMORY_SEARCH_MODES.md) · [SECURITY](guides/SECURITY.md).
 
-## REST (OpenAPI 3.1.0, 119 operações)
+## REST (OpenAPI 3.1.0, 130 operações)
 
 Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`. `?` = parâmetro opcional.
 
@@ -41,6 +41,13 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | POST | `/api/jev/config` | — | sim | Jev Save Config |
 | GET | `/api/jev/status` | — | — | Jev Status |
 | POST | `/api/jev/test` | — | — | Jev Test Connection |
+| POST | `/api/local-ai/colibri/config` | — | sim | Colibri Config Route |
+| GET | `/api/local-ai/colibri/status` | — | — | Colibri Status Route |
+| POST | `/api/local-ai/colibri/test` | — | sim | Colibri Test |
+| POST | `/api/local-ai/laya/install` | — | sim | Laya Install |
+| POST | `/api/local-ai/laya/repair` | — | — | Laya Repair |
+| GET | `/api/local-ai/laya/status` | — | — | Laya Status |
+| POST | `/api/local-ai/laya/test` | — | — | Laya Test |
 | GET | `/api/memory/audit` | — | — | Audit |
 | POST | `/api/memory/consolidate` | — | sim | Consolidate |
 | GET | `/api/memory/contradictions` | — | — | Contradictions |
@@ -78,22 +85,26 @@ Fonte: `app.main.create_app().openapi()`; no servidor, `/docs` e `/openapi.json`
 | POST | `/api/orchestration/runs` | — | sim | Create Run |
 | GET | `/api/orchestration/runs/{run_id}` | run_id, path? | — | Get Run |
 | POST | `/api/orchestration/runs/{run_id}/cancel` | run_id, path? | — | Cancel Run |
-| GET | `/api/profiles` | — | — | List Profiles |
 | GET | `/api/projects` | — | — | List Projects |
 | POST | `/api/projects` | — | sim | Add Project |
-| DELETE | `/api/projects/{project_id}` | project_id | — | Remove Project |
+| DELETE | `/api/projects/{project_id}` | project_id, purge_index? | — | Remove Project |
 | GET | `/api/projects/{project_id}/file` | project_id, path | — | Project File |
 | GET | `/api/projects/{project_id}/files` | project_id, path?, q?, content? | — | Project Files |
 | POST | `/api/projects/{project_id}/initialize` | project_id | sim | Initialize Project |
-| GET | `/api/projects/{project_id}/worktrees` | project_id | — | List Project Worktrees |
-| POST | `/api/projects/{project_id}/worktrees` | project_id | sim | Create Project Worktree |
-| DELETE | `/api/projects/{project_id}/worktrees/{worktree_id}` | project_id, worktree_id, confirm?, force? | — | Delete Project Worktree |
 | GET | `/api/providers/health` | last_n? | — | Providers Health |
-| GET | `/api/sessions` | — | — | List Sessions |
-| POST | `/api/sessions` | — | sim | Create Session |
-| DELETE | `/api/sessions/{session_id}` | session_id | — | Delete Session |
 | GET | `/api/settings` | — | — | Get Settings |
 | PUT | `/api/settings` | — | sim | Put Settings |
+| GET | `/api/workspace/io/capabilities` | — | — | Capabilities |
+| POST | `/api/workspace/io/export` | — | sim | Export |
+| GET | `/api/workspace/io/history` | project_id?, limit? | — | History |
+| POST | `/api/workspace/io/import` | — | sim | Import Memories |
+| POST | `/api/workspace/io/initialize` | — | sim | Initialize |
+| GET | `/api/workspace/io/jobs` | — | — | List Jobs |
+| GET | `/api/workspace/io/jobs/{job_id}` | job_id | — | Get Job |
+| POST | `/api/workspace/io/jobs/{job_id}/cancel` | job_id | — | Cancel Job |
+| GET | `/api/workspace/io/jobs/{job_id}/download` | job_id | — | Download |
+| GET | `/api/workspace/io/status` | project_id? | — | Status |
+| GET | `/api/workspace/roots` | — | — | Workspace Roots |
 | POST | `/benchmark/estimate` | — | sim | Benchmark Estimate |
 | GET | `/benchmark/history/summary` | — | — | Benchmark History Summary |
 | GET | `/benchmark/jobs/{job_id}` | job_id | — | Benchmark Job |

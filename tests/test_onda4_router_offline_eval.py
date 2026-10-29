@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _script():
-    spec = importlib.util.spec_from_file_location("eval_router_offline", ROOT / "scripts" / "eval_router_offline.py")
+    spec = importlib.util.spec_from_file_location("eval_router_offline", ROOT / "scripts" / "experiments" / "eval_router_offline.py")
     m = importlib.util.module_from_spec(spec)
     sys.modules["eval_router_offline"] = m
     spec.loader.exec_module(m)

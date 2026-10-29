@@ -10,8 +10,13 @@ O Markdown continua sendo a fonte da verdade. `memory.db` (em `<root>_state/`, s
   * `verify()` confere catálogo x arquivos (hash completo) e reporta divergências, sem alterar nada;
   * qualquer erro do SQLite cai para a leitura direta dos arquivos (o catálogo nunca derruba o store).
 
-CLI: `python -m app.memory_store.catalog {rebuild|verify|stats} [--root PASTA]`.
-Desligar: MG_MEMORY_CATALOG=0.
+STATUS: EXPERIMENTAL -- NOT wired into the runtime. `SavedContextStore` does not use `NoteCatalog` (no
+`.catalog` attribute) and nothing reads `MG_MEMORY_CATALOG`; the store still parses the Markdown files
+directly. The class is kept (self-contained, derived, safe to delete `memory.db`) as a candidate to speed up
+`list()/get()` on large vaults; wiring it in changes read behaviour and needs its own decision + benchmark.
+
+CLI (standalone, builds its own catalog at `<root>_state/memory.db`):
+`python -m app.memory_store.catalog {rebuild|verify|stats} [--root PASTA]`.
 """
 from __future__ import annotations
 
@@ -220,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     from app.memory_store.store import SavedContextStore
     store = SavedContextStore(a.root) if a.root else SavedContextStore()
-    cat = store.catalog or NoteCatalog(store.root, store.state_dir / "memory.db")
+    cat = NoteCatalog(store.root, store.state_dir / "memory.db")  # experimental: the store has no .catalog
     res = {"rebuild": cat.rebuild, "verify": cat.verify, "stats": cat.sync}[a.cmd]()
     print(json.dumps(res, ensure_ascii=False, indent=2))
     return 0 if res.get("ok", True) else 1

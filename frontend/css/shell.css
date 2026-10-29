@@ -457,3 +457,27 @@
   .nav-advanced-toggle { display: none; }
   .nav-advanced-list[hidden] { display: flex; }
 }
+
+/* Topbar em telas estreitas: encolhe/oculta em vez de estourar a viewport */
+.topbar-left,
+.topbar-center,
+.topbar-right { min-width: 0; }
+.breadcrumb-trail { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .app-topbar { padding: 0 var(--space-3); gap: var(--space-2); }
+  .topbar-center { max-width: none; flex: 1 1 0; }
+  .command-trigger-btn { min-width: 0; padding: 6px 8px; }
+  .command-trigger-btn kbd { display: none; }
+  .command-trigger-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-right { flex: 0 1 auto; gap: var(--space-2); }
+  .breadcrumb-trail { display: none; }
+}
+
+/* Statusbar: em telas estreitas as seções encolhem e os itens menos importantes quebram/ocultam */
+.statusbar-section { min-width: 0; }
+@media (max-width: 640px) {
+  .app-statusbar { padding: 0 var(--space-3); gap: var(--space-2); }
+  .statusbar-section { gap: var(--space-2); flex: 1 1 0; overflow: hidden; }
+  .statusbar-section:last-child { justify-content: flex-end; }
+  .statusbar-item { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}

@@ -7,7 +7,7 @@ import pathlib
 from app.orchestration.launchers import FakeLauncher
 from tests.orch_helpers import project, three
 
-_p = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "orchestration_experiment.py"
+_p = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "experiments" / "orchestration_experiment.py"
 _spec = importlib.util.spec_from_file_location("orch_experiment", _p)
 exp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(exp)

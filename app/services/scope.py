@@ -31,9 +31,10 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
-# `30-Projetos/Norteia_Cerebro/decisoes/x.md` -> area="30-Projetos", container="Norteia_Cerebro"
+# `30-Projetos/ProjetoDemo_Cerebro/decisoes/x.md` -> area="30-Projetos", container="ProjetoDemo_Cerebro"
 _AREA_DIR = re.compile(r"^(?P<area>\d{2}-[^/]+)/(?:(?P<container>[^/]+)/)?")
 _CEREBRO_SUFFIX = re.compile(r"[_-]?cerebro$", re.I)
 
@@ -45,7 +46,7 @@ PROJECT_AREAS = ("30-Projetos",)
 
 
 def slug(name: str) -> str:
-    """Stable, accent-free, lowercase slug. `Norteia_Cerebro` -> `norteia`."""
+    """Stable, accent-free, lowercase slug. `ProjetoDemo_Cerebro` -> `projetodemo`."""
     folded = unicodedata.normalize("NFKD", name)
     folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
     folded = folded.replace("_", "-").replace(" ", "-").lower()
@@ -130,6 +131,11 @@ class Scope:
 
     projects: frozenset[str] = frozenset()
     areas: frozenset[str] = frozenset()
+    # F9-01: optional `path -> frontmatter projeto` lookup, bound by the gateway for notes whose project
+    # is declared in frontmatter and NOT in the path (agent-saved `saved_context/...`). It is consulted
+    # only when the caller gave no frontmatter, only for project scopes, and never for global searches.
+    # Excluded from equality/repr: it is plumbing, not part of the scope's identity.
+    frontmatter_resolver: Callable[[str], str | None] | None = field(default=None, compare=False, repr=False)
 
     @property
     def is_global(self) -> bool:
@@ -144,8 +150,11 @@ class Scope:
     def matches(self, rel_path: str, frontmatter_projeto: str | None = None) -> bool:
         if self.is_global:
             return True
-        if self.projects and project_of(rel_path, frontmatter_projeto) in self.projects:
-            return True
+        if self.projects:
+            if frontmatter_projeto is None and self.frontmatter_resolver is not None:
+                frontmatter_projeto = self.frontmatter_resolver(rel_path)
+            if project_of(rel_path, frontmatter_projeto) in self.projects:
+                return True
         if self.areas and area_of(rel_path) in self.areas:
             return True
         return False

@@ -45,7 +45,7 @@ def verdict_enabled_default() -> bool:
     The local file wins when the key is present and is actually a bool -- anything else (missing
     file, missing key, wrong type) falls back to the env var, which defaults to False (§1.2:
     "default a decidir após validação" -- the 2026-09-29 benchmark never found a scope where a
-    non-baseline pipeline was worth it, see docs/SCOPE_BENCHMARK.md, so there is nothing validated
+    non-baseline pipeline was worth it, see Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/SCOPE_BENCHMARK.md), so there is nothing validated
     to turn on by default yet).
     """
     local = _local_settings().get("verdict_enabled")
@@ -110,13 +110,13 @@ class OptimizerConfig:
     # 0 = check on every call; negative = never (old behaviour: index frozen at startup).
     refresh_interval_s: float = field(default_factory=lambda: env_float("MG_VAULT_REFRESH_S", 5.0))
 
-    # -- VERDICT: routing decision for pipeline="auto", backed by docs/SCOPE_BENCHMARK.md ---------
+    # -- VERDICT: routing decision for pipeline="auto", backed by Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/SCOPE_BENCHMARK.md) ---------
     # This reuses `route_for()` above (app/services/verdict.py) -- it is NOT a second "auto"
     # mechanism (§1.2, §5.6). OFF by default: see verdict_enabled_default() docstring. While off,
     # `auto` behaves EXACTLY as before this feature existed (no size estimate is even computed).
     verdict_enabled: bool = field(default_factory=verdict_enabled_default)
     # Candidate-count buckets recorded for audit (`verdict_size_estimate`/`verdict_reason` in
-    # metrics_json) alongside the routing decision. docs/SCOPE_BENCHMARK.md measured its
+    # metrics_json) alongside the routing decision. Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/SCOPE_BENCHMARK.md) measured its
     # small/medium/large cuts on candidate TOKENS, segmented per corpus -- there is no measured cut
     # for a raw candidate COUNT from a single lightweight pre-filter (BaselineIndex.count(), the
     # cheap estimate app/services/verdict.py actually uses), so these are conservative placeholders

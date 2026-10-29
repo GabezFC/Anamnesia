@@ -276,7 +276,7 @@ def verify_code_task(task: Task, answer: str) -> VerifyResult:
 
 
 def verify_task(task: Task, answer: str | None, retrieved_ids: Sequence[str] | None = None) -> VerifyResult:
-    """The objective success check of docs/ROUTING_SUCCESS_DEFINITION.md.
+    """The objective success check of Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/guides/ROUTING_SUCCESS_DEFINITION.md).
 
     ANA-111: for `fact_match+citation` tasks, when retrieval happened (`retrieved_ids` is not None) the
     cited note paths must exist and be a subset of the retrieved ones; without retrieval the citation

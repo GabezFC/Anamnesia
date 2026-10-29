@@ -1,4 +1,4 @@
-"""ContextPlan (ANA-159): memory + workspace + per-role budget, decided BEFORE delegating to an agent.
+"""EXPERIMENTAL / NOT WIRED (no runtime consumer yet; only tests import it). ContextPlan (ANA-159): memory + workspace + per-role budget, decided BEFORE delegating to an agent.
 
 Pure data + arithmetic -- no search is executed here and nothing is written. `plan_for_run` splits a total
 context budget among the steps of an orchestrated run in proportion to what each role needs; the caller

@@ -246,7 +246,7 @@ def spotlight_nonce(query: str, cands: list[Candidate], full_texts: dict[str, st
 # =================================================================================================
 # model-backed stages — optional dependency, late import, skip-on-missing (§1.4)
 #
-# APIs verified against the installed libraries on 2026-10-01 (docs/OPTIONAL_STAGES_BENCHMARK.md §2):
+# APIs verified against the installed libraries on 2026-10-01 (Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/OPTIONAL_STAGES_BENCHMARK.md) §2):
 #   llmlingua 0.2.2        PromptCompressor(model_name=..., use_llmlingua2=True, device_map=...)
 #                          .compress_prompt_llmlingua2(...) — WITHOUT use_llmlingua2=True the model is
 #                          loaded as a causal LM and the call is wrong (fixed here).

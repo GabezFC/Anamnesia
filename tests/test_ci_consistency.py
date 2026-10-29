@@ -186,6 +186,7 @@ def test_dockerignore_is_an_allow_list():
     ".delegation/t.json", "Python/python.exe", "_studio/x.html", "config/local_settings.json",
     ".env", ".env.local", "app/__pycache__/x.pyc", "data/onda4e_bench.db", "reports/x.md", ".git/HEAD",
     ".venv/Scripts/python.exe", "integrations/hermes/hermes_home/state.db", "some_new_root_file.txt",
+    "docker/mgtest.env", "docker/laya-test.env", "docker/private-notes.txt",
 ])
 def test_dockerignore_excludes_sensitive_and_local_state(path):
     assert not sent_to_context(path), f"{path} would be sent to the Docker build context"
@@ -195,7 +196,9 @@ def test_dockerignore_excludes_sensitive_and_local_state(path):
     "requirements.txt", "requirements-dev.txt", "pyproject.toml", "app/main.py", "config/policy.yaml",
     "config/local_settings.example.json", "tests/conftest.py", "scripts/gen_config_reference.py",
     "data/synthetic_vault/index.md", "benchmark/synthetic_questions.json", "docs/INTERFACES.md",
-    "frontend/index.html", ".env.example", "Dockerfile.test", "AGENTS.md", "CLAUDE.md",
+    "frontend/index.html", ".env.example", "Dockerfile.test", "AGENTS.md", "CLAUDE.md", "uv.lock",
+    "docker/Dockerfile.laya-test", "docker/docker-compose.laya-test.yml",
+    "docker/mgtest.env.example", "docker/laya-test.env.example",
 ])
 def test_dockerignore_keeps_what_the_suite_needs(path):
     assert sent_to_context(path), f"{path} is required by the suite but excluded"

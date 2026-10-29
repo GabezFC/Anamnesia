@@ -240,7 +240,7 @@ OPTIONAL_STAGES_VERSION = "stages-v1"
 OPTIONAL_STAGE_NAMES = ("llmlingua2", "provence", "bge_reranker_v2_m3", "mxbai_rerank_base_v2",
                         "sentence_dedup_mmr", "spotlight_nonce")
 
-# -- APPROVED PRESET (M2 benchmark, docs/OPTIONAL_STAGES_BENCHMARK.md) ------------------------------
+# -- APPROVED PRESET (M2 benchmark, Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/OPTIONAL_STAGES_BENCHMARK.md)) ------------------------------
 # A stage is approved only if it loses neither recall nor fact_in_context AND reduces total tokens or
 # improves precision (rank-aware: P@3 / MRR), measured on the synthetic corpus (120 q) and the real
 # vault (12 q) against the SAME baseline. Reprovados (llmlingua2, mxbai_rerank_base_v2,
@@ -314,7 +314,7 @@ class OptionalStagesConfig:
     llmlingua2_rate: float = field(default_factory=lambda: env_float("OPT_STAGE_LLMLINGUA2_RATE", 0.5))
     # Provence keep-threshold on the per-sentence relevance; upstream default 0.1.
     # 0.05, not the upstream 0.1: at 0.1 Provence lost 1 of 110 buried facts on the synthetic corpus
-    # (99/110 vs 100/110); 0.05 and 0.03 kept all 100 (docs/OPTIONAL_STAGES_BENCHMARK.md).
+    # (99/110 vs 100/110); 0.05 and 0.03 kept all 100 (Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/OPTIONAL_STAGES_BENCHMARK.md)).
     provence_threshold: float = field(default_factory=lambda: env_float("OPT_STAGE_PROVENCE_THRESHOLD", 0.05))
     # Cross-encoder max input tokens (bounds VRAM/latency on long notes).
     rerank_max_length: int = field(default_factory=lambda: env_int("OPT_STAGE_RERANK_MAX_LENGTH", 1024))

@@ -301,8 +301,8 @@ def test_audit_counts_expired(store):
 def test_feedback_counts_and_two_wrongs_exclude_from_default_search(tiny_vault, tmp_path, store):
     nid = store.save("Info", "A senha do wifi vermelhoturquesa mudou.", confidence=0.9)
     store.save("Outra", "A informação vermelhoturquesa correta é outra.")
-    lc.feedback(store, nid, "useful", author="gabriel")
-    r1 = lc.feedback(store, nid, "wrong", "dado errado", author="gabriel")
+    lc.feedback(store, nid, "useful", author="synthetic-user")
+    r1 = lc.feedback(store, nid, "wrong", "dado errado", author="synthetic-user")
     assert r1["excluded_from_default_search"] is False
     r2 = lc.feedback(store, nid, "wrong", "continua errado", author="hermes")
     assert r2["excluded_from_default_search"] is True and r2["feedback_wrong"] == 2
@@ -345,14 +345,14 @@ def test_usefulness_report(store):
 def test_feedback_without_author_or_review_never_enters_calibration(store):
     nid = store.save("A", "x")
     lc.feedback(store, nid, "wrong")                       # anonymous
-    lc.feedback(store, nid, "wrong", author="gabriel")     # named, not reviewed
+    lc.feedback(store, nid, "wrong", author="synthetic-user")     # named, not reviewed
     lc.feedback(store, nid, "useful", author="hermes")
     assert lc.calibration_events(store) == []              # 0 labels without origin/review
-    lc.review_feedback(store, 0, "gabriel")                # reviewed but anonymous author -> still out
+    lc.review_feedback(store, 0, "synthetic-user")                # reviewed but anonymous author -> still out
     assert lc.calibration_events(store) == []
-    lc.review_feedback(store, 1, "gabriel")
+    lc.review_feedback(store, 1, "synthetic-user")
     cal = lc.calibration_events(store)
-    assert len(cal) == 1 and cal[0]["author"] == "gabriel" and cal[0]["reviewed_by"] == "gabriel"
+    assert len(cal) == 1 and cal[0]["author"] == "synthetic-user" and cal[0]["reviewed_by"] == "synthetic-user"
     with pytest.raises(NoteNotFound):
         lc.review_feedback(store, 99, "x")
 
@@ -668,7 +668,7 @@ def test_rest_full_lifecycle(api):
     assert d.status_code == 200 and "8080" in d.text
     assert c.post(f"/api/memory/notes/{a['id']}/rollback", json={"version": hist[0]["version"]}).status_code == 200
     assert "8000" in c.get(f"/api/memory/notes/{a['id']}").json()["content"]
-    fb = c.post(f"/api/memory/notes/{a['id']}/feedback", json={"verdict": "wrong", "reason": "r", "author": "gabriel"})
+    fb = c.post(f"/api/memory/notes/{a['id']}/feedback", json={"verdict": "wrong", "reason": "r", "author": "synthetic-user"})
     assert fb.status_code == 200 and fb.json()["feedback_wrong"] == 1
     assert c.post(f"/api/memory/notes/{a['id']}/feedback", json={"verdict": "meh"}).status_code == 422
     assert c.delete(f"/api/memory/notes/{b['id']}").status_code == 200
@@ -796,7 +796,7 @@ def test_lifecycle_operations_never_log_note_bodies(store, caplog):
 
 def test_onda3_report_script_verdicts_all_pass():
     import importlib.util
-    spec = importlib.util.spec_from_file_location("measure_onda3", os.path.join(os.path.dirname(__file__), "..", "scripts", "measure_onda3_memory.py"))
+    spec = importlib.util.spec_from_file_location("measure_onda3", os.path.join(os.path.dirname(__file__), "..", "scripts", "experiments", "measure_onda3_memory.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     v = mod.verdicts(mod.measure())

@@ -92,8 +92,8 @@ export const DECISION_I18N = {
         problemsTitle: 'Problemas encontrados', noProblems: 'Nenhum problema comprovado pela API. “Não medido” não significa que está tudo certo.',
         problem: 'Problema', cause: 'Causa', action: 'Ação', promptVersion: 'Versão do prompt', unreachable: 'Sem dados de health do Laya (serviço local indisponível).',
         p: {
-          notInstalled: { problem: 'O pacote laya não está instalado neste Python.', cause: 'O gateway roda sem o pacote “laya” (modo inproc exige).', action: 'Instale laya no ambiente do gateway ou suba laya-serve em loopback e use MG_LAYA_MODE=serve (docs/guides/LAYA.md).' },
-          noWeights: { problem: 'Checkpoint multilingual ausente.', cause: 'Os pesos não estão no diretório de modelos locais.', action: 'Baixe/registre o checkpoint multilingual em data/local_ai/models (docs/guides/LOCAL_AI.md).' },
+          notInstalled: { problem: 'O pacote laya não está instalado neste Python.', cause: 'O gateway roda sem o pacote “laya” (modo inproc exige).', action: 'Instale laya no ambiente do gateway ou suba laya-serve em loopback e use MG_LAYA_MODE=serve (Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/LAYA.md).' },
+          noWeights: { problem: 'Checkpoint multilingual ausente.', cause: 'Os pesos não estão no diretório de modelos locais.', action: 'Baixe/registre o checkpoint multilingual em data/local_ai/models (Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/LOCAL_AI.md).' },
           modeOff: { problem: 'Laya desligado por configuração.', cause: 'MG_LAYA_MODE=off.', action: 'Defina MG_LAYA_MODE=auto (ou inproc/serve) e reinicie. Laya segue experimental.' },
           serveBad: { problem: 'URL do laya-serve inválida.', cause: 'MG_LAYA_SERVE_URL vazio, não-loopback ou na porta 8000 (do Memory Gateway).', action: 'Use uma URL em 127.0.0.1 com porta própria e LAYA_HOST=127.0.0.1.' },
           unavailable: { problem: 'Laya indisponível.', cause: 'Veja o motivo informado pelo backend acima.', action: 'Corrija a causa descrita e recarregue; sem Laya o motor cai no fallback explícito.' },
@@ -182,8 +182,8 @@ export const DECISION_I18N = {
         problemsTitle: 'Problems found', noProblems: 'No problem proven by the API. “Not measured” does not mean everything is fine.',
         problem: 'Problem', cause: 'Cause', action: 'Action', promptVersion: 'Prompt version', unreachable: 'No Laya health data (local service unavailable).',
         p: {
-          notInstalled: { problem: 'The laya package is not installed in this Python.', cause: 'The gateway runs without the “laya” package (inproc needs it).', action: 'Install laya in the gateway environment, or run laya-serve on loopback and use MG_LAYA_MODE=serve (docs/guides/LAYA.md).' },
-          noWeights: { problem: 'Multilingual checkpoint missing.', cause: 'The weights are not in the local models directory.', action: 'Download/register the multilingual checkpoint in data/local_ai/models (docs/guides/LOCAL_AI.md).' },
+          notInstalled: { problem: 'The laya package is not installed in this Python.', cause: 'The gateway runs without the “laya” package (inproc needs it).', action: 'Install laya in the gateway environment, or run laya-serve on loopback and use MG_LAYA_MODE=serve (Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/LAYA.md).' },
+          noWeights: { problem: 'Multilingual checkpoint missing.', cause: 'The weights are not in the local models directory.', action: 'Download/register the multilingual checkpoint in data/local_ai/models (Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/LOCAL_AI.md).' },
           modeOff: { problem: 'Laya turned off by configuration.', cause: 'MG_LAYA_MODE=off.', action: 'Set MG_LAYA_MODE=auto (or inproc/serve) and restart. Laya remains experimental.' },
           serveBad: { problem: 'Invalid laya-serve URL.', cause: 'MG_LAYA_SERVE_URL is empty, non-loopback, or on port 8000 (Memory Gateway’s).', action: 'Use a 127.0.0.1 URL with its own port and LAYA_HOST=127.0.0.1.' },
           unavailable: { problem: 'Laya unavailable.', cause: 'See the reason reported by the backend above.', action: 'Fix the stated cause and reload; without Laya the engine falls back explicitly.' },

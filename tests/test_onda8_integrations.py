@@ -187,10 +187,12 @@ def test_dockerfile_base_image_pinned_by_digest_and_non_root():
 
 def test_compose_is_loopback_only_and_documents_bridge_and_auth():
     dc = _read("docker-compose.yml")
-    assert '"127.0.0.1:8000:8000"' in dc
+    # porta no host SEMPRE presa ao loopback; aceita a forma fixa ou a parametrizada (ANAMNESIA_PORT, padrão 8000)
+    assert '"127.0.0.1:8000:8000"' in dc or '"127.0.0.1:${ANAMNESIA_PORT:-8000}:8000"' in dc
+    assert not re.search(r'^\s*-\s*"?\$\{ANAMNESIA_PORT:-8000\}:8000"?\s*$', dc, re.M)  # sem bind em 0.0.0.0
     assert not re.search(r'^\s*-\s*"?(0\.0\.0\.0:)?8000:8000"?\s*$', dc, re.M)
     assert "MG_MCP_BRIDGE_URL" in dc and "MG_MCP_TOKEN" in dc and "MG_LOCAL_TOKEN" in dc
-    assert "ANAMNESIA_ALLOW_REMOTE_TERMINALS" in dc and "ANAMNESIA_ALLOW_REMOTE_TERMINALS: " not in dc.replace("# ", "")
+    assert "ANAMNESIA_ALLOW_REMOTE_TERMINALS" not in dc          # variavel morta removida (sem leitura no codigo)
 
 
 # --------------------------------------------------------------------------- ANA-217 (+216 behaviour)
@@ -264,7 +266,7 @@ def fake_cli(monkeypatch, tmp_path):
 
 
 def test_claude_code_adapter_available_and_generate(fake_cli):
-    from app.adapters.agents.claude_code import ClaudeCodeAdapter
+    from app.adapters.agents.agents import ClaudeCodeAdapter
     calls, state = fake_cli
 
     def handler(args, stdin):
@@ -287,7 +289,7 @@ def test_claude_code_adapter_available_and_generate(fake_cli):
 
 
 def test_claude_code_adapter_unavailable_and_bad_output(fake_cli):
-    from app.adapters.agents.claude_code import ClaudeCodeAdapter
+    from app.adapters.agents.agents import ClaudeCodeAdapter
     calls, state = fake_cli
     state["handler"] = lambda args, stdin: _Proc(b"", b"", 127) if "--version" in args else _Proc(b"not json")
     a = ClaudeCodeAdapter()
@@ -297,7 +299,7 @@ def test_claude_code_adapter_unavailable_and_bad_output(fake_cli):
 
 
 def test_codex_adapter_available_and_generate(fake_cli):
-    from app.adapters.agents.codex import CodexAdapter
+    from app.adapters.agents.agents import CodexAdapter
     calls, state = fake_cli
     out_files: list[Path] = []
 
@@ -321,7 +323,7 @@ def test_codex_adapter_available_and_generate(fake_cli):
 
 
 def test_codex_adapter_not_logged_in_and_nonzero_exit(fake_cli):
-    from app.adapters.agents.codex import CodexAdapter
+    from app.adapters.agents.agents import CodexAdapter
     calls, state = fake_cli
     state["handler"] = lambda args, stdin: (_Proc(b"codex 0.1\n") if "--version" in args
                                             else _Proc(b"Not logged in\n") if args[1:3] == ["login", "status"]
@@ -334,7 +336,7 @@ def test_codex_adapter_not_logged_in_and_nonzero_exit(fake_cli):
 
 
 def test_opencode_adapter_is_prepared_not_validated(fake_cli):
-    from app.adapters.agents.opencode import OpenCodeAdapter
+    from app.adapters.agents.agents import OpenCodeAdapter
     calls, state = fake_cli
     state["handler"] = lambda args, stdin: _Proc(b"1.18.0\n")
     a = OpenCodeAdapter()
@@ -345,7 +347,7 @@ def test_opencode_adapter_is_prepared_not_validated(fake_cli):
 
 
 def test_generic_adapter_unknown_provider_and_dispatch(monkeypatch):
-    from app.adapters.agents.generic import GenericConsumer
+    from app.adapters.registry import GenericConsumer
     from app.adapters.models import providers
     with pytest.raises(ValueError):
         GenericConsumer("nope", "m")
@@ -385,8 +387,8 @@ def test_build_snippet_branches():
 @pytest.mark.skipif(not os.environ.get("ANAMNESIA_REAL_AGENT"),
                     reason="opt-in: ANAMNESIA_REAL_AGENT=claude_code|codex (uses the logged-in CLI; may cost quota)")
 def test_real_agent_contract():
-    from app.adapters.agents.claude_code import ClaudeCodeAdapter
-    from app.adapters.agents.codex import CodexAdapter
+    from app.adapters.agents.agents import ClaudeCodeAdapter
+    from app.adapters.agents.agents import CodexAdapter
     name = os.environ["ANAMNESIA_REAL_AGENT"]
     cls = {"claude_code": ClaudeCodeAdapter, "codex": CodexAdapter}[name]
     a = cls()
@@ -485,8 +487,8 @@ def test_offline_blocks_hosted_providers_before_any_request(monkeypatch, fake_op
 
 
 def test_offline_blocks_agent_clis(monkeypatch, fake_cli):
-    from app.adapters.agents.claude_code import ClaudeCodeAdapter
-    from app.adapters.agents.codex import CodexAdapter
+    from app.adapters.agents.agents import ClaudeCodeAdapter
+    from app.adapters.agents.agents import CodexAdapter
     calls, _ = fake_cli
     monkeypatch.setenv("ANAMNESIA_OFFLINE", "1")
     for a in (ClaudeCodeAdapter(), CodexAdapter()):

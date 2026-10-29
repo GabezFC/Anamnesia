@@ -2,7 +2,7 @@
 
 This is NOT a second "auto" mechanism (proposta 2026-09-28 §1.2/§5.6): it wraps the SAME
 `MG_ROUTE_SIMPLE/MEDIUM/COMPLEX/AMBIGUOUS` routes already on `OptimizerConfig`
-(config/optimizer.py, applied in app/gateway/optimizer.py). docs/SCOPE_BENCHMARK.md (2026-09-29,
+(config/optimizer.py, applied in app/gateway/optimizer.py). Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/SCOPE_BENCHMARK.md) (2026-09-29,
 real vault + 520-note synthetic corpus, every scope bucket measured) found no case where switching
 away from `baseline` was justified, so `decide()` below never overrides `cfg.route_for()` -- it
 only records an audited "why", including a cheap deterministic size estimate, alongside the

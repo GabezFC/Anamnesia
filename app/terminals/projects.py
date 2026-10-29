@@ -1,6 +1,7 @@
 """Project registry (SQLite) and path-safety helpers for the read-only file explorer (S5)."""
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
 import time
@@ -27,7 +28,7 @@ SECRET_FILE_NAMES = {".npmrc", ".pypirc", ".netrc", ".git-credentials", "id_rsa"
 
 def is_secret_file(name: str) -> bool:
     n = name.lower()
-    return n.startswith(".env") or n in SECRET_FILE_NAMES or n.endswith(SECRET_FILE_EXT)
+    return n.startswith(".env") or n.endswith(".env") or n in SECRET_FILE_NAMES or n.endswith(SECRET_FILE_EXT)
 
 
 class ProjectError(ValueError):
@@ -42,11 +43,18 @@ class PathEscapeError(ProjectError):
 class Project:
     id: str
     name: str
-    path: str
+    path: str            # caminho ACESSÍVEL ao processo (no Docker: o do contêiner)
     created_at: float
+    host_path: str = ""  # caminho original do host, só para exibição ("" fora de Docker/sem mapa)
+
+    @property
+    def display_path(self) -> str:
+        return self.host_path or self.path
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        d.update(path=self.display_path, container_path=self.path, mapped=bool(self.host_path))
+        return d
 
 
 def _is_within(root: Path, target: Path) -> bool:
@@ -303,23 +311,32 @@ class ProjectRegistry:
 
     @staticmethod
     def _row(r) -> Project:
-        return Project(r["id"], r["name"], r["path"], r["created_at"])
+        host = r["host_path"] if "host_path" in r.keys() else ""
+        path = r["path"]
+        if not host:  # registro antigo com caminho do host: re-traduz se o mapa atual o cobre
+            from app.terminals import path_map
+            tr = path_map.translate_stored(path)
+            if tr is not None:
+                host, path = tr.host_path, tr.container_path
+        return Project(r["id"], r["name"], path, r["created_at"], host or "")
 
-    def add(self, name: str, path: str) -> Project:
+    def add(self, name: str, path: str, translation=None) -> Project:
+        """Registra uma pasta. `path` pode ser do host (Docker + ANAMNESIA_PATH_MAP) ou nativo.
+
+        Levanta `path_map.PathMapError` (subclasse de ProjectError) com código específico. O id é estável
+        (derivado do caminho), então remover e registrar de novo reaproveita o mesmo índice.
+        """
+        from app.terminals import path_map
         name = (name or "").strip()
         if not name or len(name) > 120:
             raise ProjectError("nome obrigatório (até 120 caracteres)")
-        try:
-            real = Path(path).expanduser().resolve(strict=True)
-        except (OSError, RuntimeError, ValueError) as e:
-            raise ProjectError("o caminho não existe") from e
-        if not real.is_dir():
-            raise ProjectError("o caminho não é um diretório")
-        proj = Project(uuid.uuid4().hex[:12], name, str(real), time.time())
+        tr = translation or path_map.resolve_project_path(path)
+        pid = hashlib.sha256(("proj:" + tr.stable_key).encode("utf-8")).hexdigest()[:12]
+        proj = Project(pid, name, tr.container_path, time.time(), tr.host_path)
         c = self._conn()
         try:
-            c.execute("INSERT INTO projects (id,name,path,created_at) VALUES (?,?,?,?)",
-                      (proj.id, proj.name, proj.path, proj.created_at))
+            c.execute("INSERT INTO projects (id,name,path,created_at,host_path) VALUES (?,?,?,?,?)",
+                      (proj.id, proj.name, proj.path, proj.created_at, proj.host_path))
             c.commit()
         except sqlite3.IntegrityError as e:
             raise ProjectError("esse diretório já está registrado") from e

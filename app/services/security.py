@@ -65,9 +65,21 @@ def get_or_create_local_token() -> str:
     return token
 
 
+def _trusted_local_clients() -> set[str]:
+    """Extra client IPs treated as "this machine" (env `MG_TRUSTED_LOCAL_CLIENTS`, comma-separated).
+
+    Docker only: a port published as 127.0.0.1:PORT reaches the container from the bridge GATEWAY IP
+    (e.g. 172.28.0.1), never from 127.0.0.1, so without this the browser could not fetch the token and
+    every call returned 401/403. Only list the gateway of a network whose host-side publish is loopback.
+    Empty by default (no behaviour change outside the container).
+    """
+    raw = os.environ.get("MG_TRUSTED_LOCAL_CLIENTS", "")
+    return {h.strip() for h in raw.split(",") if h.strip()}
+
+
 def is_local_client(request: Request) -> bool:
     client = request.client
-    return bool(client) and client.host in LOCAL_HOSTS
+    return bool(client) and (client.host in LOCAL_HOSTS or client.host in _trusted_local_clients())
 
 
 def _same_origin(request: Request, header_value: str | None) -> bool:

@@ -164,7 +164,7 @@ def render() -> str:
         "# Interfaces do Anamnésia / Memory Gateway (geradas do código)",
         "",
         "Contrato único de REST, CLI e MCP. Contexto e semântica: [README](../README.md) · "
-        "[MEMORY_SEARCH_MODES](guides/MEMORY_SEARCH_MODES.md) · [SECURITY](guides/SECURITY.md).",
+        "Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/MEMORY_SEARCH_MODES.md) · [SECURITY](guides/SECURITY.md).",
         "",
     ]
     return "\n".join([*head, *rest_section(), *cli_sections(), *mcp_section()]).rstrip() + "\n"

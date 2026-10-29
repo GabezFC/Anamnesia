@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _rev():
-    spec = importlib.util.spec_from_file_location("revise_router", ROOT / "scripts" / "revise_router.py")
+    spec = importlib.util.spec_from_file_location("revise_router", ROOT / "scripts" / "experiments" / "revise_router.py")
     m = importlib.util.module_from_spec(spec)
     sys.modules["revise_router"] = m
     spec.loader.exec_module(m)

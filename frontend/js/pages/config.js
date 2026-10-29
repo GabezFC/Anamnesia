@@ -10,13 +10,13 @@
 import { icon } from '../icons.js';
 import { I18N, getLang, setLang } from '../i18n.js';
 import { esc, fmtNumber } from '../format.js';
-import { mockPresets, mockConnections } from '../mock-data.js';
+import { mockPresets } from '../mock-data.js';
 import { gatewayState } from '../live.js';
 import { call, getSettings, putSettings, costBudget, costByRole, isUnavailable, fmtUsd } from '../anamnesia-api.js';
 import { skeletonCard, loadingBlock } from '../components/skeleton.js';
 import { emptyState } from '../components/empty-state.js';
 import { handleTablistKey, tabId, panelId } from '../components/tabs.js';
-import { renderKeyRows, handleKeyAction, refreshKeyStatus } from './connections.js';
+import { paintKeepingKeys } from './connections.js';
 
 /* ------------------------------------------------------------------ helpers puros (testáveis) */
 export const PIPELINES = ['auto', 'baseline', 'graphify', 'graphify_jev', 'graphify_jev_opt'];
@@ -34,7 +34,7 @@ export const langFromServer = (l) => (String(l || '').toLowerCase().startsWith('
 
 export function defaultSettings() {
   return {
-    subagent_preset: {}, prefilter_cache: {}, terminal_layout: {}, language: 'pt-BR',
+    subagent_preset: {}, prefilter_cache: {}, workspace_layout: {}, language: 'pt-BR',
     budget: { daily_usd: null, monthly_usd: null, alert_pct: 80 },
     max_tokens_per_query: null, default_pipeline: 'auto',
     auto_graphify_jev_opt: false, reduce_max_results_by_question_type: false,
@@ -49,7 +49,7 @@ export function normalizeSettings(raw) {
     ...d, ...s,
     subagent_preset: { ...(s.subagent_preset || {}) },
     prefilter_cache: { ...(s.prefilter_cache || {}) },
-    terminal_layout: { ...(s.terminal_layout || {}) },
+    workspace_layout: { ...(s.workspace_layout || {}) },
     budget: { ...d.budget, ...(s.budget || {}) },
     default_pipeline: PIPELINES.includes(s.default_pipeline) ? s.default_pipeline : 'auto',
   };
@@ -110,7 +110,7 @@ export function planMigration(current, localPreset, localGw) {
 }
 
 /* ------------------------------------------------------------------ estado do módulo */
-let activeTab = 'subagents'; // subagents | general | budget | economy | keys | gateway | active
+let activeTab = 'subagents'; // subagents | general | budget | economy | gateway | active
 let currentState = 'loading'; // 'loaded' | 'loading' | 'empty' | 'error' | 'backend-unavailable'
 let settings = null;          // espelho do servidor (já com alterações otimistas)
 let budgetStatus = null;      // GET /api/costs/budget ou null
@@ -123,7 +123,7 @@ let inlineError = '';         // erro de validação mostrado na aba
 const gatewayConfig = gatewayState;
 const toast = (type, message) => window.dispatchEvent(new CustomEvent('anamnesia:toast', { detail: { type, message } }));
 const errMsg = (e) => (e && e.message ? e.message : String(e));
-const paint = (root) => { if (root && activeRoot === root) root.innerHTML = render(); };
+const paint = (root) => { if (root && activeRoot === root) paintKeepingKeys(root, render()); };
 const selectedPresetId = () => (settings && settings.subagent_preset && settings.subagent_preset.name)
   || (mockPresets.find((p) => p.id === 'equilibrado') || mockPresets[0] || {}).id || 'equilibrado';
 
@@ -276,11 +276,11 @@ export function render() {
 
   const tabs = [
     ['subagents', t.tabSubagents], ['general', t.tabGeneral], ['budget', t.tabBudget],
-    ['economy', t.tabEconomy], ['keys', t.tabKeys], ['gateway', t.tabGateway], ['active', t.tabActive],
+    ['economy', t.tabEconomy], ['gateway', t.tabGateway], ['active', t.tabActive],
   ];
   const body = {
     subagents: renderSubagentsTab, general: renderGeneralTab, budget: renderBudgetTab,
-    economy: renderEconomyTab, keys: renderKeysTab, gateway: renderGatewayTab, active: renderActiveConfigTab,
+    economy: renderEconomyTab, gateway: renderGatewayTab, active: renderActiveConfigTab,
   }[activeTab] || renderSubagentsTab;
 
   return `
@@ -486,31 +486,6 @@ function renderEconomyTab(t) {
     </div>`;
 }
 
-function renderKeysTab(t) {
-  const providers = (mockConnections.models || []).filter((m) => m.env_keys && m.env_keys.length);
-  return `
-    <div class="u-a19567">
-      ${sectionHead(t.keysTitle, t.keysDesc)}
-      ${providers.length ? `<div class="cards-grid">${providers.map((p) => `
-        <div class="connection-card" data-connection-id="${p.id}">
-          <div class="connection-card-top">
-            <div class="connection-brand">
-              <div class="connection-avatar">${p.name.charAt(0)}</div>
-              <div><div class="connection-name">${p.name}</div><div class="connection-type">${p.type}</div></div>
-            </div>
-          </div>
-          ${renderKeyRows(p)}
-          <div class="connection-card-actions">
-            <span></span>
-            <div class="connection-card-actions-right">
-              <button class="btn btn-secondary btn-sm" data-action="test-connection" data-item-id="${p.id}">${t.keyTest}</button>
-            </div>
-          </div>
-        </div>`).join('')}</div>`
-        : emptyState({ title: t.keysEmpty, description: t.keysEmptyDesc, variant: 'data', compact: true })}
-    </div>`;
-}
-
 function renderGatewayTab(t) {
   return `
     <div class="gateway-form-card">
@@ -612,10 +587,13 @@ function switchConfigTab(root, id, { focus = false } = {}) {
   if (focus) root.querySelector(`#${tabId('config', id)}`)?.focus();
   if (activeTab === 'economy') refreshByRole().then(() => activeTab === 'economy' && repaint());
   if (activeTab === 'budget') refreshBudget().then(() => activeTab === 'budget' && repaint());
-  if (activeTab === 'keys') refreshKeyStatus().then(() => activeTab === 'keys' && repaint());
 }
 
+/** Rota antiga da aba removida (#/config/keys, #/config?tab=keys): leva para Conexões, onde as chaves vivem agora. */
+export const isLegacyKeysHash = (h) => /^#\/config(?:\/keys|[/?&]tab=keys)\b/.test(h || '');
+
 export function mount(root) {
+  if (typeof location !== 'undefined' && isLegacyKeysHash(location.hash)) { location.replace('#/connections'); return; }
   activeRoot = root;
   inlineError = '';
 
@@ -672,8 +650,6 @@ export function mount(root) {
       gatewayConfig.enableSemanticCache = !gatewayConfig.enableSemanticCache; repaint();
     } else if (action === 'save-gateway-config') {
       saveGateway(root);
-    } else if (action === 'save-key' || action === 'remove-key' || action === 'test-connection') {
-      handleKeyAction(action, target, { toast, rerender: repaint });
     } else if (action === 'retry-config') {
       load(root);
     }

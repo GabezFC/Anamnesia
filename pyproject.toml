@@ -23,7 +23,6 @@ dependencies = [
     "python-dotenv==1.2.3",
     "pydantic==2.13.5",
     "anthropic==1.8.0",
-    "openai==3.19.2",
     # app/* imports yaml directly; until now it only arrived transitively via uvicorn[standard].
     "PyYAML==6.0.3",
 ]
@@ -61,7 +60,7 @@ packages = ["app", "config", "memory_gateway", "anamnesia"]
 # ---------------------------------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-norecursedirs = ["spikes", "scripts", "graphify-out", "frontend", "data", "node_modules", ".git", ".venv", "build", "dist"]
+norecursedirs = ["scripts", "graphify-out", "frontend", "data", "node_modules", ".git", ".venv", "build", "dist"]
 addopts = "-ra --strict-markers --strict-config"
 markers = [
     "e2e: end-to-end tests that drive a real server/browser-like flow (tests/e2e); applied automatically",
@@ -81,7 +80,7 @@ markers = [
 [tool.ruff]
 target-version = "py312"
 line-length = 120
-extend-exclude = ["spikes", "graphify-out", "frontend", "data", "build", "dist"]
+extend-exclude = ["graphify-out", "frontend", "data", "build", "dist"]
 
 [tool.ruff.lint]
 select = ["E9", "F63", "F7", "F82"]

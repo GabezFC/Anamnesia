@@ -104,22 +104,90 @@ def test_snippet_ok_and_unverified(client):
     assert un["status"] == "unverified" and un["note"]
 
 
+def _item(c, cid):
+    return next(x for x in c.get("/api/connections").json()["connections"] if x["id"] == cid)
+
+
 def test_test_endpoint_is_offline_by_default(client, monkeypatch):
     def boom(*a, **k):
         raise AssertionError("network used")
-    monkeypatch.setattr("app.api.connections.urllib.request.urlopen", boom)
+    monkeypatch.setattr("app.connections.verify.urllib.request.urlopen", boom)
     r = client.post("/api/connections/ollama/test")
-    assert r.status_code == 200 and r.json()["network_checked"] is False
+    assert r.status_code == 200 and r.json()["network_checked"] is False and r.json()["ok"] is False
     r = client.post("/api/connections/openai/test")
     body = r.json()
-    assert body["network_checked"] is False and body["ok"] is False
-    assert any(c["name"] == "env:OPENAI_API_KEY" and not c["ok"] for c in body["checks"])
+    assert body["network_checked"] is False and body["ok"] is False and body["state"] == "not_configured"
     _put(client, "openai", "OPENAI_API_KEY")
-    assert client.post("/api/connections/openai/test").json()["ok"] is True
+    body = client.post("/api/connections/openai/test").json()
+    # chave presente mas sem rede: configurado/não testado, NUNCA conectado
+    assert body["state"] == "configured" and body["ok"] is False and body["network_checked"] is False
+    assert _item(client, "openai")["state"] == "configured"
+
+
+def test_clean_install_nothing_connected(client):
+    items = client.get("/api/connections").json()["connections"]
+    assert not any(c["state"] == "connected" for c in items)
+    assert all(c["state"] in ("not_configured", "not_installed", "detected", "unavailable", "configured") for c in items)
+    assert _item(client, "anthropic")["state"] == "not_configured"
+
+
+def test_agents_accept_keys(client):
+    """Regressão: agentes (Claude/Hermes/Codex) tinham campo readonly/disabled por não declararem env_keys."""
+    items = {c["id"]: c for c in client.get("/api/connections").json()["connections"]}
+    assert "ANTHROPIC_API_KEY" in items["claude-code"]["env_keys"]
+    assert "OPENAI_API_KEY" in items["codex"]["env_keys"]
+    assert items["hermes"]["env_keys"], "hermes precisa de ao menos um campo de chave"
+    r = _put(client, "claude-code", "ANTHROPIC_API_KEY")
+    assert r.status_code == 200 and FAKE not in r.text
+    assert _item(client, "claude-code")["has_key"] is True
+    assert _delete(client, "claude-code", "ANTHROPIC_API_KEY").json()["has_key"] is False
+
+
+def test_network_verification_states(client, monkeypatch):
+    from app.connections import verify
+    monkeypatch.setenv("ANAMNESIA_ALLOW_NETWORK_TEST", "1")
+    _put(client, "openai", "OPENAI_API_KEY")
+    for code, state in ((200, "connected"), (401, "auth_error"), (500, "unavailable")):
+        monkeypatch.setattr(verify, "_http_get", lambda url, h, timeout=8.0, c=code: c)
+        b = client.post("/api/connections/openai/test").json()
+        assert b["state"] == state and b["network_checked"] is True and b["ok"] is (state == "connected")
+        assert FAKE not in str(b)
+    def down(*a, **k):
+        raise OSError("sem rede")
+    monkeypatch.setattr(verify, "_http_get", down)
+    assert client.post("/api/connections/openai/test").json()["state"] == "unavailable"
+
+
+def test_connected_invalidated_when_key_changes_or_removed(client, monkeypatch):
+    from app.connections import verify
+    monkeypatch.setenv("ANAMNESIA_ALLOW_NETWORK_TEST", "1")
+    monkeypatch.setattr(verify, "_http_get", lambda *a, **k: 200)
+    _put(client, "openai", "OPENAI_API_KEY")
+    assert client.post("/api/connections/openai/test").json()["state"] == "connected"
+    assert _item(client, "openai")["state"] == "connected"
+    _put(client, "openai", "OPENAI_API_KEY", value="sk-test-outra-chave-9999")
+    assert _item(client, "openai")["state"] == "expired"
+    client.post("/api/connections/openai/test")
+    monkeypatch.setenv("ANAMNESIA_VERIFY_TTL_S", "1")
+    monkeypatch.setattr(verify.time, "time", lambda: verify._records["openai"]["ts"] + 5)
+    assert _item(client, "openai")["state"] == "expired"
+    monkeypatch.undo()
+    _delete(client, "openai", "OPENAI_API_KEY")
+    assert _item(client, "openai")["state"] == "not_configured" or _item(client, "openai")["state"] == "expired"
+
+
+def test_cli_missing_is_not_installed(client, monkeypatch):
+    from app.connections import verify
+    monkeypatch.setattr(verify.shutil, "which", lambda *_: None)
+    b = client.post("/api/connections/codex/test").json()
+    assert b["state"] == "not_installed" and b["ok"] is False
+    assert _item(client, "codex")["state"] == "not_installed"
 
 
 def test_network_flag_only_probes_ollama(client, monkeypatch):
     monkeypatch.setenv("ANAMNESIA_ALLOW_NETWORK_TEST", "1")
-    monkeypatch.setattr("app.api.connections._ollama_probe", lambda: (True, "HTTP 200"))
-    assert client.post("/api/connections/ollama/test").json()["network_checked"] is True
-    assert client.post("/api/connections/openai/test").json()["network_checked"] is False
+    monkeypatch.setattr("app.connections.verify._ollama_probe", lambda: (True, "HTTP 200"))
+    b = client.post("/api/connections/ollama/test").json()
+    assert b["network_checked"] is True
+    monkeypatch.setattr("app.connections.verify._ollama_probe", lambda: (False, "OSError"))
+    assert client.post("/api/connections/ollama/test").json()["state"] == "unavailable"

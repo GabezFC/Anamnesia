@@ -115,6 +115,7 @@ class DecisionResult:
     jev_requests: int = 0
     errors: list[str] = field(default_factory=list)
     cache_hits: int = 0
+    model: str = ""                                 # checkpoint/modelo do provider que decidiu (Fase 7: registro do modelo usado)
 
     @property
     def fallback_count(self) -> int:
@@ -131,7 +132,7 @@ class DecisionResult:
 
     def to_public(self) -> dict:
         from app.decision.cost import estimate_jev_tokens
-        return {"request_id": self.request_id, "op": self.op, "provider": self.provider, "strategy": self.strategy,
+        return {"request_id": self.request_id, "op": self.op, "provider": self.provider, "model": self.model or "não disponível", "strategy": self.strategy,
                 "project": self.project, "items": [i.to_public() for i in self.items],
                 "latency_ms": labeled(round(self.latency_ms, 2), MEASURED),
                 "calls": self.calls, "jev_calls": labeled(self.jev_items, MEASURED),

@@ -6,10 +6,8 @@
  * - `registerCommand({id,label,description,shortcut,category,permission,when,run,keywords})`:
  *   fonte única para a paleta (Ctrl+K), dicas <kbd> e documentação. Dicas de atalho são
  *   geradas do registro: não existe mais dica sem handler.
- * - O dispatcher (`installShortcutDispatcher`) ignora composição IME, campos editáveis e o xterm,
+ * - O dispatcher (`installShortcutDispatcher`) ignora composição IME e campos editáveis,
  *   exceto atalhos com Ctrl/Cmd (que continuam valendo em qualquer lugar).
- * - `isAppShortcut(ev)` serve ao `interceptKey` do SessionTerminal: devolve true quando a tecla
- *   é um atalho do app e o xterm NÃO deve repassá-la ao pty.
  *
  * Módulo puro (sem dependências de DOM na importação) para poder ser testado em Node.
  */
@@ -93,10 +91,9 @@ export function usesCtrlOrMeta(spec) {
   return s.ctrl || s.mod;
 }
 
-/** Alvo onde digitar não deve disparar atalhos "soltos" (campos, contenteditable, xterm). */
+/** Alvo onde digitar não deve disparar atalhos "soltos" (campos, contenteditable). */
 export function isEditableTarget(t) {
   if (!t || !t.closest) return false;
-  if (t.closest('.xterm, .xterm-helper-textarea, [data-terminal-mount]')) return true;
   if (t.isContentEditable) return true;
   const tag = t.tagName;
   if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
@@ -116,7 +113,6 @@ export function findCommandForEvent(ev, ctx = {}) {
   return null;
 }
 
-/** Hook para `SessionTerminal.hooks.interceptKey`: true = atalho do app, xterm não deve processar. */
 export function isAppShortcut(ev, phase = 'down') {
   if (phase === 'peek') return false;
   const c = findCommandForEvent(ev, {});

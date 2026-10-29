@@ -3,7 +3,7 @@
 Calcula 92 pares (46 por tema) e compara ANTES (git ref, padrão HEAD) x DEPOIS (arquivo atual).
 Uso:
     python scripts/check_contrast.py                 # tabela antes x depois; exit 1 se algum par DEPOIS < 4,5
-    python scripts/check_contrast.py --ref HEAD --markdown docs/bench/anam-028-contraste.md
+    python scripts/check_contrast.py --ref HEAD --markdown data/reports-out/anam-028-contraste.md
 """
 from __future__ import annotations
 

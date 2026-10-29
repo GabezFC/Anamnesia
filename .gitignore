@@ -27,6 +27,9 @@ dist/
 htmlcov/
 .tox/
 
+# Local Docker environments may contain personal paths; publish templates only.
+/docker/*.env
+
 # --- Environment / secrets ---
 .env
 .env.*
@@ -126,7 +129,7 @@ reports/
 # --- Eclipse/IDE project file ---
 .project
 
-# spikes: vendored third-party assets and screenshots are local-only
+# spikes: spikes/pty_windows foi removido (R06); estes ignores cobrem só artefatos locais restantes (R07)
 spikes/**/vendor/
 spikes/**/shots/
 spikes/**/node_modules/

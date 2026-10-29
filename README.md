@@ -17,17 +17,17 @@ A local-first app (loopback only, your keys never leave your machine) with four 
 
 | Area | What it does | Status |
 | --- | --- | --- |
-| **Workspace** (home screen) | Real terminals (PTY) grouped by local project, split panels and tabs, run several agents (Hermes, Claude Code, Codex, OpenCode) in parallel | Built — terminals are default-deny ([`TERMINALS.md`](docs/guides/TERMINALS.md)) |
-| **Connections** | Connect API keys for agents, models and MCP servers from a small catalog (`config/connections.yaml`) that grows over time | Built — keys go to the local `.env`, connection tests are offline unless `ANAMNESIA_ALLOW_NETWORK_TEST=1` ([`CONNECTIONS.md`](docs/guides/CONNECTIONS.md)) |
-| **Config** | Pick a sub-agent orchestration preset (Economic / Balanced / Max) that routes work to cheaper models | Built, **off by default** (`ANAMNESIA_ROUTING=1`, `ANAMNESIA_DELEGATE=1`; [`ORCHESTRATION.md`](docs/guides/ORCHESTRATION.md)) |
-| **Costs** (Memory Gateway) | See what every memory call cost: project, agent, pipeline, tokens, price, latency | Built (ledger + dashboard; [`COSTS_LEDGER.md`](docs/guides/COSTS_LEDGER.md)) |
+| **Workspace** (home screen) | Project manager: register local projects, browse their files and agent context, and persist the panel layout. The PTY launcher that lets the orchestrator run agents (Hermes, Claude Code, Codex, OpenCode) is internal and has no visual terminal in the UI | Built — the internal PTY launcher is default-deny (Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/TERMINALS.md) |
+| **Connections** | Connect API keys for agents, models and MCP servers from a small catalog (`config/connections.yaml`) that grows over time | Built — keys go to the local `.env`, connection tests are offline unless `ANAMNESIA_ALLOW_NETWORK_TEST=1` (Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/CONNECTIONS.md) |
+| **Config** | Pick a sub-agent orchestration preset (Economic / Balanced / Max) that routes work to cheaper models | Built, **off by default** (`ANAMNESIA_ROUTING=1`, `ANAMNESIA_DELEGATE=1`; Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/ORCHESTRATION.md) |
+| **Costs** (Memory Gateway) | See what every memory call cost: project, agent, pipeline, tokens, price, latency | Built (ledger + dashboard; Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/COSTS_LEDGER.md) |
 
 Model routing: `memory_search` keeps its name and has a `mode` parameter (MCP and REST):
 `context` (default, today's behaviour), `answer` (a router picks a cheap model that returns a short
 answer with sources; falls back to `context` when routing is off) and `delegate` (full orchestrator,
 needs `ANAMNESIA_DELEGATE=1` and a resolvable project). `answer` is only promoted to default if the
 benchmark shows it does not lose recall or facts. No saving is claimed before it is measured.
-Details: [`MEMORY_SEARCH_MODES.md`](docs/guides/MEMORY_SEARCH_MODES.md).
+Details: Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/MEMORY_SEARCH_MODES.md).
 
 Supported systems (target): Windows, Linux, macOS. Distribution (target): `git clone` + script,
 Docker (without terminals by default) and `pipx` / `uv tool`. "Supported" means green CI on that
@@ -159,7 +159,7 @@ To run the test suite, install dev tooling on top: `pip install -r requirements-
 `pytest`; `requirements.txt` alone is the minimal runtime install). Optional retrieval stages
 (compression/reranking, §1.4 — off by default, see `app/retrieval/optional_stages.py`) have their
 own heavier dependencies in `requirements-optional.txt`; none are required for the default pipelines. The measured, approved subset is selectable with `OPT_STAGES_PRESET=off|free|approved`
-(default `free` = sentence dedup only; see `docs/reports/OPTIMIZED_PIPELINE.md`).
+(default `free` = sentence dedup only; see nota OPTIMIZED_PIPELINE.md no Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24)).
 
 ---
 
@@ -473,7 +473,7 @@ tests/               282 tests, no network, no keys
 data/synthetic_vault/  520-note example corpus + MANIFEST.json ground truth
 benchmark/           synthetic_questions.json (120 questions)
 frontend/            dashboard (vanilla ES modules, no build step)
-docs/                ENVIRONMENT.md · JEV_API.md
+docs/                README.md · INTERFACES.md · ENVIRONMENT_REFERENCE.md · guides/ (QUICKSTART, CONFIGURATION, SECURITY, DOCKER, E2E, COMPATIBILITY, FRONTEND_WORKSPACE); other guides: Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24)
 ```
 
 Two pipelines live side by side permanently: `pipelines.py` is the **frozen baseline** and
@@ -481,16 +481,51 @@ Two pipelines live side by side permanently: `pipelines.py` is the **frozen base
 
 ---
 
+## Evaluation status — 28 October 2026
+
+The 25 October generative benchmark is a single-run, fixed-corpus comparison, not a
+proof of superior quality, statistical equivalence, or persistence across real agent sessions.
+An offline correction found that the LLM judge counted bare abstentions as factual answers.
+Among 72 answerable questions × 9 models (648 observations per arm), the original judged
+accuracy was 86.57% for OFF-A and 86.88% for auto+optimizer. Reclassifying only the complete
+mandated abstention sentence gives 77.78% and 83.64%, respectively; 57 and 21 verdicts change.
+The paired difference is +5.86 percentage points, with a question-cluster bootstrap 95% CI
+of [-3.40, +15.28]. This is neither a superiority result nor an equivalence test. On the 60
+questions where OFF-A supplied context, auto+optimizer instead loses 7.78 pp. Broad prefix
+rule R1 is retained separately as sensitivity analysis because mixed replies are ambiguous.
+
+The Graphify-only arm falls to 59.26% under the strict rule, versus 77.78% for OFF-A;
+source recall must not be confused with answer-bearing context or generation accuracy.
+All arms appropriately abstained in the original judge labels on the ten unanswerable
+questions (90 observations per arm); this small fixed set does not establish calibrated abstention.
+
+Provider-reported generation cost across eight remote models was US$2.339738 (OFF-A)
+and US$0.427638 (auto+optimizer), an 81.72% reduction for this workload, not a universal net
+saving. JEV tariffs, evaluation judging, retries with unknown charges, electricity and agent
+operation must be accounted for separately. All logged judge rows cost US$0.784137;
+deduplicating verdicts for scoring must not deduplicate spending. No balances were rechecked.
+
+Local, ignored artifacts: `data/reports-out/finalizacao-2026-10-28/evaluation/ADDENDUM.md`,
+`reanalysis.json`, `abstention_audit.csv`, and `paired_outcomes.csv`. Reproduce with
+`scripts/research_reanalysis.py` (offline; no model calls). Private texts are not copied into
+the audit outputs. Original logs and PDFs remain unchanged. The frozen scratch question JSON
+is no longer present; optional class/regex metadata is recovered from retained definitions,
+not from a recreated frozen gold-source validation. A revised paper accompanies the addendum.
+
 ## 11. Interfaces
 
 Every interface defaults to `pipeline="auto"`: the **Memory Optimization Layer** runs on every
 search (routing, result cache, index freshness, adaptive cut, near-duplicate collapse, injection
-flag, compact headers — all zero-token). Measured: context **-39.7%** (synthetic, 520 notes) and
-**-24.2%** (real vault) with recall unchanged. See [`docs/guides/OPTIMIZATION_LAYER.md`](docs/guides/OPTIMIZATION_LAYER.md).
+flag, compact headers — no LLM tokens for these deterministic stages, but not zero compute).
+Earlier documentation quoted context reductions of -39.7% (synthetic) and -24.2% (real vault)
+with unchanged recall. The artifact supporting those specific figures was not located in this
+audit; they are not current validated headline results. Corpus-dependent retrieval regressions
+exist (see the evaluation status above). See Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/OPTIMIZATION_LAYER.md).
 
 **MCP (preferred for agents)** — `python -m app.mcp.server`, stdio. Default toolset is **one tool**,
-`memory_search(query, pipeline="auto", max_results, scope, client, mode)` with a compact response
-(schemas cost 183 instead of 775 tokens per turn). `MG_MCP_TOOLSET=full` adds the read-only legacy
+`memory_search(query, pipeline="auto", max_results, scope, client, mode)` with a compact response.
+Earlier schema counts of 183 versus 775 tokens lack a retained tokenizer/version/counting
+artifact and are not a verified current per-turn cost. `MG_MCP_TOOLSET=full` adds the read-only legacy
 set (6 more tools) and `MG_MCP_SAVE=1` adds the opt-in `memory_save`.
 
 **REST** — interactive docs at `/docs` (`/openapi.json`); the persistent-memory routes live under

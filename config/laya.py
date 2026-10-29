@@ -21,14 +21,22 @@ LAYA_REVISIONS = {
 
 @dataclass
 class LayaConfig:
-    # off | inproc | serve | auto   (auto = inproc se 'laya' importável e pesos presentes; senão serve se
-    # MG_LAYA_SERVE_URL estiver definida; senão OFF explícito e visível em status()/métricas)
+    # off | inproc | worker | serve | auto
+    #   auto = inproc se 'laya' importável e pesos presentes; senão worker (processo-filho no Python que TEM laya,
+    #   MG_LAYA_PYTHON ou data/local_ai/venv*) se achado; senão serve se MG_LAYA_SERVE_URL definida;
+    #   senão OFF explícito e visível em status()/métricas.
     mode: str = field(default_factory=lambda: env_str("MG_LAYA_MODE", "auto").strip().lower())
     models_dir: str = field(default_factory=lambda: env_str("MG_LAYA_MODELS_DIR", "data/local_ai/models"))
     multilingual_dir: str = field(default_factory=lambda: env_str("MG_LAYA_MULTILINGUAL_DIR", ""))
     english_dir: str = field(default_factory=lambda: env_str("MG_LAYA_ENGLISH_DIR", ""))
     serve_url: str = field(default_factory=lambda: env_str("MG_LAYA_SERVE_URL", ""))  # só loopback; nunca :8000
     timeout_s: float = field(default_factory=lambda: env_float("MG_LAYA_TIMEOUT_S", 20.0))
+    # worker: Python (venv) que tem laya+torch e tempo máximo para carregar os pesos (1ª chamada medida: 10-40 s em CPU)
+    python: str = field(default_factory=lambda: env_str("MG_LAYA_PYTHON", ""))
+    load_timeout_s: float = field(default_factory=lambda: env_float("MG_LAYA_LOAD_TIMEOUT_S", 120.0))
+    # disjuntor: após N falhas seguidas o Laya fica "aberto" por cooldown_s (falha rápida, SEM retry em laço)
+    breaker_failures: int = field(default_factory=lambda: env_int("MG_LAYA_BREAKER_FAILURES", 3))
+    breaker_cooldown_s: float = field(default_factory=lambda: env_float("MG_LAYA_BREAKER_COOLDOWN_S", 30.0))
     # ""=auto por idioma (Router); "multilingual" evita carregar o checkpoint inglês (842 MB) e usa 1 só modelo.
     force_model: str = field(default_factory=lambda: env_str("MG_LAYA_FORCE_MODEL", "").strip().lower())
     device: str = field(default_factory=lambda: env_str("MG_LAYA_DEVICE", "cpu"))
@@ -53,8 +61,8 @@ class LayaConfig:
     write_triage: str = field(default_factory=lambda: env_str("MG_LAYA_WRITE_TRIAGE", "off").strip().lower())
 
     def validate(self) -> "LayaConfig":
-        if self.mode not in {"off", "inproc", "serve", "auto"}:
-            raise ValueError(f"MG_LAYA_MODE inválido: {self.mode!r} (off|inproc|serve|auto)")
+        if self.mode not in {"off", "inproc", "worker", "serve", "auto"}:
+            raise ValueError(f"MG_LAYA_MODE inválido: {self.mode!r} (off|inproc|worker|serve|auto)")
         if self.force_model not in {"", "english", "multilingual"}:
             raise ValueError("MG_LAYA_FORCE_MODEL inválido ('', english, multilingual)")
         if self.failure_mode not in {"fail_open", "fail_closed"}:

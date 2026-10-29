@@ -29,13 +29,17 @@ export function renderKeyRows(item) {
   const t = I18N.connections;
   const c = tKeys();
   const envKeys = item.env_keys || [];
+  if (!envKeys.length && (item.uses_providers || []).length) {
+    const names = item.uses_providers.map((id) => { const m = (mockConnections.models || []).find((x) => x.id === id); return m ? m.name : id; }).join(', ');
+    return `
+      <div class="connection-key-section" data-bind="uses-providers">
+        <p class="input-hint">${esc(fmtMsg(c.keyUsesProviders || 'Usa a credencial dos provedores {names}.', { names }))}</p>
+      </div>`;
+  }
   if (!envKeys.length) {
     return `
       <div class="connection-key-section">
-        <label class="input-label" for="key-${domId(item.id)}">${t.apiKeyLabel}</label>
-        <div class="input-control">
-          <input id="key-${domId(item.id)}" type="password" autocomplete="new-password" value="" placeholder="${t.apiKeyPlaceholder}" readonly disabled data-bind="masked-key-input" />
-        </div>
+        <p class="input-hint">${esc(c.keyNone || 'Este item não usa chave de API: a autenticação é feita pelo próprio programa.')}</p>
       </div>`;
   }
   return envKeys.map((env) => {
@@ -73,15 +77,47 @@ export async function refreshKeyStatus() {
     for (const c of list) {
       keyStatus[c.id] = c.keys || {};
       const item = allConnections().find((x) => x.id === c.id);
-      if (item) { item.has_key = !!c.has_key; item.masked_key = c.masked ? esc(c.masked) : null; }
+      if (item) { item.has_key = !!c.has_key; item.masked_key = c.masked ? esc(c.masked) : null; item.state = c.state; item.state_detail = c.detail || ''; item.uses_providers = c.uses_providers || []; item.detected = !!c.detected; item.status = c.state === 'connected' ? 'online' : 'offline'; }
     }
-  } catch { /* backend indisponível: mantém o que há */ }
+    return true;
+  } catch { return false; /* backend indisponível: mantém o que há */ }
+}
+
+/* ------------------------------------------------------------------ estado da conexão (vem do backend) */
+export const STATE_LABEL = {
+  not_installed: 'Não instalado', detected: 'Detectado · não autenticado', not_configured: 'Não configurado',
+  configured: 'Configurado · não testado', testing: 'Testando…', connected: 'Autenticado · verificado',
+  auth_error: 'Erro de autenticação', unavailable: 'Erro · indisponível', expired: 'Verificação expirada',
+};
+const STATE_CHIP = {
+  connected: 'chip-online', configured: 'chip-configured', detected: 'chip-configured', testing: 'chip-configured',
+  not_configured: 'chip-offline', not_installed: 'chip-offline', unavailable: 'chip-unconfigured',
+  auth_error: 'chip-unconfigured', expired: 'chip-unconfigured',
+};
+export const stateOf = (item) => item.state || (item.has_key ? 'configured' : 'not_configured');
+
+/**
+ * Troca o innerHTML preservando o que o usuário está digitando nos campos de chave (e o foco).
+ * Sem isso, qualquer re-render assíncrono (refresh de status) apagava a digitação no meio.
+ */
+export function paintKeepingKeys(root, html) {
+  const drafts = new Map();
+  root.querySelectorAll('input[data-env-key]').forEach((i) => { if (i.value) drafts.set(i.id, i.value); });
+  const active = document.activeElement;
+  const activeId = active && root.contains(active) ? active.id : null;
+  const caret = activeId && active.selectionStart != null ? active.selectionStart : null;
+  root.innerHTML = html;
+  drafts.forEach((v, id) => { const el = root.querySelector(`#${CSS.escape(id)}`); if (el) el.value = v; });
+  if (activeId) {
+    const el = root.querySelector(`#${CSS.escape(activeId)}`);
+    if (el) { el.focus(); if (caret != null && el.setSelectionRange) { try { el.setSelectionRange(caret, caret); } catch { /* tipo sem seleção */ } } }
+  }
 }
 
 const safeErr = (e) => (e && e.message ? e.message : String(e));
 
 /**
- * Ações de chave compartilhadas (#/connections e #/config → Chaves). `target` é o botão clicado.
+ * Ações de chave compartilhadas (#/connections; a antiga aba Configuração › Chaves foi removida). `target` é o botão clicado.
  * Nunca registra nem exibe o valor digitado; o input é limpo assim que a requisição é montada.
  */
 export async function handleKeyAction(action, target, { toast, rerender } = {}) {
@@ -92,11 +128,15 @@ export async function handleKeyAction(action, target, { toast, rerender } = {}) 
   const card = target.closest('.connection-card') || document;
 
   if (action === 'test-connection') {
+    if (found) { found.state = 'testing'; found.state_detail = ''; if (rerender) rerender(); }
     try {
       const r = await testConn(itemId);
-      const ok = r && (r.ok === true || r.status === 'ok');
-      toast(ok ? 'success' : 'error', `${name}: ${r?.message || r?.status || (ok ? 'ok' : 'falhou')}`);
+      const st = r && r.state;
+      const kind = st === 'connected' ? 'success' : (['configured', 'detected', 'not_configured', 'not_installed'].includes(st) ? 'info' : 'error');
+      toast(kind, `${name}: ${STATE_LABEL[st] || st || 'sem resposta'} — ${r?.detail || r?.note || ''}`);
     } catch (err) { toast('error', `${name}: ${safeErr(err)}`); }
+    await refreshKeyStatus();
+    if (rerender) rerender();
     return;
   }
 
@@ -185,9 +225,8 @@ export function render() {
   ` : '';
 
   const renderCard = (item) => {
-    const isOnline = item.status === 'online';
+    const st = stateOf(item);
     const isDetected = item.detected;
-    const hasKey = item.has_key;
 
     return `
       <div class="connection-card" data-connection-id="${item.id}" data-bind="connection-card">
@@ -200,17 +239,17 @@ export function render() {
             </div>
           </div>
           <div class="connection-chips-row">
-            <span class="chip ${isOnline ? 'chip-online' : 'chip-offline'}">
-              <span class="dot ${isOnline ? 'dot-success' : 'dot-neutral'}"></span>
-              ${isOnline ? t.online : t.offline}
+            <span class="chip ${STATE_CHIP[st] || 'chip-offline'}" data-bind="connection-state" data-state="${st}" title="${esc(item.state_detail || '')}">
+              <span class="dot ${st === 'connected' ? 'dot-success' : 'dot-neutral'}"></span>
+              ${STATE_LABEL[st] || st}
             </span>
           </div>
         </div>
 
         <div class="connection-chips-row">
-          <span class="chip ${isDetected ? 'chip-online' : 'chip-offline'}">${isDetected ? t.detected : t.notDetected}</span>
-          <span class="chip ${hasKey ? 'chip-configured' : 'chip-unconfigured'}">${hasKey ? t.configured : t.notConfigured}</span>
+          <span class="chip ${isDetected ? 'chip-configured' : 'chip-offline'}">${isDetected ? t.detected : t.notDetected}</span>
         </div>
+        ${item.state_detail ? `<p class="input-hint" data-bind="connection-detail">${esc(item.state_detail)}</p>` : ''}
 
         <!-- Chaves por variável de ambiente (NUNCA reexibir a chave real no client-side) -->
         ${renderKeyRows(item)}
@@ -291,7 +330,7 @@ export function mount(root) {
     const all = allConnections();
     const found = all.find(x => x.id === itemId);
     if (action === 'test-connection' || action === 'save-connection' || action === 'save-key' || action === 'remove-key') {
-      handleKeyAction(action, target, { toast, rerender: () => { root.innerHTML = render(); } });
+      handleKeyAction(action, target, { toast, rerender: () => { paintKeepingKeys(root, render()); } });
     } else if (action === 'view-snippet') {
       snippetOf(itemId).then((r) => {
         window.dispatchEvent(new CustomEvent('anamnesia:modal:snippet', { detail: { title: found?.name || itemId, snippet: r.content || r.note || '' } }));
@@ -300,13 +339,13 @@ export function mount(root) {
       });
     } else if (action === 'retry-connections') {
       currentState = 'loaded';
-      root.innerHTML = render();
+      paintKeepingKeys(root, render());
     }
   };
 
   root.addEventListener('click', handleClick);
   const stopHealth = mountHealth(root);
-  refreshKeyStatus().then(() => { if (root.isConnected) root.innerHTML = render(); });
+  refreshKeyStatus().then(() => { if (root.isConnected) paintKeepingKeys(root, render()); });
   root._connectionsCleanup = () => {
     root.removeEventListener('click', handleClick);
     stopHealth();
@@ -322,5 +361,5 @@ export function unmount(root) {
 
 export function setDebugState(state, root) {
   currentState = state;
-  if (root) root.innerHTML = render();
+  if (root) paintKeepingKeys(root, render());
 }

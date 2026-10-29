@@ -9,7 +9,7 @@ calls.
      a) the router would otherwise send the query to the free baseline (we never override an
         explicit route configured through MG_ROUTE_*, nor an explicit pipeline);
      b) the query is hard for lexical recall: complexity COMPLEX, or AMBIGUOUS with a multi-hop hint
-        (SIMPLE/MEDIUM are answered at the top of baseline; see docs/SCOPE_BENCHMARK.md);
+        (SIMPLE/MEDIUM are answered at the top of baseline; see Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/SCOPE_BENCHMARK.md));
      c) the cheap lexical pool is big enough that filtering saves context: size_estimate
         >= JEV_MIN_POOL (30). With a small pool there is nothing to filter and the judge would cost
         more tokens than it removes. Unknown size -> stay on baseline;

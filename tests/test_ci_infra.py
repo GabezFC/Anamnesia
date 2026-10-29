@@ -181,7 +181,7 @@ def test_shuffle_seed_flag_reorders_and_is_reproducible(tmp_path):
 def test_auto_markers_mapping():
     assert ci_support.auto_markers_for("tests/e2e/test_workspace_e2e.py") == ["e2e", "slow"]
     assert ci_support.auto_markers_for("tests\\test_pty_posix.py") == ["posix_only"]
-    assert ci_support.auto_markers_for("tests/test_terminals_jobobject.py") == ["windows_only"]
+    assert ci_support.auto_markers_for("tests/test_terminal_jobobject.py") == []   # arquivo misto: marcador por teste
     assert ci_support.auto_markers_for("tests/test_paths.py") == []
 
 
@@ -189,10 +189,11 @@ def test_marker_deselection_works_via_collect_only():
     """`-m "not slow"` must be a valid expression with every marker registered (--strict-markers)."""
     r = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider",
                         "-m", "not slow and not e2e and not windows_only", "tests/e2e", "tests/test_pty_posix.py",
-                        "tests/test_terminals_jobobject.py"], cwd=ROOT, capture_output=True, text=True, timeout=120)
+                        "tests/test_terminal_jobobject.py"], cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert r.returncode in (0, 5), r.stdout + r.stderr  # 5 = nothing selected, still a valid selection
     assert "test_workspace_e2e.py::" not in r.stdout
-    assert "test_terminals_jobobject.py::" not in r.stdout
+    assert "test_job_object_kills_grandchild_started_with_start_b" not in r.stdout   # windows_only por teste
+    assert "test_close_kills_whole_descendant_tree" in r.stdout                       # os demais seguem selecionados
     assert "unknown" not in (r.stdout + r.stderr).lower()
 
 

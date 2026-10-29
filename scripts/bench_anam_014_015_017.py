@@ -1,7 +1,7 @@
 """ANAM-014/015/017 -- medições antes/depois (cache JEV, fusão híbrida, near-dup, FTS prefixo, cosseno).
 
-    python scripts/bench_anam_014_015_017.py --label antes  --out docs/bench/anam-014-015-017_antes.json
-    python scripts/bench_anam_014_015_017.py --label depois --out docs/bench/anam-014-015-017_depois.json
+    python scripts/bench_anam_014_015_017.py --label antes  --out data/reports-out/anam-014-015-017_antes.json
+    python scripts/bench_anam_014_015_017.py --label depois --out data/reports-out/anam-014-015-017_depois.json
 
 Determinístico e offline (sem juiz, sem modelo, zero tokens). Latências são medianas de N repetições
 (ruído típico de ±15% nesta máquina; só diferenças maiores contam). Cada bloco é tolerante a API ausente
@@ -171,6 +171,7 @@ def bench_cache() -> dict:
 
 def bench_hybrid() -> dict:
     """recall/MRR no golden-v2 (test + calibração) para fusão por rank (legado), magnitude e rrf."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "experiments"))
     import measure_onda9 as M
     from app.benchmark import golden
     from app.retrieval.experiments import RetrievalExperiments as E, with_flags as wf

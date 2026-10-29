@@ -13,11 +13,16 @@ ENV PYTHONUNBUFFERED=1 \
     # The HOST side stays loopback-only: see docker-compose.yml (127.0.0.1:8000:8000).
     MG_HOST=0.0.0.0
 
+ARG GIT_COMMIT=unknown
+ARG FRONTEND_SHA=unknown
 WORKDIR /app
 COPY . /app
 RUN pip install . && rm -rf /app/* \
     && useradd --create-home --uid 10001 anamnesia \
     && mkdir /data && chown anamnesia:anamnesia /data
+
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}" \
+      io.anamnesia.frontend-sha256="${FRONTEND_SHA}"
 
 USER anamnesia
 VOLUME ["/data"]

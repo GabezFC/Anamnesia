@@ -6,7 +6,7 @@ unless a calibration file is supplied through `ANAMNESIA_TOKEN_CALIBRATION` (pat
 `{"pt": 1.25, "other": 1.0, "source": "tiktoken cl100k_base, n=...", "tokenizer": "..."}`). Factors in
 that file are RELATIVE TO THE RAW heuristic (before PT_CALIBRATION_FACTOR) and replace it. The file is
 produced from a real tokenizer (tiktoken) or from API-reported usage; no factor is hard-coded here
-because none could be derived honestly for a Claude tokenizer offline (see docs/MEASUREMENT.md).
+because none could be derived honestly for a Claude tokenizer offline (see Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/MEASUREMENT.md)).
 
 `detect_lang` is a cheap stopword/diacritic heuristic ("pt" | "other"), used only for `lang="auto"`
 when a calibration file is active.

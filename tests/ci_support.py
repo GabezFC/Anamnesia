@@ -141,7 +141,6 @@ def shuffled(items: list, seed: int, key=lambda it: it.module.__name__ if getatt
 # ----------------------------------------------------------------------------------------------
 AUTO_MARKERS: dict[str, tuple[str, ...]] = {
     "e2e/": ("e2e", "slow"),
-    "test_terminals_jobobject.py": ("windows_only",),
     "test_pty_posix.py": ("posix_only",),
 }
 

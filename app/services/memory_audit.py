@@ -44,7 +44,7 @@ from app.services.scope import project_of
 
 DEFAULT_INACTIVE_DAYS = 90
 DEFAULT_NEAR_DUP_THRESHOLD = 0.92
-#: Fields the vault convention says every note declares (docs/PERSISTENT_MEMORY_ARCHITECTURE.md).
+#: Fields the vault convention says every note declares (Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/guides/PERSISTENT_MEMORY_ARCHITECTURE.md)).
 REQUIRED_FIELDS = ("id", "title", "area", "type", "tags", "status", "created", "updated")
 
 _WLINK = re.compile(r"\[\[([^\[\]]*?)\]\]")

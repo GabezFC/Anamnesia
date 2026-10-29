@@ -28,7 +28,7 @@ def build_record(req: DecisionRequest, res: DecisionResult) -> dict:
         counts[i.decision] = counts.get(i.decision, 0) + 1
     return {
         "ts": round(time.time(), 3), "request_id": res.request_id, "op": res.op, "project": req.project,
-        "provider": res.provider, "strategy": res.strategy, "query_hash": sha(req.query), "schema": req.schema,
+        "provider": res.provider, "model": res.model or None, "strategy": res.strategy, "query_hash": sha(req.query), "schema": req.schema,
         "n_items": len(res.items), "decisions": counts, "latency_ms": round(res.latency_ms, 2),
         "calls": dict(res.calls), "jev_requests": res.jev_requests, "jev_calls_avoided": res.jev_calls_avoided,
         "cache_hits": res.cache_hits, "fallbacks": res.fallback_count,

@@ -2,7 +2,7 @@
 
 Same input (query, context_tokens, task_kind, risk, registry file, policy) -> same decision.
 Routing misses never raise: they return a RoutingDecision with model_id None and a reason code.
-Nothing here is measured yet; see docs/MODEL_ROUTER.md.
+Nothing here is measured yet; see Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/guides/MODEL_ROUTER.md).
 """
 from __future__ import annotations
 

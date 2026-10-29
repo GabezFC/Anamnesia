@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import importlib
 import sys
-import warnings
 from pathlib import Path
 
 import pytest
@@ -97,15 +96,17 @@ def test_wilson_ci_moved_to_core_and_reexported():
 
 
 # ANA-056 -------------------------------------------------------------------------------------
-def test_core_tokens_is_the_implementation_and_gateway_shim_aliases_it():
+def test_core_tokens_is_the_implementation_and_legacy_shims_are_gone():
     import app.core.tokens as core
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        sys.modules.pop("app.gateway.token_budget", None)
-        legacy = importlib.import_module("app.gateway.token_budget")
-    assert legacy is core
-    assert any(issubclass(x.category, DeprecationWarning) for x in w)
-    assert core.estimate_tokens("olá mundo") == legacy.estimate_tokens("olá mundo") > 0
+    assert core.estimate_tokens("olá mundo") > 0
+    # Shims removidos com aprovação do usuário (2026-10-24): token_budget -> app.core.tokens; app.config fachada.
+    for legacy in ("app.gateway.token_budget", "app.config"):
+        sys.modules.pop(legacy, None)
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(legacy)
+    assert not (ROOT / "app" / "gateway" / "token_budget.py").exists()
+    assert not (ROOT / "app" / "config.py").exists()
+    assert '"app.config"' not in (ROOT / "scripts" / "layers.toml").read_text(encoding="utf-8")
 
 
 def test_core_has_no_upward_imports(graph):

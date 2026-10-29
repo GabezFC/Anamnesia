@@ -37,10 +37,15 @@ class Connection:
     docs_url: str | None
     status: str
     mcp_snippet: str | None
+    secret_keys: tuple[str, ...] = ()   # chaves guardáveis no cartão que NÃO afetam a detecção (ex.: agentes)
+
+    @property
+    def key_names(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys((*self.env_keys, *self.secret_keys)))
 
     def public(self) -> dict:
         return {"id": self.id, "type": self.type, "name": self.name, "command": self.command,
-                "env_keys": list(self.env_keys), "docs_url": self.docs_url, "status": self.status,
+                "env_keys": list(self.key_names), "docs_url": self.docs_url, "status": self.status,
                 "mcp_snippet": self.mcp_snippet}
 
 
@@ -70,10 +75,13 @@ def _entry(raw, idx: int) -> Connection:
     docs = raw.get("docs_url")
     if docs is not None and not (isinstance(docs, str) and docs.startswith(("http://", "https://"))):
         raise CatalogError(f"{where}: docs_url must be an http(s) URL or null")
+    secret_keys = raw.get("secret_keys") or []
+    if not isinstance(secret_keys, list) or not all(isinstance(k, str) and _ENV_RE.match(k) for k in secret_keys):
+        raise CatalogError(f"{where}: secret_keys must be a list of UPPER_CASE names")
     snip = raw.get("mcp_snippet")
     if snip is not None and snip not in SNIPPET_FORMATS:
         raise CatalogError(f"{where}: mcp_snippet must be one of {SNIPPET_FORMATS} or null")
-    return Connection(cid, raw["type"], raw["name"], command, tuple(env_keys), docs, raw["status"], snip)
+    return Connection(cid, raw["type"], raw["name"], command, tuple(env_keys), docs, raw["status"], snip, tuple(secret_keys))
 
 
 def load_catalog(path: Path | str | None = None, derive: bool = True) -> list[Connection]:

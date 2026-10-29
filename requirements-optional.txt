@@ -2,7 +2,7 @@
 # NONE of these are runtime deps of the Gateway: every stage is OFF by default and is skipped with a
 # single log warning (`optional_stage_skipped:<name>` in the run metrics) when its library is missing.
 #
-# VERSIONS BELOW WERE INSTALLED AND EXERCISED ON 2026-10-01/02 (docs/OPTIONAL_STAGES_BENCHMARK.md):
+# VERSIONS BELOW WERE INSTALLED AND EXERCISED ON 2026-10-01/02 (Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/OPTIONAL_STAGES_BENCHMARK.md)):
 #   Windows 11, Python 3.11.16, RTX 3060 12 GB, separate venv (NEVER the project .venv):
 #     uv venv --python 3.11 %LOCALAPPDATA%/Temp/mg-stages-venv
 #     uv pip install --python <that venv> -r requirements.txt -r requirements-optional.txt \

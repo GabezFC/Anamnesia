@@ -9,7 +9,7 @@ Safety:
   * nothing is sent unless the backend is actually used; `available()` is a cheap /api/tags probe;
   * quality is NOT assumed: the output is validated (scores clamped to [0, 1], a missing name raises so the
     JevService failure policy -- fail_open / fail_closed -- decides), and the judge-agreement measurement
-    lives in docs/reports/ONDA9_EXPERIMENTOS.md (status BLOCKED while no local model is available).
+    lives in Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/ONDA9_EXPERIMENTOS.md) (status BLOCKED while no local model is available).
 
 Protocol: one chat call per batch, `format` = JSON schema {name: number}, temperature 0.
 """

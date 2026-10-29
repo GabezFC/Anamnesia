@@ -1,6 +1,6 @@
 """ANA-238: local-first grade (L0-L5) published by `anamnesia doctor`. Pure, offline, no secret values.
 
-The scale is NOT defined elsewhere in the repo, so it is defined here (and in docs/guides/ENVIRONMENT.md):
+The scale is NOT defined elsewhere in the repo, so it is defined here (and in Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/ENVIRONMENT.md)):
 
   L0  reserved: retrieval/storage would depend on a remote service (never true for this product).
   L1  reserved: storage local but retrieval needs a network service (never true: FTS5/BM25 is local).

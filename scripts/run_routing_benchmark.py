@@ -38,7 +38,7 @@ def main(argv=None) -> int:
     ap.add_argument("--timeout", type=float, default=120.0, help="per-call cap in seconds (real runner)")
     ap.add_argument("--cache", default=None, help="JSON file persisting the task x model cache")
     ap.add_argument("--db", default=None, help="explicit SQLite path to persist runs (never defaults to benchmark.db)")
-    ap.add_argument("--out", default=None, help="report path (default docs/ROUTING_BENCHMARK_<date>[_SIMULATED].md)")
+    ap.add_argument("--out", default=None, help="report path (default data/reports-out/ROUTING_BENCHMARK_<date>[_SIMULATED].md)")
     ap.add_argument("--tasks", default=None, help="tasks json (default benchmark/routing_tasks.json)")
     ap.add_argument("--with-memory", action="store_true",
                     help="--real: include memory_qa, injecting context retrieved by the gateway (ANA-019)")
@@ -156,7 +156,7 @@ def main(argv=None) -> int:
         ids = rb.persist(db, result)
         print(f"persisted {len(ids)} runs into {a.db}")
     date = time.strftime("%Y-%m-%d")
-    out = Path(a.out) if a.out else ROOT / "docs" / f"ROUTING_BENCHMARK_{date}{'' if a.real else '_SIMULATED'}.md"
+    out = Path(a.out) if a.out else ROOT / "data" / "reports-out" / f"ROUTING_BENCHMARK_{date}{'' if a.real else '_SIMULATED'}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(rb.render_report(result, date, a.real, notes), encoding="utf-8")
     if not a.real:

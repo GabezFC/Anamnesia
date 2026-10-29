@@ -71,12 +71,6 @@ async def lifespan(_app: FastAPI):
         g.close()
     except Exception as exc:  # noqa: BLE001
         g.log.warning("gateway close failed: %s", type(exc).__name__)
-    try:  # never leave PTY child processes behind when the server stops
-        from app.api.workspace import get_manager
-        get_manager().close_all()
-    except Exception:  # noqa: BLE001
-        pass
-
 
 def _install_trace_middleware(app: FastAPI) -> None:
     """ANAM-012: one trace_id per REST request (client X-Trace-Id honoured if safe) in a ContextVar scope and
@@ -160,7 +154,7 @@ def create_app() -> FastAPI:
     app.include_router(costs_routing_api.router)
     from app.api import connections as connections_api  # Fase 9
     from app.api import orchestration as orchestration_api  # Fase 11
-    from app.api import workspace as workspace_api  # Fase 10 (terminals: loopback-only gate inside)
+    from app.api import workspace as workspace_api  # projects, file explorer, initialize, JEV (sem sessões de terminal)
     from app.api import benchmark_report as benchmark_report_api  # aggregate + report (server-side)
     from app.api import memory_context as memory_context_api  # last-search / search-preview
     from app.api import settings as settings_api  # persisted settings
@@ -176,8 +170,13 @@ def create_app() -> FastAPI:
     app.include_router(connections_api.router)
     app.include_router(orchestration_api.router)
     app.include_router(workspace_api.router)
+    from app.api import workspace_io as workspace_io_api  # Central de Importação, Exportação e Inicialização
+    app.include_router(workspace_io_api.router)
     from app.api import decision as decision_api  # ANAM-043: /api/decision/* (loopback-only)
     app.include_router(decision_api.router)
+
+    from app.api import local_ai as local_ai_api  # ANAM-046: /api/local-ai/* (loopback-only; install exige confirm)
+    app.include_router(local_ai_api.router)
     if FRONTEND.exists():
         app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 

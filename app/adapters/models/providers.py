@@ -140,7 +140,7 @@ def _parse_keep_alive(value):
 class OllamaAdapter(OpenAICompatibleAdapter):
     """Ollama via the NATIVE `POST /api/chat` (ANAM-032). Why not `/v1`: Ollama's OpenAI-compatibility doc says the
     OpenAI API has no way to set the context size; `options.num_ctx` and `keep_alive` exist only on the native
-    endpoints (docs/api.md, docs/faq.mdx; see docs/guides/ENVIRONMENT.md). `num_ctx`/`keep_alive` are sent ONLY
+    endpoints (docs/api.md, docs/faq.mdx; see Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/ENVIRONMENT.md)). `num_ctx`/`keep_alive` are sent ONLY
     when configured (ctor or ANAMNESIA_OLLAMA_NUM_CTX / ANAMNESIA_OLLAMA_KEEP_ALIVE); otherwise the server
     defaults apply (4096 tokens / 5m) and truncation can only be detected, not prevented."""
 

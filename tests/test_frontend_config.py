@@ -66,7 +66,7 @@ def test_key_management_never_stores_or_shows_secrets():
     assert "input.value = ''" in cn and 'type="password"' in cn and 'autocomplete="new-password"' in cn
     assert not re.search(r"console\.\w+\([^)]*(?:input\.value|\bv\b|secret|value)", cn)
     cfg = read(JS / "pages" / "config.js")
-    assert "renderKeyRows" in cfg and "handleKeyAction" in cfg
+    assert "renderKeyRows" not in cfg and "handleKeyAction" not in cfg  # aba Chaves removida; só Conexões
     # nenhum value="${...}" preenchendo input password com segredo
     for src in (cn, cfg):
         for m in re.finditer(r'<input[^>]*type="password"[^>]*>', src, flags=re.S):
@@ -160,7 +160,7 @@ const loaded = m.render();
 console.log(JSON.stringify({
   skeleton: loading.includes('skeleton') && loading.includes('aria-busy'),
   err: error.includes('retry-config') && error.includes('empty-state'),
-  tabs: ['general','budget','economy','keys'].every(t => loaded.includes('data-tab="' + t + '"')),
+  tabs: ['general','budget','economy','gateway'].every(t => loaded.includes('data-tab="' + t + '"')),
   presets: loaded.includes('select-preset'),
 }));
 """)

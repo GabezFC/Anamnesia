@@ -10,7 +10,7 @@
 import './dynamic-style.js';
 import { icon } from './icons.js';
 import { I18N, getLang, setLang } from './i18n.js';
-import { mockProjects, mockCostSummary, mockSessions } from './mock-data.js';
+import { mockProjects, mockCostSummary } from './mock-data.js';
 
 import * as workspacePage from './pages/workspace.js';
 import * as connectionsPage from './pages/connections.js';
@@ -24,11 +24,11 @@ import { installShortcutDispatcher } from './commands.js';
 import { registerAppCommands } from './app-commands.js';
 import { openPalette, isPaletteOpen } from './components/command-palette.js';
 import { trapFocus } from './components/focus-trap.js';
-import { loadLive, installTerminalObserver, registerProject, live, demoBlocks, isDemo, checkHealth, refreshAlerts } from './live.js';
+import { loadLive, registerProject, workspaceRoots, live, demoBlocks, isDemo, checkHealth, refreshAlerts } from './live.js';
 
 // `title` é getter: lê I18N no momento do render para acompanhar a troca de idioma.
 const ROUTES = {
-  '#/workspace': { id: 'workspace', get title() { return I18N.nav.workspace; }, icon: 'terminal', module: workspacePage },
+  '#/workspace': { id: 'workspace', get title() { return I18N.nav.workspace; }, icon: 'folder', module: workspacePage },
   '#/connections': { id: 'connections', get title() { return I18N.nav.connections; }, icon: 'connections', module: connectionsPage },
   '#/config': { id: 'config', get title() { return I18N.nav.config; }, icon: 'config', module: configPage },
   '#/costs': { id: 'costs', get title() { return I18N.nav.costs; }, icon: 'costs', module: costsPage },
@@ -111,10 +111,6 @@ export async function init() {
     openPalette: () => openPalette(),
     toggleTheme,
     toggleLang: () => changeLang(getLang() === 'en' ? 'pt' : 'en'),
-    newTerminal: () => {
-      window.location.hash = '#/workspace';
-      setTimeout(() => document.querySelector('[data-action="toggle-profile-menu"]')?.click(), 60);
-    },
   });
   installShortcutDispatcher(window);
   window.addEventListener('keydown', handleModalEscape);
@@ -123,12 +119,15 @@ export async function init() {
   // Saúde real e alertas: atualizados em segundo plano; só os indicadores são repintados (sem re-render de página)
   setInterval(() => { Promise.all([checkHealth(), refreshAlerts()]).then(paintLiveIndicators); }, 30000);
   window.addEventListener('anamnesia:toast', (e) => showToast(e.detail));
-  window.addEventListener('anamnesia:modal:add-project', () => openModal({ type: 'add-project' }));
+  window.addEventListener('anamnesia:modal:add-project', () => {
+    openModal({ type: 'add-project', roots: null, error: null, busy: false, name: '', path: '' });
+    workspaceRoots().then((r) => { if (activeModal && activeModal.type === 'add-project') { keepAddForm(); activeModal.roots = r; renderShell(); } })
+      .catch(() => { if (activeModal && activeModal.type === 'add-project') { keepAddForm(); activeModal.roots = { roots: [], mapped: false, unavailable: true }; renderShell(); } });
+  });
   window.addEventListener('anamnesia:modal:snippet', (e) => openModal({ type: 'snippet', ...e.detail }));
 
   // Dados reais do backend (fallback ao mock se indisponível)
   await loadLive();
-  installTerminalObserver();
 
   // Initial routing
   handleRoute();
@@ -225,9 +224,10 @@ function renderShellBody() {
   // ANA-201: valores do shell só vêm do backend; com a API do bloco indisponível o mock NÃO é exibido ("—").
   const wsDemo = isDemo('workspace');
   const activeProject = (!wsDemo && mockProjects[0]) || { name: '—' };
-  const activeSession = (!wsDemo && mockSessions[0]) || { profileId: '—' };
-  const activeSessions = wsDemo ? null : mockSessions.filter((s) => s.status === 'active').length;
   const costVal = isDemo('costs') ? null : mockCostSummary.total_usd.value;
+  // Fase 6: "indisponível" tem causas distintas -- API fora (demo), nenhuma chamada hoje, ou preço não verificado.
+  const costNoCalls = !isDemo('costs') && costVal == null && mockCostSummary.calls.value === 0;
+  const costUnavailableText = costNoCalls ? I18N.app.statusCostNoCalls : I18N.app.statusCostUnavailable;
   const hv = healthView();
   const debugOn = /[?&]debug=1/.test(window.location.hash) || localStorage.getItem('anamnesia_debug') === '1';
 
@@ -248,7 +248,7 @@ function renderShellBody() {
           <!-- Navegação: Apenas Workspace, Conexões, Config, Custos -->
           <nav class="sidebar-nav" aria-label="${esc(I18N.app.mainNav)}">
             <a href="#/workspace" class="nav-item ${routeObj.id === 'workspace' ? 'is-active' : ''}" aria-current="${routeObj.id === 'workspace' ? 'page' : 'false'}">
-              <span class="nav-item-icon">${icon('terminal', '', 18)}</span>
+              <span class="nav-item-icon">${icon('folder', '', 18)}</span>
               <span>${I18N.nav.workspace}</span>
             </a>
             <a href="#/connections" class="nav-item ${routeObj.id === 'connections' ? 'is-active' : ''}" aria-current="${routeObj.id === 'connections' ? 'page' : 'false'}">
@@ -362,22 +362,13 @@ function renderShellBody() {
               <span>${esc(I18N.app.statusProject)}:</span>
               <span class="u-3171f9">${activeProject.name}</span>
             </div>
-            <span aria-hidden="true">|</span>
-            <div class="statusbar-item">
-              <span>${esc(I18N.app.statusProfile)}:</span>
-              <span class="u-3171f9">${activeSession.profileId}</span>
-            </div>
           </div>
 
           <div class="statusbar-section">
             <div class="statusbar-item tabular">
               <span>Memory Gateway:</span>
-              <span class="u-2bbabc">${costVal == null ? esc(I18N.app.statusCostUnavailable) : esc('US$ ' + fmtNumber(costVal, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + I18N.app.statusToday)}</span>
+              <span class="u-2bbabc">${costVal == null ? esc(costUnavailableText) : esc('US$ ' + fmtNumber(costVal, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + I18N.app.statusToday)}</span>
               ${costVal == null ? '' : `<span class="badge-origin badge-origin-measured u-eb7604">${esc(I18N.app.measured)}</span>`}
-            </div>
-            <span aria-hidden="true">|</span>
-            <div class="statusbar-item tabular">
-              <span>${activeSessions == null ? esc(I18N.app.unavailable) : esc(fmtNumber(activeSessions))} ${esc(I18N.app.statusSessions)}</span>
             </div>
           </div>
         </footer>
@@ -401,6 +392,38 @@ function renderShellBody() {
   attachShellHandlers();
 }
 
+const toWinPath = (s) => String(s).split('/').join('\\');
+
+/** Guarda o que foi digitado antes de recriar o DOM do modal. */
+function keepAddForm() {
+  if (!activeModal || activeModal.type !== 'add-project') return;
+  const n = document.getElementById('new-project-name'); const p = document.getElementById('new-project-path');
+  if (n) activeModal.name = n.value;
+  if (p) activeModal.path = p.value;
+}
+
+function addProjectExtras() {
+  const W = I18N.workspace;
+  const m = activeModal;
+  const r = m.roots;
+  let rootsHtml = '';
+  if (r && r.mapped && r.roots.length) {
+    const ex = toWinPath(r.roots[0].host_path) + '\\meu-projeto';
+    rootsHtml = `<div class="add-roots" data-bind="add-roots"><div class="input-label">${esc(W.addRootsTitle)}</div>
+      <p class="wio-hint">${esc(W.addRootsHint.replace('{example}', ex))}</p>
+      <ul class="add-roots-list">${r.roots.map((x) => `<li><code>${esc(x.host_path)}</code>
+        ${x.available ? '' : `<span class="badge">${esc(W.addRootsUnavailable)}</span>`}${x.read_only ? ` <span class="badge">${esc(W.addRootsReadOnly)}</span>` : ''}
+        <button type="button" class="btn btn-ghost btn-sm" data-action="use-root" data-root="${esc(x.host_path)}">${esc(W.addRootsUse)}</button></li>`).join('')}</ul></div>`;
+  } else if (r) {
+    rootsHtml = `<p class="wio-hint" data-bind="add-roots">${esc(W.addRootsNone)}</p>`;
+  }
+  const e = m.error;
+  const errHtml = e ? `<div class="add-error" role="alert" data-bind="add-error" data-error-code="${esc(e.code || '')}">
+      <strong>${esc((W.addErrCodes && W.addErrCodes[e.code]) || W.rmFail)}</strong>
+      <p>${esc(e.message || '')}</p>${e.hint ? `<p class="wio-hint"><b>${esc(W.addErrFix)}:</b> ${esc(e.hint)}</p>` : ''}</div>` : '';
+  return { rootsHtml, errHtml };
+}
+
 function renderModal() {
   if (!activeModal) return '';
 
@@ -413,22 +436,25 @@ function renderModal() {
             <button class="btn btn-ghost btn-icon" data-action="close-modal" aria-label="${I18N.app.close}">${icon('x', '', 16)}</button>
           </div>
           <div class="modal-body">
+            <p class="wio-hint"><strong>${esc(I18N.workspace.addExistingTitle)}</strong> — ${esc(I18N.workspace.addExistingHint)}</p>
+            ${addProjectExtras().rootsHtml}
             <div class="input-group">
               <label class="input-label" for="new-project-name">${I18N.workspace.projectNameLabel}</label>
               <div class="input-control">
-                <input type="text" id="new-project-name" placeholder="meu-novo-projeto" autocomplete="off" />
+                <input type="text" id="new-project-name" placeholder="meu-novo-projeto" autocomplete="off" value="${esc(activeModal.name || '')}" />
               </div>
             </div>
             <div class="input-group">
               <label class="input-label" for="new-project-path">${I18N.workspace.projectPathLabel}</label>
               <div class="input-control">
-                <input type="text" id="new-project-path" placeholder="/home/dev/meu-novo-projeto" autocomplete="off" />
+                <input type="text" id="new-project-path" placeholder="${esc(I18N.workspace.addPathPlaceholder)}" autocomplete="off" spellcheck="false" value="${esc(activeModal.path || '')}" />
               </div>
             </div>
+            ${addProjectExtras().errHtml}
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" data-action="close-modal">${I18N.app.cancel}</button>
-            <button class="btn btn-primary" data-action="submit-add-project">${I18N.app.save}</button>
+            <button class="btn btn-primary" data-action="submit-add-project"${activeModal.busy ? ' disabled aria-busy="true"' : ''}>${activeModal.busy ? esc(I18N.workspace.addSaving) : I18N.app.save}</button>
           </div>
         </div>
       </div>
@@ -584,13 +610,31 @@ function attachShellHandlers() {
         const pathInput = document.getElementById('new-project-path');
         const name = nameInput ? nameInput.value.trim() : '';
         const path = pathInput ? pathInput.value.trim() : '';
-        if (name && path) {
+        if (name && path && !activeModal.busy) {
+          activeModal.name = name; activeModal.path = path; activeModal.error = null; activeModal.busy = true;
+          renderShell();
           registerProject(name, path).then(() => {
             closeModal();
             showToast({ type: 'success', message: `Projeto ${name} registrado com sucesso!` });
             handleRoute();
-          }).catch((err) => showToast({ type: 'error', message: `Não foi possível registrar: ${err.message || err}` }));
+          }).catch((err) => {
+            if (!activeModal || activeModal.type !== 'add-project') return;
+            activeModal.busy = false;
+            activeModal.error = { code: err.code || '', message: err.message || String(err), hint: err.hint || '' };
+            renderShell();
+            document.querySelector('[data-bind="add-error"]')?.scrollIntoView?.({ block: 'nearest' });
+          });
+        } else if (!name || !path) {
+          activeModal.error = { code: 'path_invalid', message: !name ? I18N.workspace.projectNameLabel : I18N.workspace.projectPathLabel, hint: '' };
+          keepAddForm(); renderShell();
         }
+        break;
+      }
+      case 'use-root': {
+        keepAddForm();
+        activeModal.path = toWinPath(target.getAttribute('data-root') || '') + '\\';
+        renderShell();
+        const pi = document.getElementById('new-project-path'); if (pi) { pi.focus(); pi.setSelectionRange(pi.value.length, pi.value.length); }
         break;
       }
       case 'copy-snippet': {

@@ -15,12 +15,9 @@ Todo valor vindo do backend passa por `esc()` (`js/format.js`) antes de `innerHT
 | `js/live.js` | **Camada de dados reais.** Preenche IN PLACE os arrays de `mock-data.js`; se a API falhar, o mock permanece (`window.__liveDemo` lista o que caiu em demonstração). |
 | `js/mock-data.js` | Formato dos dados + fallback de demonstração. |
 | `js/anamnesia-api.js`, `js/api.js` | Cliente REST/WS/SSE (token local via `GET /config/token`). |
-| `js/terminals.js` | `SessionTerminal`: xterm.js real ligado ao PTY local da sessão. |
-| `js/components/terminal-view.js` | Moldura do terminal e paleta ANSI. |
 | `js/charts/chart-kit.js` | Gráficos SVG responsivos (ResizeObserver, `viewBox` em px reais, nunca `preserveAspectRatio="none"`). |
 | `js/pages/{workspace,connections,config,costs}.js` | App principal. |
 | `js/pages/compare/*.js` | **Laboratório "Comparar Modelos"** (único lugar com benchmark). |
-| `vendor/xterm/` | xterm.js + addon-fit (carregados por `<script src>`). |
 
 ## Rotas (hash)
 

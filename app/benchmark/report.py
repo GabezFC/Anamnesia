@@ -24,7 +24,7 @@ def _fmt(v):
 
 
 def render_session(db, session_id: str) -> str:
-    runs = [r for r in db.list_runs(100000, session_id) if not r.get("warmup")]
+    runs = [r for r in db.list_runs(limit=100000, session_id=session_id) if not r.get("warmup")]
     if not runs:
         return f"sessão {session_id}: sem runs"
     lines = [f"SESSION {session_id}  ({len(runs)} runs, warm-up excluído, cache_enabled=false)"]

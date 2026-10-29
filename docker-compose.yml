@@ -1,40 +1,97 @@
-# Local use only. The port is published on the HOST loopback (127.0.0.1) and nowhere else.
-# Do NOT change it to "8000:8000" (that exposes the service to your whole network).
+# Uso local. A porta é publicada SOMENTE no loopback do host (127.0.0.1). NÃO troque por "8000:8000"
+# (expõe o serviço a toda a rede). Guia completo: docs/guides/DOCKER.md
+#
+#   docker compose up -d --build        # http://127.0.0.1:8000
+#   docker compose ps                   # STATUS "healthy" = /health respondeu 200 dentro do contêiner
+#   docker compose logs -f anamnesia
+#
+# Porta/raízes diferentes do padrão (qualquer shell; o jeito portátil é o arquivo de ambiente):
+#   docker compose --env-file docker/mgtest.env -p mgtest up -d --build     # exemplo versionado (porta 8010)
+#   PowerShell:  $env:ANAMNESIA_PORT = '8010'; docker compose up -d
+#   bash/zsh:    ANAMNESIA_PORT=8010 docker compose up -d
+#   cmd.exe:     set ANAMNESIA_PORT=8010 && docker compose up -d
+# No Windows prefira `python scripts/mgtest.py up` (valida config, checa porta, espera healthy).
+#
+# Variáveis lidas do SHELL, de --env-file ou de um `.env` ao lado deste compose (só para interpolação abaixo):
+#   ANAMNESIA_PORT            porta no host (padrão 8000)
+#   ANAMNESIA_VAULT_HOST      pasta do host montada como vault, SOMENTE LEITURA (padrão: corpus sintético do repo)
+#   ANAMNESIA_PROJECTS_HOST   (opcional) raiz de projetos do host -> /projects, SOMENTE LEITURA. Nunca a unidade inteira.
+#   ANAMNESIA_PROJECTS_HOST2  (opcional) segunda raiz -> /projects2, SOMENTE LEITURA
+#   ANAMNESIA_PATH_MAP        (opcional) pares 'host=contêiner' separados por ';', ex.:
+#                             C:/Users/me/Projetos=/projects;D:/Code=/projects2
+#   OLLAMA_HOST               ex.: http://host.docker.internal:11434 (opcional; Ollama no host)
+# Sem ANAMNESIA_PROJECTS_HOST* os binds apontam p/ docker/projects-empty (vazio, RO): nada do host é exposto.
+# Segredos (chaves de API etc.): coloque em `.env.docker` (ignorado pelo git e pela imagem). Opcional.
 services:
   anamnesia:
-    build: .
+    build:
+      context: .
+      args:
+        # Rastreabilidade da imagem (docker inspect -> labels). scripts/mgtest.py preenche; padrão "unknown".
+        GIT_COMMIT: "${GIT_COMMIT:-unknown}"
+        FRONTEND_SHA: "${FRONTEND_SHA:-unknown}"
     image: anamnesia:local
+    init: true
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${ANAMNESIA_PORT:-8000}:8000"
+    env_file:
+      - path: .env.docker
+        required: false
     environment:
-      # Bound to 0.0.0.0 INSIDE the container (needed for the port mapping); the host side is loopback-only.
+      # 0.0.0.0 DENTRO do contêiner (necessário para o mapeamento); o lado do host é só loopback.
       MG_HOST: "0.0.0.0"
-      # Host-header guard (DNS-rebinding protection) accepts these names. Add yours only if you know why.
       MG_ALLOWED_HOSTS: "localhost,127.0.0.1"
       ANAMNESIA_HOME: /data
-      # Terminals are DISABLED by default here: the app only enables them on a loopback bind, and the
-      # container binds 0.0.0.0. Do not set ANAMNESIA_ALLOW_REMOTE_TERMINALS=1 unless you accept
-      # shell access for anything that can reach the published port.
-      # ANA-217: token for REST reads from a non-loopback address (e.g. the MCP bridge on the host). Set it
-      # in a private env_file/shell; leave unset and the app mints one in /data/.env on first start.
-      # MG_LOCAL_TOKEN: ""
-      # ANA-224: ANAMNESIA_OFFLINE=1 blocks every outbound non-loopback connection of the container.
-      # ANAMNESIA_OFFLINE: "1"
-      # TYPESAFE_API_KEY: ""        # optional, only for the paid judge; prefer an env_file you keep private
-      # MEMORY_GATEWAY_VAULT: /vault
+      MEMORY_GATEWAY_VAULT: /vault
+      # Pelo port-publish o cliente chega do GATEWAY da rede (nunca 127.0.0.1); sem isto a UI não obtém o
+      # token e toda chamada dá 401/403. O gateway é fixado na rede abaixo. Seguro porque o host só publica no loopback.
+      MG_TRUSTED_LOCAL_CLIENTS: "172.29.240.1"
+      # Opcional (IA local no host). O núcleo funciona sem. Laya em modo serve exige URL loopback
+      # (MG_LAYA_SERVE_URL) e portanto NÃO alcança o host a partir do contêiner; rode Laya in-proc ou no host.
+      OLLAMA_HOST: "${OLLAMA_HOST:-}"
+      # Mapeia caminhos do host (Windows) para os montados no contêiner. Vazio = sem mapeamento.
+      ANAMNESIA_PATH_MAP: "${ANAMNESIA_PATH_MAP:-}"
+      # Não há rotas/UI de terminal: o PTY é só um launcher interno do orquestrador (Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/TERMINALS.md).
+      # MG_LOCAL_TOKEN: ""     # vazio => gerado em /data/.env na 1ª subida (persistido no volume)
+      # ANAMNESIA_OFFLINE: "1" # bloqueia saídas não-loopback
+    extra_hosts:
+      # host.docker.internal também no Linux (no Docker Desktop já existe).
+      - "host.docker.internal:host-gateway"
     volumes:
-      - anamnesia-data:/data
-      # Your own vault, read-only. Uncomment BOTH this line and MEMORY_GATEWAY_VAULT above:
-      # - /path/to/your/vault:/vault:ro
+      - anamnesia-data:/data          # db, índices, memórias, logs, config, .env com o token
+      - type: bind
+        source: ${ANAMNESIA_VAULT_HOST:-./data/synthetic_vault}
+        target: /vault
+        read_only: true
+      # Raízes de projetos do host, SOMENTE LEITURA (opcionais; sem a variável => diretório vazio inofensivo).
+      - type: bind
+        source: ${ANAMNESIA_PROJECTS_HOST:-./docker/projects-empty}
+        target: /projects
+        read_only: true
+      - type: bind
+        source: ${ANAMNESIA_PROJECTS_HOST2:-./docker/projects-empty}
+        target: /projects2
+        read_only: true
+    networks:
+      - anamnesia
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
     restart: unless-stopped
+
+networks:
+  anamnesia:
+    ipam:
+      config:
+        # Sub-rede fixa p/ o gateway acima ser previsível. Se colidir com sua rede/VPN, mude AMBOS (aqui e em MG_TRUSTED_LOCAL_CLIENTS).
+        - subnet: 172.29.240.0/24
+          gateway: 172.29.240.1
 
 volumes:
   anamnesia-data:
 
-# ANA-216: bridge mode. The Gateway runs in the container; your agent keeps a stdio MCP server on the HOST that
-# forwards memory_search to this REST API (127.0.0.1:8000), optionally with `Authorization: Bearer`:
-#
-#   docker compose up -d
+# Modo bridge (ANA-216): o Gateway roda no contêiner; seu agente mantém um MCP stdio no HOST que repassa
+# memory_search para esta REST API:
 #   MG_MCP_BRIDGE_URL=http://127.0.0.1:8000 MG_MCP_TOKEN=<MG_LOCAL_TOKEN> anamnesia mcp
-#
-# Only memory_search is bridged (see app/mcp/bridge.py). The compose file itself needs no extra service.
+# Token: docker compose exec anamnesia sh -c 'grep MG_LOCAL_TOKEN /data/.env'

@@ -12,7 +12,7 @@ import pytest
 
 from app.schemas.models import Candidate
 from app.retrieval import pipelines
-from scripts import _candidate_cache as cc
+from scripts.experiments import _candidate_cache as cc
 
 
 def _cand(name: str) -> Candidate:
@@ -181,7 +181,7 @@ def test_no_cache_nao_le_o_cache_ja_existente(fake, vault, tmp_path):
 # -- wiring --------------------------------------------------------------------------------------
 
 def test_scripts_registram_a_flag_no_cache():
-    from scripts import check_jev_snippet, sweep_prefilter
+    from scripts.experiments import check_jev_snippet, sweep_prefilter
     import inspect
 
     for module in (check_jev_snippet, sweep_prefilter):
@@ -194,7 +194,7 @@ def test_scripts_nao_chamam_graphify_candidates_direto():
     """A geração de candidatos tem que passar pelo cache, senão a flag é decorativa."""
     import inspect
 
-    from scripts import check_jev_snippet, sweep_prefilter
+    from scripts.experiments import check_jev_snippet, sweep_prefilter
     for module in (check_jev_snippet, sweep_prefilter):
         src = inspect.getsource(module)
         assert "from app.retrieval.pipelines import _graphify_candidates" not in src, module.__name__

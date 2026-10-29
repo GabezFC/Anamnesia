@@ -56,7 +56,7 @@ def test_set_model_key_requires_write_guard(client):
 # -- verdict flag ---------------------------------------------------------------------------------
 def test_verdict_flag_roundtrip_reflects_in_system_info(client):
     before = client.get("/config/verdict").json()
-    assert before["enabled"] is False  # default, per docs/SCOPE_BENCHMARK.md
+    assert before["enabled"] is False  # default, per Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/SCOPE_BENCHMARK.md)
 
     r = client.post("/config/verdict", json={"enabled": True})
     assert r.status_code == 200

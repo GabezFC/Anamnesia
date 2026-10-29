@@ -288,11 +288,11 @@ def test_default_gateway_search_unchanged_by_experiment_plumbing(tiny_vault):
 
 def test_report_is_fresh_and_has_verdicts():
     import importlib.util
-    spec = importlib.util.spec_from_file_location("measure_onda9", ROOT / "scripts" / "measure_onda9.py")
+    spec = importlib.util.spec_from_file_location("measure_onda9", ROOT / "scripts" / "experiments" / "measure_onda9.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    res = json.loads((ROOT / "docs" / "reports" / "ONDA9_EXPERIMENTOS.json").read_text(encoding="utf-8"))
-    md = (ROOT / "docs" / "reports" / "ONDA9_EXPERIMENTOS.md").read_text(encoding="utf-8")
+    res = json.loads((ROOT / "tests" / "fixtures" / "onda9" / "ONDA9_EXPERIMENTOS.json").read_text(encoding="utf-8"))
+    md = (ROOT / "tests" / "fixtures" / "onda9" / "ONDA9_EXPERIMENTOS.md").read_text(encoding="utf-8")
     assert md.replace("\r\n", "\n").strip() == mod.render(res).strip(), "rode: python scripts/measure_onda9.py --render"
     allowed = {"ADOTAR", "MANTER_OPT_IN", "REJEITAR", "BLOCKED"}
     ids = set()

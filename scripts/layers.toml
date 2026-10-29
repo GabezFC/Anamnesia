@@ -6,7 +6,6 @@ roots = ["app", "config", "anamnesia", "memory_gateway"]
 
 [layers]
 "config" = 0
-"app.config" = 0
 "app.core" = 0
 "app.schemas" = 0
 "app.services" = 1
@@ -22,6 +21,7 @@ roots = ["app", "config", "anamnesia", "memory_gateway"]
 "app.policy" = 3
 "app.connections" = 3
 "app.orchestration" = 4
+"app.workspace_io" = 4
 "app.mcp" = 4
 "app.api" = 5
 "app.cli" = 5

@@ -96,3 +96,15 @@ def check(path: str | os.PathLike) -> None:
         log.warning("project_guard(warn): %s -> %s", real, why)
         return
     raise ProjectDenied(f"projeto recusado: {why}")
+
+
+def check_host(host_path: str) -> None:
+    """Caminho de HOST (Docker + ANAMNESIA_PATH_MAP): recusa pastas sensíveis mesmo dentro de uma raiz mapeada."""
+    if not host_path or _mode() == "off":
+        return
+    for part in host_path.replace("\\", "/").split("/")[1:]:
+        if part.lower() in SENSITIVE_DIRS:
+            if _mode() == "warn":
+                log.warning("project_guard(warn): host %s -> sensível (%s)", host_path, part)
+                return
+            raise ProjectDenied(f"projeto recusado: diretório sensível ({part})")

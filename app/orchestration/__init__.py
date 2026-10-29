@@ -1,4 +1,4 @@
-"""Sub-agent orchestration (Fase 11). See docs/ORCHESTRATION.md."""
+"""Sub-agent orchestration (Fase 11). See Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/ORCHESTRATION.md)."""
 from app.orchestration.config import OrchestrationConfig, load_config  # noqa: F401
 from app.orchestration.launchers import FakeLauncher, InProcessModelLauncher, SessionLauncher  # noqa: F401
 from app.orchestration.orchestrator import Orchestrator  # noqa: F401

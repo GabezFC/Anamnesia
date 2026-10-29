@@ -1,0 +1,76 @@
+# Anamnésia + Laya — instância de TESTE separada (projeto compose "mglaya", porta 8030, volume "mglaya_data").
+# Independente de docker-compose.yml / projeto mgtest (8010) / instância do usuário (8000). Não os referencia.
+#
+#   python scripts/mglaya.py up        # valida, checa porta, build + up, espera healthy
+#   docker compose -p mglaya --env-file docker/laya-test.env -f docker/docker-compose.laya-test.yml config -q
+#
+# Caminhos relativos abaixo são relativos a ESTA pasta (docker/). Variáveis (de --env-file ou shell):
+#   LAYA_TEST_PORT     porta no host, SOMENTE loopback (padrão 8030; nunca 8000/8010)
+#   LAYA_MODELS_HOST   pasta do host com laya-multilingual/ e laya-english/, montada SOMENTE LEITURA em /models
+#   OMP_THREADS        threads de CPU (OMP/MKL/torch) — registrar no relatório; padrão 4 (igual ao scratch/laya_real.py)
+services:
+  laya:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.laya-test
+      args:
+        GIT_COMMIT: "${GIT_COMMIT:-unknown}"
+        FRONTEND_SHA: "${FRONTEND_SHA:-unknown}"
+    image: anamnesia:laya-test
+    init: true
+    ports:
+      - "127.0.0.1:${LAYA_TEST_PORT:-8030}:8000"
+    environment:
+      MG_HOST: "0.0.0.0"
+      MG_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      ANAMNESIA_HOME: /data
+      MEMORY_GATEWAY_VAULT: /vault
+      # Gateway da rede própria abaixo (sub-rede distinta da do mgtest, 172.29.240.0/24).
+      MG_TRUSTED_LOCAL_CLIENTS: "172.29.241.1"
+      # --- Laya in-process (laya importável nesta imagem; sem worker/serve) ---
+      MG_LAYA_MODE: "inproc"
+      MG_LAYA_MODELS_DIR: /models
+      MG_LAYA_MULTILINGUAL_DIR: /models/laya-multilingual
+      MG_LAYA_ENGLISH_DIR: /models/laya-english
+      MG_LAYA_DEVICE: "cpu"
+      MG_LAYA_THREADS: "${OMP_THREADS:-4}"
+      OMP_NUM_THREADS: "${OMP_THREADS:-4}"
+      MKL_NUM_THREADS: "${OMP_THREADS:-4}"
+      MG_LAYA_LOAD_TIMEOUT_S: "240"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      # Sem segredos, sem Ollama, sem chamadas pagas: ANAMNESIA_PAID_CALLS não é definido.
+      ANAMNESIA_OFFLINE: "1"
+    volumes:
+      - type: volume
+        source: laya-data
+        target: /data
+      - type: bind
+        source: ${ANAMNESIA_VAULT_HOST:-../data/synthetic_vault}
+        target: /vault
+        read_only: true
+      # PESOS DA LAYA: somente leitura, nunca copiados para a imagem.
+      - type: bind
+        source: ${LAYA_MODELS_HOST:-../data/local_ai/models}
+        target: /models
+        read_only: true
+    networks:
+      - laya
+    mem_limit: 6g
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    restart: "no"
+
+networks:
+  laya:
+    name: mglaya_net
+    ipam:
+      config:
+        - subnet: 172.29.241.0/24
+          gateway: 172.29.241.1
+
+volumes:
+  laya-data:
+    name: mglaya_data

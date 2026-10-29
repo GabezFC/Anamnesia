@@ -40,7 +40,7 @@ export function stateBlock() {
     case 'error':
       return emptyState({ title: t.errorTitle, description: lab.error, variant: 'error', action: { label: I18N.app.errorRetry, action: 'lab-reload', kind: 'secondary' } });
     case 'empty':
-      return emptyState({ title: t.emptyTitle, description: t.emptyDesc, variant: 'data' });
+      return emptyState({ title: t.emptyTitle, description: lab.dbPath ? `${t.emptyDesc} ${t.emptyDb.replace('{path}', lab.dbPath)}` : t.emptyDesc, variant: 'data' });
     default:
       return null;
   }

@@ -360,7 +360,7 @@ def test_fit_or_keep_never_loses_evidence_at_any_budget(budget):
 
 
 # -- fit_or_keep: SECTION RELOCATION at equal price (snip-v2, §5.5 item 2 / Parte 2b) -------------
-# Fixture shaped like the measured failure (docs/QUALITY_5_5.md Parte 2): a candidate whose
+# Fixture shaped like the measured failure (Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/QUALITY_5_5.md) Parte 2): a candidate whose
 # ORIGINAL snippet is just the note's title + a generic one-line blurb (no part of the real
 # answer), with the actual answer buried in a deeper subsection the pre-filter never truncates
 # down to. Synthetic, not the real vault, so this test has no external dependency.

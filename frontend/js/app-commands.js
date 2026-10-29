@@ -8,7 +8,7 @@ import { I18N } from './i18n.js';
 import { registerCommand } from './commands.js';
 
 const NAV = [
-  ['nav-workspace', '#/workspace', 'goWorkspace', 'terminal', 'Alt+Shift+1', 'workspace ide terminal'],
+  ['nav-workspace', '#/workspace', 'goWorkspace', 'folder', 'Alt+Shift+1', 'workspace central importacao exportacao'],
   ['nav-connections', '#/connections', 'goConnections', 'connections', 'Alt+Shift+2', 'conexoes connections'],
   ['nav-config', '#/config', 'goConfig', 'config', 'Alt+Shift+3', 'configuracao settings config'],
   ['nav-costs', '#/costs', 'goCosts', 'costs', 'Alt+Shift+4', 'custos costs ledger'],
@@ -16,7 +16,7 @@ const NAV = [
   ['nav-decision', '#/decision', 'goDecision', 'cpu', 'Alt+Shift+6', 'decision engine decisao jev laya hybrid adaptive avaliacao'],
 ];
 
-/** `api`: { navigate(hash), toggleTheme(), toggleLang(), openPalette(), newTerminal() } fornecido pelo app.js. */
+/** `api`: { navigate(hash), toggleTheme(), toggleLang(), openPalette() } fornecido pelo app.js. */
 export function registerAppCommands(api) {
   const cat = () => I18N.palette.catNav;
   NAV.forEach(([id, hash, key, ico, shortcut, keywords]) => registerCommand({
@@ -32,10 +32,6 @@ export function registerAppCommands(api) {
     id: 'palette-toggle', label: () => I18N.palette.openPalette, category: 'system', categoryLabel: sys, icon: 'search',
     shortcut: 'Mod+K', keywords: 'ctrl k busca search', run: () => api.openPalette(),
     hidden: true,
-  });
-  registerCommand({
-    id: 'new-terminal', label: () => I18N.palette.newTerminal, category: 'system', categoryLabel: sys, icon: 'plus',
-    keywords: 'terminal novo new perfil profile', run: () => api.newTerminal(),
   });
   registerCommand({
     id: 'toggle-theme', label: () => I18N.app.paletteToggleTheme, category: 'system', categoryLabel: sys, icon: 'sun',

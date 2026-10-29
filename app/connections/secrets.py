@@ -124,3 +124,18 @@ def delete_key(env_key: str) -> bool:
     if os.environ.pop(env_key, None) is not None:
         removed = True
     return removed
+
+
+def resolve_env(env_keys) -> dict[str, str]:
+    """Credenciais centrais -> dict de variáveis de ambiente PARA UM PROCESSO FILHO (só em memória).
+
+    É o caminho de reuso para agentes (ex.: OpenCode lê ANTHROPIC_/OPENAI_/OPENROUTER_API_KEY do ambiente do
+    processo): o agente NÃO tem cópia própria da chave; o chamador passa este dict em `env=` do spawn.
+    Nunca grava em disco, URL, log nem resposta de API. Chaves ausentes são omitidas.
+    """
+    out: dict[str, str] = {}
+    for k in dict.fromkeys(env_keys or ()):
+        v = _read(k)
+        if v:
+            out[k] = v
+    return out

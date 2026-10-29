@@ -38,7 +38,7 @@ from app.schemas.models import Candidate
 from app.services.query_fp import CARRIER, classify, fold, stem, tokens
 
 # ANA-226: the legacy expression `bm25(sec, 2.0, 1.0)` put 2.0 on the UNINDEXED `file` column, i.e. the heading
-# was never boosted.  Measured neutral on the golden set (docs/reports/ONDA9_EXPERIMENTOS.md), so the intended 2.0
+# was never boosted.  Measured neutral on the golden set (Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/reports/ONDA9_EXPERIMENTOS.md)), so the intended 2.0
 # on `section` is now the default; MG_EXP_BM25_SECTION_WEIGHT=1.0 reproduces the old ranking exactly.
 DEFAULT_SECTION_WEIGHT = 2.0
 HYBRID_MODES = ("rank", "magnitude", "rrf")

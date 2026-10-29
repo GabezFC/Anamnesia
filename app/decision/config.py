@@ -14,9 +14,9 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PROVIDERS = ("jev", "laya", "hybrid", "adaptive")
+PROVIDERS = ("jev", "laya", "colibri", "hybrid", "adaptive")
 STRATEGIES = ("laya_then_jev", "jev_then_laya", "ensemble")
-THRESHOLD_KEYS = ("jev", "laya", "ensemble", "adaptive")
+THRESHOLD_KEYS = ("jev", "laya", "colibri", "ensemble", "adaptive")
 DEFAULT_PROVIDER = "jev"   # JEV-only (graphify_jev_opt) continua o padrão; Laya/híbridos são opt-in
 
 # Presets: SÓ configuração, EXPERIMENTAIS (nenhum foi validado com JEV real; ver docs/bench/decision-engine.md).
@@ -62,6 +62,9 @@ def _builtin_thresholds() -> dict[str, Thresholds]:
     from config.laya import LayaConfig
     j, ly = JevConfig(), LayaConfig()
     return {"jev": Thresholds(j.relevance_threshold, j.review_threshold),
+            # colibri: mesmos limiares do JEV por padrão — probabilidades NÃO batem (Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/JEV_LOCAL.md);
+            # recalibre antes de confiar. Separado para poder afinar sem tocar no JEV pago.
+            "colibri": Thresholds(j.relevance_threshold, j.review_threshold),
             "laya": Thresholds(ly.keep_threshold, ly.drop_threshold, ly.min_confidence),
             # ensemble opera sobre o voto (KEEP=1, REVIEW=.5, DROP=0), sem escala de probabilidade
             "ensemble": Thresholds(0.75, 0.25),
@@ -124,13 +127,24 @@ class DecisionConfig:
                           sort_keys=True)
         return hashlib.sha256(blob.encode()).hexdigest()[:12]
 
+    @staticmethod
+    def _calibration_info() -> dict:
+        from config.laya import LayaConfig
+        ly = LayaConfig()
+        return {"fitted_on_user_data": bool(ly.calibration_file), "laya_temperature": ly.temperature,
+                "laya_calibration_file": "definido" if ly.calibration_file else "ausente",
+                "status": ("CALIBRADO com arquivo do usuário" if ly.calibration_file else
+                           "NÃO CALIBRADO com dados do usuário (limiares do corpus sintético; sem histórico de decisões)")}
+
     def to_public(self) -> dict:
         """Config efetiva (sem segredos: aqui não há chaves). Projetos listados por slug, sem conteúdo."""
         return {"provider": self.provider, "strategy": self.strategy, "preset": self.preset or None,
                 "preset_status": "EXPERIMENTAL" if self.preset else None,
                 "thresholds": {k: v.to_dict() for k, v in self.thresholds.items()},
                 "threshold_label": "ESTIMATED (experimental, calibrado no corpus sintético; recalibre)",
+                "calibration": self._calibration_info(),
                 "ensemble_weights": {"laya": self.ensemble_weights[0], "jev": self.ensemble_weights[1]},
+                "colibri_note": "provider local (MG_COLIBRI_*); qualidade NAO medida contra o JEV",
                 "projects": {s: {"provider": p.get("provider"), "strategy": p.get("strategy"),
                                  "thresholds": {k: _th(v, self.thresholds[k], "").to_dict()
                                                 for k, v in (p.get("thresholds") or {}).items()}}

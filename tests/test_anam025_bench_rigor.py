@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 
 def _load(name):
-    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / ("experiments" if name in ("run_onda4e_openrouter", "final_comparison") else ".") / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

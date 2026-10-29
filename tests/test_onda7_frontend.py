@@ -28,7 +28,7 @@ def node(code: str) -> str:
 
 def test_ana200_live_never_fabricates_zero_or_default_budget():
     live = read(JS / "live.js")
-    body = live[live.index("async function loadCosts"):live.index("terminais xterm reais")]
+    body = live[live.index("async function loadCosts"):live.index("/* ------------------------------------------------------------------ boot */")]
     assert "?? 0" not in body, "KPI de custo/tokens ausente deve ser null, não 0"
     assert "mk(b.day, 2)" not in body and "mk(b.month, 50)" not in body, "teto de orçamento inventado"
     assert "x?.spent_usd ?? null" in body and "x?.ceiling_usd ?? null" in body

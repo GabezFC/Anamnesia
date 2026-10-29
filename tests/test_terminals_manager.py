@@ -213,3 +213,32 @@ def test_env_forces_truecolor_for_agent_clis():
     env = build_env(environ={"PATH": "/bin", "NO_COLOR": "1"})
     assert env["COLORTERM"] == "truecolor" and env["FORCE_COLOR"] == "3"
     assert "NO_COLOR" not in env
+
+
+def test_build_env_injects_central_credentials_only_into_child_env(monkeypatch, tmp_path):
+    """OpenCode recebe as chaves do armazenamento central via env do filho; nada vai a disco; env real vence."""
+    import app.connections.secrets as sec
+    asked = []
+
+    def fake_resolve(keys):
+        asked.append(list(keys))
+        return {k: f"central-{k}" for k in keys}
+    monkeypatch.setattr(sec, "resolve_env", fake_resolve)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "do-ambiente")
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.chdir(tmp_path)
+    env = build_env(("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"))
+    assert env["ANTHROPIC_API_KEY"] == "do-ambiente"                # ambiente explícito tem precedência
+    assert env["OPENAI_API_KEY"] == "central-OPENAI_API_KEY"
+    assert env["OPENROUTER_API_KEY"] == "central-OPENROUTER_API_KEY"
+    assert asked == [["OPENAI_API_KEY", "OPENROUTER_API_KEY"]]       # só pede o que falta
+    assert "central-OPENAI_API_KEY" not in __import__("os").environ.values()   # não vaza para o processo pai
+    assert list(tmp_path.iterdir()) == []                            # nada gravado em arquivo
+    # com environ explícito (testes/isolamento) o armazenamento central NÃO é consultado
+    asked.clear()
+    assert "OPENAI_API_KEY" not in build_env(("OPENAI_API_KEY",), {"PATH": "x"}) and asked == []
+    # falha do armazenamento não quebra o spawn
+    monkeypatch.setattr(sec, "resolve_env", lambda keys: (_ for _ in ()).throw(RuntimeError("cofre")))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert "OPENAI_API_KEY" not in build_env(("OPENAI_API_KEY",))

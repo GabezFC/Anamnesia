@@ -1,4 +1,4 @@
-"""ANA-193: deterministic A/B bucketing between two routing policies. OFF by default.
+"""EXPERIMENTAL / NOT WIRED (no runtime consumer; only tests import it). ANA-193: deterministic A/B bucketing between two routing policies. OFF by default.
 
 * Only active when ANAMNESIA_ROUTING_AB=1 (flag) AND risk == "low": medium/high risk always get arm A.
 * Bucket = sha256(salt + query_fingerprint) -> [0,1): the same query always lands in the same arm, no RNG.

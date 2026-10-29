@@ -1109,3 +1109,111 @@
 @media (prefers-reduced-motion: reduce) {
   .skeleton, .spinner { animation: none; }
 }
+
+/* --------------------------------------------------------------------------
+   MARKDOWN / CONTEÚDO LONGO — sem cortes nem estouro de viewport.
+   Texto e URLs quebram; blocos largos (pre, tabelas, imagens) rolam no próprio bloco.
+   Itens flex/grid precisam de min-width:0, senão o conteúdo empurra o layout inteiro.
+   -------------------------------------------------------------------------- */
+.shell-container > *,
+.main-viewport,
+.app-content,
+.app-content > *,
+.card,
+.card-header,
+.memory-page,
+.memory-section,
+.memory-context,
+.memory-field,
+.mem-note-sub > *,
+.md-content,
+.markdown-body,
+.prose {
+  min-width: 0;
+}
+.main-viewport,
+.app-content { max-width: 100%; }
+
+.card,
+.memory-context,
+.md-content,
+.markdown-body,
+.prose {
+  overflow-wrap: anywhere;
+}
+.card-title,
+.card-subtitle,
+.mem-note-title,
+.mem-note-sub,
+.mem-tag,
+.toast {
+  overflow-wrap: anywhere;
+}
+
+.md-content,
+.markdown-body,
+.prose {
+  max-width: 100%;
+  line-height: 1.6;
+}
+.md-content :is(h1, h2, h3, h4, h5, h6, p, li, blockquote, dd, dt, a, td, th, figcaption),
+.markdown-body :is(h1, h2, h3, h4, h5, h6, p, li, blockquote, dd, dt, a, td, th, figcaption),
+.prose :is(h1, h2, h3, h4, h5, h6, p, li, blockquote, dd, dt, a, td, th, figcaption) {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.md-content :is(code, kbd, samp),
+.markdown-body :is(code, kbd, samp),
+.prose :is(code, kbd, samp) {
+  overflow-wrap: anywhere;
+}
+.md-content pre,
+.markdown-body pre,
+.prose pre,
+.card pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+  tab-size: 4;
+}
+.md-content pre code,
+.markdown-body pre code,
+.prose pre code {
+  white-space: inherit;
+  overflow-wrap: normal;
+}
+/* pre que já quebra linha por design (contexto/diff) continua quebrando */
+.card pre.memory-context-pre,
+.card pre.dec-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.md-content table,
+.markdown-body table,
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.md-content :is(th, td),
+.markdown-body :is(th, td),
+.prose :is(th, td) {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+.md-content :is(img, video, svg, iframe),
+.markdown-body :is(img, video, svg, iframe),
+.prose :is(img, video, svg, iframe) {
+  max-width: 100%;
+  height: auto;
+}
+.md-content blockquote,
+.markdown-body blockquote {
+  margin-inline: 0;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 3px solid var(--border-default);
+}

@@ -36,13 +36,13 @@ def test_settings_defaults_and_partial_merge(api):
     assert d["budget"] == {"daily_usd": None, "monthly_usd": None, "alert_pct": 80.0}
     assert d["max_tokens_per_query"] is None and d["auto_graphify_jev_opt"] is False
     assert d["reduce_max_results_by_question_type"] is False
-    assert d["subagent_preset"] == {} and d["prefilter_cache"] == {} and d["terminal_layout"] == {}
+    assert d["subagent_preset"] == {} and d["prefilter_cache"] == {} and d["workspace_layout"] == {} and d["terminal_layout"] == {}
 
     r = tc.put("/api/settings", json={"language": "en", "budget": {"daily_usd": 2.5},
-                                      "terminal_layout": {"cols": 2}, "max_tokens_per_query": 3000})
+                                      "workspace_layout": {"cols": 2}, "max_tokens_per_query": 3000})
     assert r.status_code == 200
     r = tc.put("/api/settings", json={"budget": {"alert_pct": 70}, "auto_graphify_jev_opt": True}).json()
-    assert r["language"] == "en" and r["terminal_layout"] == {"cols": 2}      # untouched by 2nd PUT
+    assert r["language"] == "en" and r["workspace_layout"] == {"cols": 2}     # untouched by 2nd PUT
     assert r["budget"] == {"daily_usd": 2.5, "monthly_usd": None, "alert_pct": 70.0}
     assert r["max_tokens_per_query"] == 3000 and r["auto_graphify_jev_opt"] is True
     assert tc.get("/api/settings").json() == r
@@ -75,6 +75,44 @@ def test_settings_persist_across_reopen(api):
     assert s.default_pipeline == "baseline" and s.subagent_preset == {"name": "x"}
     db2.conn.close()
 
+
+# -- X04: terminal_layout -> workspace_layout (migração, alias, round-trip) -------------------------
+def test_layout_migration_old_key_to_new(api):
+    tc, db = api
+    from app.services.settings_store import KV_KEY
+    db.set_kv(KV_KEY, {"language": "en", "terminal_layout": {"widths": [1, 2], "files_open": True}})
+    d = tc.get("/api/settings").json()
+    assert d["workspace_layout"] == {"widths": [1, 2], "files_open": True} and d["language"] == "en"
+    stored = db.get_kv(KV_KEY)                                   # persistido com o nome novo, sem perda
+    assert stored["workspace_layout"] == {"widths": [1, 2], "files_open": True}
+    assert "terminal_layout" not in stored and stored["language"] == "en"
+
+
+def test_layout_migration_new_key_wins_when_both_stored(api):
+    tc, db = api
+    from app.services.settings_store import KV_KEY
+    db.set_kv(KV_KEY, {"terminal_layout": {"old": 1}, "workspace_layout": {"new": 1}})
+    assert tc.get("/api/settings").json()["workspace_layout"] == {"new": 1}
+    assert "terminal_layout" not in db.get_kv(KV_KEY)
+
+
+def test_layout_put_alias_terminal_layout_still_accepted(api):
+    tc, db = api
+    r = tc.put("/api/settings", json={"terminal_layout": {"cols": 3}})
+    assert r.status_code == 200
+    assert r.json()["workspace_layout"] == {"cols": 3} and r.json()["terminal_layout"] == {"cols": 3}
+    from app.services.settings_store import KV_KEY
+    assert db.get_kv(KV_KEY)["workspace_layout"] == {"cols": 3} and "terminal_layout" not in db.get_kv(KV_KEY)
+    # os dois no mesmo PUT: o nome novo vence
+    r = tc.put("/api/settings", json={"terminal_layout": {"a": 1}, "workspace_layout": {"b": 2}}).json()
+    assert r["workspace_layout"] == {"b": 2}
+
+
+def test_layout_round_trip_new_name(api):
+    tc, _ = api
+    layout = {"widths": [30, 70], "files_open": False}
+    assert tc.put("/api/settings", json={"workspace_layout": layout}).json()["workspace_layout"] == layout
+    assert tc.get("/api/settings").json()["workspace_layout"] == layout
 
 # -- costs ----------------------------------------------------------------------------------------
 def _seed(db):

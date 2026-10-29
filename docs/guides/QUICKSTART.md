@@ -120,4 +120,4 @@ O que você precisa saber:
 
 ## 6. Problemas?
 
-Veja [TROUBLESHOOTING.md](TROUBLESHOOTING.md). Para entender a arquitetura, o [README](../../README.md).
+Veja Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/TROUBLESHOOTING.md). Para entender a arquitetura, o [README](../../README.md).

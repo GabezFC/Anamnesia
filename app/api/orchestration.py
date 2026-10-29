@@ -20,7 +20,7 @@ _orch_lock = threading.Lock()
 def get_orchestrator() -> Orchestrator:
     """Default: headless in-process launcher over the models usable right now. Tests override this dependency.
 
-    (Terminal-session launching is wired later; see docs/ORCHESTRATION.md.)
+    (Terminal-session launching is wired later; see Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/ORCHESTRATION.md).)
     """
     global _orch
     with _orch_lock:

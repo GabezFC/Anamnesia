@@ -1,4 +1,4 @@
-"""ANA-184: task router PROTOTYPE, SHADOW ONLY. Maps a query to {pipeline, tier, budget} and records it; it
+"""EXPERIMENTAL / NOT WIRED (no runtime consumer; only tests import it). ANA-184: task router PROTOTYPE, SHADOW ONLY. Maps a query to {pipeline, tier, budget} and records it; it
 never acts. Verdict: HOLD (blocked by foundation: ANA-039 code tasks, ANA-186 shadow data, ANA-170 router that
 discriminates). Cost of the decision is measured and must stay <= DECISION_BUDGET_MS.
 

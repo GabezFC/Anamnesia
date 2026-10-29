@@ -1,4 +1,4 @@
-"""Static / node guards: workspace layout persistence, session launcher, Memory page, agent-context panel."""
+"""Static / node guards: workspace layout persistence, IO hub, Memory page, agent-context panel."""
 from __future__ import annotations
 
 import json
@@ -35,20 +35,26 @@ def test_api_block_and_endpoints():
         assert frag in tail, frag
 
 
-def test_layout_persistence_uses_settings_with_debounce_and_only_live_sessions():
+def test_layout_persistence_uses_settings_with_debounce():
     ws = read("js/pages/workspace.js")
-    assert "terminal_layout" in ws and "putSettings" in ws and "getSettings" in ws
+    assert "workspace_layout" in ws and "putSettings" in ws and "getSettings" in ws
     assert re.search(r"setTimeout\([^;]*putSettings", ws, re.S)  # debounce
-    assert "isLiveSession" in ws and "alive.has" in ws  # restore only sessions still active
-    for key in ("order", "focus", "split", "widths"):
+    for key in ("widths", "files_open", "snapshotLayout", "applyLayout"):
         assert key in ws
 
 
-def test_launcher_options_and_session_chips():
-    ws, live = read("js/pages/workspace.js"), read("js/live.js")
-    assert 'data-launch-opt="worktree"' in ws and 'data-launch-opt="role"' in ws and 'data-launch-opt="mcp"' in ws
-    assert "ws-chip" in ws and "sess.branch" in ws and "sess.role" in ws and "sess.mcp" in ws
-    assert "createSessionOpts" in live and "branch: s.branch" in live
+def test_workspace_has_no_terminal_ui():
+    for rel in ("js/pages/workspace.js", "js/live.js", "js/app.js", "js/anamnesia-api.js"):
+        src = read(rel)
+        for frag in ("/api/sessions", "SessionTerminal", "xterm", "data-terminal-mount", "createSessionOpts",
+                     "launchSession", "closeSession", "emptyTerminal"):
+            assert frag not in src, (rel, frag)
+    assert not (FRONT / "js" / "terminals.js").exists()
+    assert not (FRONT / "js" / "components" / "terminal-view.js").exists()
+    assert not (FRONT / "vendor" / "xterm").exists()
+    assert not (FRONT / "css" / "xterm-dom.css").exists()
+    html = read("index.html")
+    assert "vendor/xterm" not in html and "xterm-dom.css" not in html
 
 
 def test_context_panel_is_real_not_mock():

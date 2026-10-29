@@ -30,12 +30,6 @@ export async function call(method, path, body) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   try { headers['X-MG-Token'] = await getLocalToken(); } catch { /* reads work without it on loopback */ }
-  if (method === 'POST' && path === '/api/sessions') { // ANA-042: human-confirmation header, only the UI (cookie holder) gets it
-    try {
-      const c = await fetch('/config/shell-confirm', { cache: 'no-store' });
-      if (c.ok) headers['X-MG-Confirm'] = (await c.json()).confirm;
-    } catch { /* MG_SHELL_CONFIRM=warn (default) still accepts the session */ }
-  }
   let r;
   try {
     r = await fetch(path, {
@@ -62,7 +56,11 @@ export function asList(x, ...keys) {
 export const listProjects = () => call('GET', '/api/projects').then((x) => asList(x, 'projects'));
 export const addProject = (name, path) => call('POST', '/api/projects', { name, path });
 export const initializeProject = (id, dryRun = false) => call('POST', `/api/projects/${encodeURIComponent(id)}/initialize`, { dry_run: dryRun });
-export const removeProject = (id) => call('DELETE', `/api/projects/${encodeURIComponent(id)}`);
+/** Desvincula o projeto (nunca apaga a pasta). `purgeIndex` = também apaga o índice do Workspace deste projeto. */
+export const removeProject = (id, purgeIndex = false) =>
+  call('DELETE', `/api/projects/${encodeURIComponent(id)}${purgeIndex ? '?purge_index=true' : ''}`);
+/** Raízes autorizadas host -> contêiner (ANAMNESIA_PATH_MAP). */
+export const listWorkspaceRoots = () => call('GET', '/api/workspace/roots');
 export const listFiles = (projectId, path = '', q = '') => {
   const p = new URLSearchParams();
   if (path) p.set('path', path);
@@ -72,23 +70,7 @@ export const listFiles = (projectId, path = '', q = '') => {
 };
 export const getFileContent = (projectId, path) =>
   call('GET', `/api/projects/${encodeURIComponent(projectId)}/file?path=${encodeURIComponent(path)}`);
-export const listProfiles = () => call('GET', '/api/profiles').then((x) => asList(x, 'profiles'));
-export const listSessions = () => call('GET', '/api/sessions').then((x) => asList(x, 'sessions'));
-export const createSession = (project, profile) => call('POST', '/api/sessions', { project, profile });
-export const deleteSession = (id) => call('DELETE', `/api/sessions/${encodeURIComponent(id)}`);
 
-/** WebSocket for one session. The token travels as subprotocol `tok.<token>` (never in the URL). */
-export async function openSessionSocket(sessionId) {
-  let token = null;
-  try { token = await getLocalToken(); } catch { /* connect without; server decides */ }
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = `${proto}//${location.host}/api/sessions/${encodeURIComponent(sessionId)}/ws`;
-  const ws = token ? new WebSocket(url, [`tok.${token}`]) : new WebSocket(url);
-  ws.binaryType = 'arraybuffer';
-  return ws;
-}
-
-/* ---- connections --------------------------------------------------------- */
 export const listConnections = () => call('GET', '/api/connections').then((x) => asList(x, 'connections'));
 export const testConnection = (id) => call('POST', `/api/connections/${encodeURIComponent(id)}/test`, {});
 export const getSnippet = (id) => call('GET', `/api/connections/${encodeURIComponent(id)}/snippet`);
@@ -173,14 +155,6 @@ export const searchPreview = ({ q, maxResults = 8, scope = '', pipeline = '' } =
   return call('GET', `/api/memory/search-preview?${p.toString()}`);
 };
 /** Sessão com opções: worktree (bool|id), subagent_role (orchestrator|researcher|implementer|reviewer), mcp (bool|undefined). */
-export const createSessionOpts = ({ project, profile, worktree, role, mcp }) => {
-  const body = { project, profile };
-  if (worktree) body.worktree = worktree;
-  if (role) body.subagent_role = role;
-  if (typeof mcp === 'boolean') body.mcp = mcp;
-  return call('POST', '/api/sessions', body);
-};
-// ---- Onda 7 (somente leitura) ----
 export const recentRuns = (limit = 30) => call('GET', `/benchmark/runs?limit=${Number(limit) || 30}`).then((x) => asList(x));
 export const runDetail = (id) => call('GET', `/benchmark/runs/${encodeURIComponent(id)}`);
 export const getAlerts = () => call('GET', '/api/alerts');

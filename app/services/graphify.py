@@ -1,4 +1,4 @@
-"""Graphify adapter (§9 PIPELINE B). Verified against graphify 0.9.59 CLI — see docs/ENVIRONMENT.md.
+"""Graphify adapter (§9 PIPELINE B). Verified against graphify 0.9.59 CLI — see Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/ENVIRONMENT.md).
 
 Graphify writes `graphify-out/` inside the analysed directory, so it must never run on the vault.
 We keep a byte-identical mirror of the vault's markdown in `data/vault_mirror/` (copied through the
@@ -44,7 +44,7 @@ class GraphifyService:
         self.bin = shutil.which(graphify_bin) or graphify_bin
         self.query_budget = query_budget
         self.timeout_s = timeout_s
-        self._section_cache: dict[str, list] = {}
+        self._section_cache: dict[str, tuple[bytes, list]] = {}
         # ANA-080: graph staleness. stale_fallback_s > 0 => graph candidates are dropped (BM25-only)
         # once the graph has been stale for longer than that many seconds. 0 = never fall back.
         self.stale_fallback_s = float(stale_fallback_s)
@@ -198,9 +198,20 @@ class GraphifyService:
         return nodes, seeds
 
     def _sections(self, rel: str):
-        if rel not in self._section_cache:
-            self._section_cache[rel] = split_sections(self.vault.read(rel))
-        return self._section_cache[rel]
+        # Read through the confined vault API on every request. A stat-only key
+        # misses same-size edits with preserved timestamps; hash the exact text
+        # being split instead. This refreshes evidence, not graph topology/lines.
+        try:
+            text = self.vault.read(rel)
+        except (OSError, ValueError):
+            self._section_cache.pop(rel, None)
+            raise
+        signature = hashlib.sha256(text.encode("utf-8")).digest()
+        cached = self._section_cache.get(rel)
+        if cached is None or cached[0] != signature:
+            cached = (signature, split_sections(text))
+            self._section_cache[rel] = cached
+        return cached[1]
 
     def _section_for(self, rel: str, line: int):
         secs = self._sections(rel)

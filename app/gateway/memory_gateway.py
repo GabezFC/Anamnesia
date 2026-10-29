@@ -46,7 +46,7 @@ from app.services.pricing import cost_usd
 from app.services.scope import Scope, discover, parse_scope
 
 # Bumped whenever a change alters the MEANING of a metric already in metrics_json -- e.g. the PT
-# calibration factor in app/gateway/token_budget.py:estimate_tokens (§5.5 item 9). Lets a consumer
+# calibration factor in app/core/tokens.py:estimate_tokens (§5.5 item 9). Lets a consumer
 # (the history line chart, item 2.1) split series instead of plotting two incompatible measurement
 # scales as one continuous line. Runs recorded before this field existed simply lack the key.
 METRICS_VERSION = 1
@@ -167,6 +167,42 @@ class MemoryGateway:
         self.graph_index = GraphIndex(self.graphify.graph_path)
 
     # -- scope (contextvar-backed, §5.4) -------------------------------------------
+    def _saved_note_project(self, rel_path: str) -> str | None:
+        """F9-01: `projeto:` frontmatter of an agent-saved note (`saved_context/...`), else None.
+
+        Path-only scoping hid every saved note from `projeto:X` searches: its path carries no project.
+        Only extra-root files (the Gateway's own folder) are resolved -- user-vault notes keep the
+        path-only rule -- and the read is read-only and bounded to the frontmatter head. Cached per file
+        by (mtime_ns, size), so a save/update/delete is seen on the next search with no explicit
+        invalidation. Called only while filtering a NON-global scope: unscoped searches pay nothing.
+        """
+        vault = self.vault
+        if not vault.extra_roots or vault._extra_split(rel_path) is None:
+            return None
+        try:
+            p = vault._abs(rel_path)
+            st = p.stat()
+        except Exception:  # noqa: BLE001 -- missing/escaping path: no project, fail closed
+            return None
+        cache = self.__dict__.setdefault("_saved_project_cache", {})
+        key = (st.st_mtime_ns, st.st_size)
+        hit = cache.get(rel_path)
+        if hit is not None and hit[0] == key:
+            return hit[1]
+        project = None
+        try:
+            from app.services.obsidian import frontmatter_fields
+            with open(p, "r", encoding="utf-8", errors="replace") as fh:
+                head = fh.read(8192)
+            value = frontmatter_fields(head).get("projeto")
+            project = value.strip() if isinstance(value, str) and value.strip() else None
+        except Exception:  # noqa: BLE001
+            project = None
+        if len(cache) > 20000:
+            cache.clear()
+        cache[rel_path] = (key, project)
+        return project
+
     @property
     def active_scope(self) -> "Scope | None":
         """Set per-search so pipelines can scope candidates early; None means global (§14).
@@ -292,6 +328,8 @@ class MemoryGateway:
         run_id = meta.get("run_id") or uuid.uuid4().hex[:12]
         jcfg = replace(self.jev_cfg, **jev_overrides) if jev_overrides else self.jev_cfg
         parsed_scope = parse_scope(scope)
+        if not parsed_scope.is_global:       # F9-01: saved notes declare their project in frontmatter
+            parsed_scope.frontmatter_resolver = self._saved_note_project
         t0 = time.perf_counter()
         error = None
 

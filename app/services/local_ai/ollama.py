@@ -1,6 +1,6 @@
 """Adaptador Ollama - ANAM-034. API nativa verificada em docs/api.md do repo ollama/ollama (2026-10-15):
 ``GET /api/version``, ``GET /api/tags``, ``GET /api/ps``, ``POST /api/generate`` (``keep_alive``; prompt vazio carrega o
-modelo e ``keep_alive: 0`` descarrega). OpenAI-compativel em ``/v1`` (ENVIRONMENT.md). Nada e baixado (sem /api/pull).
+modelo e ``keep_alive: 0`` descarrega). OpenAI-compativel em ``/v1`` (Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/ENVIRONMENT.md). Nada e baixado (sem /api/pull).
 """
 from __future__ import annotations
 

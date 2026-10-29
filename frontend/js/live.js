@@ -4,16 +4,14 @@
  * indisponível, o mock continua e o bloco entra em `live.demo` — o shell mostra UM banner global
  * "Dados de demonstração: <blocos>" (ANA-201) e nunca apresenta número de mock como real.
  * O Laboratório (#/compare) NÃO usa mock: lê a API em lab-data.js (ANA-200).
- * Terminais: xterm.js real ligado ao PTY local da sessão, dentro de [data-terminal-mount].
+ * (Os terminais interativos foram removidos; esta camada cobre projetos/arquivos/contexto/custos.)
  */
 import {
-  mockProjects, mockProfiles, mockSessions, mockFiles, mockConnections, mockPresets,
+  mockProjects, mockFiles, mockConnections, mockPresets,
   mockCostSummary, mockBudget, mockCalls,
 } from './mock-data.js';
 import * as A from './anamnesia-api.js';
 import { call } from './anamnesia-api.js';
-import { SessionTerminal } from './terminals.js';
-import { isAppShortcut } from './commands.js';
 import { fmtTime } from './format.js';
 
 export const live = { demo: new Set(), projects: false, sessions: false, health: { state: 'unknown', ms: null, warnings: [] }, alerts: [] };
@@ -54,25 +52,6 @@ const safe = async (name, fn) => {
 };
 
 /* ------------------------------------------------------------------ workspace */
-function toSession(s, projects) {
-  const proj = projects.find((p) => p.id === s.project_id);
-  return {
-    id: s.id, projectId: s.project_id, projectName: proj?.name || 'projeto', profileId: s.profile_id,
-    title: `${s.profile_id} [${proj?.name || 'local'}]`, status: s.state,
-    statusText: s.state === 'active' ? 'Ativo' : `Encerrado${s.exit_code != null ? ` (código ${s.exit_code})` : ''}`,
-    cols: s.cols, rows: s.rows, startTime: hhmm(s.started_at), real: true,
-    // worktree/subagente/MCP (valores crus: workspace.js aplica esc() ao renderizar)
-    cwd: s.cwd || null, branch: s.branch || null, role: s.role || null, worktreeId: s.worktree_id || null,
-    mcp: s.mcp && typeof s.mcp === 'object' ? s.mcp : null,
-  };
-}
-
-export async function refreshSessions() {
-  const sess = await A.listSessions();
-  replace(mockSessions, sess.map((s) => toSession(s, mockProjects)));
-  mockProjects.forEach((p) => { p.active_sessions = mockSessions.filter((s) => s.projectId === p.id && s.status === 'active').length; });
-}
-
 export const filesState = { projectId: '' };
 const HIDDEN_DIRS = ['.git', '.venv', 'node_modules', '__pycache__', '.pytest_cache'];
 
@@ -110,36 +89,26 @@ export async function toggleDir(file) {
 export const fileContent = (path) => A.getFileContent(filesState.projectId, path);
 
 async function loadWorkspace() {
-  const [projects, profiles] = await Promise.all([A.listProjects(), A.listProfiles()]);
+  const projects = await A.listProjects();
   live.projects = true;
   replace(mockProjects, projects.map((p) => ({
-    id: esc(p.id), name: esc(p.name), path: esc(p.path), active_sessions: 0, git_branch: '—', vault_size_mb: 0,
+    id: esc(p.id), name: esc(p.name), path: esc(p.path), container_path: esc(p.container_path || ''), active_sessions: 0, git_branch: '—', vault_size_mb: 0,
   })));
-  replace(mockProfiles, profiles.map((p) => ({
-    id: esc(p.id), name: esc(p.name), description: esc(p.description), command: esc(p.command), available: !!p.available,
-    icon: p.kind === 'agent' ? 'bot' : 'terminal',
-  })));
-  await refreshSessions();
-  live.sessions = true;
   if (mockProjects[0]) await loadFiles(mockProjects[0].id).catch(() => replace(mockFiles, []));
   else replace(mockFiles, []);
 }
 
-export async function launchSession(projectId, profileId, opts = null) {
-  const r = opts && (opts.worktree || opts.role || typeof opts.mcp === 'boolean')
-    ? await A.createSessionOpts({ project: projectId, profile: profileId, ...opts })
-    : await A.createSession(projectId, profileId);
-  await refreshSessions();
-  return r.session_id || r.session?.id;
-}
-export async function closeSession(id) {
-  await A.deleteSession(id).catch(() => {});
-  await refreshSessions();
-}
 export const initializeProject = (id) => A.initializeProject(id);
 export const jevStatus = () => A.jevStatus();
 export const jevSaveConfig = (s, k) => A.jevSaveConfig(s, k);
 export const jevTestConnection = () => A.jevTestConnection();
+export async function unregisterProject(id, purgeIndex = false) {
+  const r = await A.removeProject(id, purgeIndex);
+  await loadWorkspace();
+  return r;
+}
+export const refreshWorkspace = () => loadWorkspace();
+export const workspaceRoots = () => A.listWorkspaceRoots();
 export async function registerProject(name, path) {
   const p = await A.addProject(name, path);
   await loadWorkspace();
@@ -158,7 +127,7 @@ async function loadConnections() {
     groups[CAT[c.type] || 'mcp'].push({
       id: esc(c.id), name: esc(c.name), type: esc(TYPE_LABEL[c.type] || c.type), detected: !!c.detected, has_key: !!c.has_key,
       masked_key: esc(c.masked || k?.masked || '') || null, env_keys: (c.env_keys || []).map(esc),
-      status: c.detected ? 'online' : 'offline', snippet: '', real: true, rawStatus: c.status,
+      status: c.state === 'connected' ? 'online' : 'offline', state: c.state, state_detail: c.detail || '', snippet: '', real: true, rawStatus: c.status,
     });
   }
   mockConnections.agents = groups.agents; mockConnections.models = groups.models; mockConnections.mcp = groups.mcp;
@@ -216,38 +185,6 @@ async function loadCosts() {
     statusLabel: x?.ceiling_usd == null ? 'Sem teto definido' : 'Normal',
   });
   Object.assign(mockBudget, { daily: mk(b.day), monthly: mk(b.month) });
-}
-
-/* ------------------------------------------------------------------ terminais xterm reais */
-const terms = new Map(); // sessionId -> SessionTerminal
-
-function attachTerminals() {
-  document.querySelectorAll('[data-terminal-mount][data-session-id]').forEach((mount) => {
-    const sid = mount.getAttribute('data-session-id');
-    const s = mockSessions.find((x) => x.id === sid);
-    if (!s || !s.real) return;
-    let t = terms.get(sid);
-    if (!t) {
-      t = new SessionTerminal(sid, { interceptKey: isAppShortcut });
-      terms.set(sid, t);
-      t.start();
-    }
-    if (t.el.parentElement !== mount) {
-      mount.querySelector('[data-terminal-mock-view]')?.remove();
-      mount.appendChild(t.el);
-      requestAnimationFrame(() => { t.refit(); t.focus(); });
-    }
-  });
-  for (const [sid, t] of terms) {
-    if (!mockSessions.some((s) => s.id === sid)) { t.dispose(); terms.delete(sid); }
-  }
-}
-
-export function installTerminalObserver() {
-  const obs = new MutationObserver(() => attachTerminals());
-  obs.observe(document.getElementById('app'), { childList: true, subtree: true });
-  attachTerminals();
-  setInterval(() => refreshSessions().catch(() => {}), 10000);
 }
 
 /* ------------------------------------------------------------------ boot */

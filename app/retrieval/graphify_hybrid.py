@@ -223,12 +223,17 @@ def hybrid_search(gw, query: str, limit: int, text_seeds: int = 10,
             exp.hybrid_score, bm, seed_files, related,
             index.lexical_seed_files(query, text_seeds) if index.loaded else [], exp)
 
+    section_counts = collections.Counter(c.source_file.replace("\\", "/") for c in bm)
+    section_ranks: dict[str, int] = collections.defaultdict(int)
     for c in bm:
         f = c.source_file.replace("\\", "/")
         if f not in order:
             continue
-        rank = order[f]
-        c.score = fused_text.get(c.candidate_id, round(1.0 - 0.45 * (rank / n_seeds), 4))
+        # Keep lexical section order inside each file's band, without crossing the
+        # next file's band or tying scores (dedup would then sort by heading).
+        rank = order[f] + section_ranks[f] / section_counts[f]
+        section_ranks[f] += 1
+        c.score = fused_text.get(c.candidate_id, 1.0 - 0.45 * (rank / n_seeds))
         c.origin = "graphify_hybrid:text"
         c.meta = {**(c.meta or {}), "seed": True, "via": "bm25"}
         cands.append(c)

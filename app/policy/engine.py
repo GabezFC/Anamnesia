@@ -11,7 +11,7 @@ Mode (env ``ANAMNESIA_POLICY``; default ``off`` = the engine does nothing and wr
 Audit: append-only jsonl with a hash chain (``prev``/``hash``; see ``verify_chain``). It records actor, action,
 target (truncated), decision, rule id, run/step ids -- never payloads, prompts or argv. Path: env
 ``ANAMNESIA_POLICY_AUDIT`` or ``<logs>/policy_audit.jsonl``. This chain is NEW and separate from
-``exec_audit.jsonl`` (ANA-024); ANA-067 (unified audit trail) is only PARTIAL: see docs/guides/POLICY_ENFORCEMENT.md.
+``exec_audit.jsonl`` (ANA-024); ANA-067 (unified audit trail) is only PARTIAL: see Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/POLICY_ENFORCEMENT.md).
 """
 from __future__ import annotations
 

@@ -129,10 +129,30 @@ class LayaBackend:
         self.calls = 0
         self.errors = 0
         self.last_error = ""
+        self._worker: Any | None = None
+        self._worker_py = ""
+        self._consec_fail = 0           # disjuntor: falhas seguidas
+        self._open_until = 0.0          # monotonic; > agora => falha rápida, sem tocar no Laya
+        self.worker_factory: Any | None = None   # injetável em testes: fn(python, ml, en, cfg) -> obj com predict_batch
 
     # -- modo efetivo ---------------------------------------------------------------------------
+    def _models_base(self) -> Path:
+        """Base dos pesos. Caminho relativo (padrao `data/local_ai/models`) NAO pode depender do CWD do processo
+        (MCP/agentes sobem de qualquer pasta): tenta ANAMNESIA data_dir(), depois a raiz do pacote, depois o CWD;
+        devolve o 1o candidato com pesos multilingual, senao o 1o candidato (absoluto, para a mensagem)."""
+        p = Path(self.cfg.models_dir).expanduser()
+        if p.is_absolute():
+            return p
+        from config.paths import PACKAGE_ROOT, data_dir
+        rel = p.relative_to("data") if p.parts[:1] == ("data",) else p
+        cands = [Path(data_dir()) / rel, Path(PACKAGE_ROOT) / p, Path.cwd() / p]
+        for c in cands:
+            if (c / "laya-multilingual" / "model.safetensors").exists():
+                return c
+        return cands[0]
+
     def _model_dirs(self) -> dict[str, str]:
-        base = Path(self.cfg.models_dir)
+        base = self._models_base()
         ml = self.cfg.multilingual_dir or str(base / "laya-multilingual")
         en = self.cfg.english_dir or str(base / "laya-english")
         out = {}
@@ -164,7 +184,9 @@ class LayaBackend:
                     eff, why = "inproc", f"pacote laya + pesos em {list(dirs)}"
                 else:
                     why = ("pacote 'laya' não importável neste Python" if not has_pkg
-                           else f"pesos multilingual ausentes em {self.cfg.models_dir}")
+                           else f"pesos multilingual ausentes em {self._models_base()}")
+            if eff == "off" and want in ("worker", "auto"):
+                eff, why = self._resolve_worker(why)
             if eff == "off" and want in ("serve", "auto"):
                 url = self.cfg.serve_url.strip()
                 if not url:
@@ -178,11 +200,30 @@ class LayaBackend:
         self._mode_effective, self._reason = eff, why
         return eff
 
+    def _resolve_worker(self, why: str) -> tuple[str, str]:
+        from app.services.local_ai.laya_proc import discover_python
+        dirs = self._model_dirs()
+        if "multilingual" not in dirs:
+            return "off", why + f"; worker: pesos multilingual ausentes em {self._models_base()}"
+        py, origin = discover_python(self.cfg.python)
+        if not py:
+            return "off", why + f"; worker: {origin}"
+        self._worker_py = py
+        return "worker", f"worker (processo-filho) com {py} [{origin}]; pesos em {list(dirs)}"
+
     def status(self) -> dict:
         eff = self.resolve_mode()
+        now = time.monotonic()
         return {"configured_mode": self.cfg.mode, "effective_mode": eff, "reason": self._reason,
+                "circuit": {"open": now < self._open_until, "retry_in_s": round(max(0.0, self._open_until - now), 1),
+                            "consecutive_failures": self._consec_fail},
+                "worker": ({"python": self._worker_py, "alive": bool(self._worker and self._worker.alive()),
+                            "starts": getattr(self._worker, "starts", 0),
+                            "laya_version": getattr(self._worker, "laya_version", "")}
+                           if eff == "worker" else None),
                 "calls": self.calls, "errors": self.errors, "last_error": self.last_error,
                 "load_ms": self._load_ms, "prompt_version": LAYA_PROMPT_VERSION,
+                "models_dir_resolved": str(self._models_base()),
                 "revisions": {k: v[1] for k, v in LAYA_REVISIONS.items()},
                 "temperature": self.cfg.temperature}
 
@@ -206,13 +247,32 @@ class LayaBackend:
                 self._load_ms = round((time.perf_counter() - t0) * 1000, 1)
         return self._router
 
+    def _get_worker(self):
+        with self._lock:
+            if self._worker is None:
+                dirs = self._model_dirs()
+                args = (self._worker_py, dirs["multilingual"], dirs.get("english", ""), self.cfg)
+                if self.worker_factory is not None:
+                    self._worker = self.worker_factory(*args)
+                else:
+                    from config.paths import logs_dir
+                    from app.services.local_ai.laya_proc import LayaWorker
+                    self._worker = LayaWorker(self._worker_py, args[1], args[2], self.cfg.device,
+                                              self.cfg.threads, self.cfg.load_timeout_s,
+                                              Path(logs_dir()) / "laya_worker.log")
+            return self._worker
+
     def _post(self, body: dict) -> dict:
         url = self.cfg.serve_url.rstrip("/") + "/v1/systemone"
         if self._http_post is not None:
             return self._http_post(url, body, self.cfg.timeout_s)
         import urllib.request
+        headers = {"Content-Type": "application/json"}
+        key = os.environ.get("MG_LAYA_API_KEY", "").strip()   # = LAYA_API_KEY do laya-serve; só em memória/ambiente
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
         req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
-                                     headers={"Content-Type": "application/json"}, method="POST")
+                                     headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=self.cfg.timeout_s) as r:  # noqa: S310 (loopback validado)
             return json.loads(r.read().decode("utf-8"))
 
@@ -221,18 +281,34 @@ class LayaBackend:
         mode = self.resolve_mode()
         if mode == "off":
             raise LayaUnavailable(f"Laya off: {self._reason}")
+        if time.monotonic() < self._open_until:   # disjuntor aberto: falha rápida, sem retry e sem tocar no Laya
+            raise LayaUnavailable(f"circuito aberto por {self.cfg.breaker_cooldown_s:.0f}s após "
+                                  f"{self._consec_fail} falhas seguidas; último erro: {self.last_error}")
         self.calls += len(requests)
         try:
             if mode == "inproc":
                 router = self._get_router()
-                return router.predict_batch(requests, batch_size=self.cfg.batch_size)
-            return [self._post(r) for r in requests]
+                out = router.predict_batch(requests, batch_size=self.cfg.batch_size)
+            elif mode == "worker":
+                out = self._get_worker().predict_batch(requests, self.cfg.batch_size, self.cfg.timeout_s)
+            else:
+                out = [self._post(r) for r in requests]
+            self._consec_fail = 0
+            return out
         except LayaUnavailable:
             raise
         except Exception as exc:  # noqa: BLE001 — qualquer falha de inferência vira indisponibilidade explícita
             self.errors += 1
-            self.last_error = f"{type(exc).__name__}: {exc}"[:300]
+            self._consec_fail += 1
+            kind = getattr(exc, "kind", "")
+            self.last_error = (f"{kind}: " if kind and not str(exc).startswith(kind) else "") + \
+                f"{type(exc).__name__}: {exc}"[:300]
+            if self._consec_fail >= max(1, self.cfg.breaker_failures):
+                self._open_until = time.monotonic() + self.cfg.breaker_cooldown_s
             raise LayaUnavailable(self.last_error) from exc
+
+    def reset_circuit(self) -> None:
+        self._consec_fail, self._open_until = 0, 0.0
 
     def decide(self, states: list[Any], question_name: str, question: dict) -> list[LayaAnswer]:
         """Uma mesma pergunta choice A/B sobre N states, em lote."""
@@ -261,6 +337,12 @@ class LayaBackend:
 
     def close(self) -> None:
         self._router = None
+        w, self._worker = self._worker, None
+        if w is not None and hasattr(w, "stop"):
+            try:
+                w.stop()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 # --------------------------------------------------------------------------------------------------

@@ -17,7 +17,7 @@
 !integrations
 !assets
 !packaging
-!spikes
+!docker
 !.github
 !.githooks
 !data
@@ -34,6 +34,11 @@
 !docker-compose.yml
 !docker-compose.test.yml
 !README.md
+!CHANGELOG.md
+!NOTICE
+!THIRD_PARTY_NOTICES.md
+!requirements.lock
+!uv.lock
 !LICENSE
 !SECURITY.md
 !CONTRIBUTING.md
@@ -48,6 +53,11 @@
 !.ai-memory.toml
 
 # re-exclude (last match wins): data not in the allow-list, local state, secrets, caches, databases
+docker/*
+!docker/Dockerfile.laya-test
+!docker/docker-compose.laya-test.yml
+!docker/mgtest.env.example
+!docker/laya-test.env.example
 data/*
 !data/synthetic_vault
 config/local_settings.json

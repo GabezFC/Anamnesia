@@ -45,9 +45,30 @@ class SessionNotFound(KeyError):
     pass
 
 
+def _with_central_credentials(src, env_keys) -> dict[str, str]:
+    """Completa as chaves ausentes do ambiente com o armazenamento central (connections.secrets.resolve_env).
+
+    Só em memória e só para o ambiente do processo filho: nada é gravado em arquivo/log. O ambiente real do
+    processo tem precedência (override explícito do usuário). Falha do armazenamento => segue só com o ambiente."""
+    merged = dict(src)
+    missing = [k for k in env_keys if not merged.get(k)]
+    if not missing:
+        return merged
+    try:
+        from app.connections.secrets import resolve_env
+        for k, v in resolve_env(missing).items():
+            if v and not merged.get(k):
+                merged[k] = v
+    except Exception:  # noqa: BLE001 - credencial central é opcional; o spawn não pode quebrar por isso
+        pass
+    return merged
+
+
 def build_env(env_keys=(), environ=None, extra: dict[str, str] | None = None) -> dict[str, str]:
     """Allowlisted environment + ONLY the keys the chosen profile declares (never the whole env)."""
     src = os.environ if environ is None else environ
+    if environ is None and env_keys:
+        src = _with_central_credentials(src, env_keys)
     upper = {k.upper(): k for k in src}
     out: dict[str, str] = {}
     for key in (*ENV_ALLOWLIST, *env_keys):

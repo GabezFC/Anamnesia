@@ -34,7 +34,7 @@ $MEMORY_GATEWAY_VAULT     # ver .env.example; padrão = <PROJECT_ROOT>/data/synt
 5. **Não invente APIs**, endpoints, comandos ou parâmetros.
 6. **Verifique versão e documentação antes de integrar** qualquer componente
    (Graphify, JEV/TypeSafe, Hermes, Claude Code, Codex, OpenCode, MCP, Ollama, vLLM).
-   Registre o que descobrir em `docs/guides/ENVIRONMENT.md`. Integração não testada não é suportada.
+   Registre o que descobrir em Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/ENVIRONMENT.md). Integração não testada não é suportada.
 7. **Mantenha a separação:** Memory Gateway (orquestração) ≠ agentes (consumidores)
    ≠ modelos (síntese) ≠ Graphify (recuperação) ≠ JEV (julgamento/filtragem).
    JEV e Graphify pertencem ao Gateway, não a nenhum agente. Nada no core depende
@@ -45,7 +45,7 @@ $MEMORY_GATEWAY_VAULT     # ver .env.example; padrão = <PROJECT_ROOT>/data/synt
 1. Ler `AGENTS.md` / `CLAUDE.md`.
 2. Consultar o Cérebro quando necessário.
 3. Ler a seção relevante da especificação.
-4. Inspecionar o estado atual (`docs/guides/ENVIRONMENT.md`, código, testes).
+4. Inspecionar o estado atual (Cérebro IA: Anamnesia/Guias-de-usuario-2026-10-24/ENVIRONMENT.md, código, testes).
 5. Planejar → implementar → `pytest` → validar com o vault real → checar que o vault
    não mudou (`python -m memory_gateway vault-check`).
 
@@ -58,7 +58,7 @@ $MEMORY_GATEWAY_VAULT     # ver .env.example; padrão = <PROJECT_ROOT>/data/synt
   Leitura + benchmark; `MG_MCP_SAVE=1` (opt-in) acrescenta `memory_save`, que grava só na pasta própria do
   Gateway, nunca no vault. Lista exata: `docs/INTERFACES.md` (gerado do código).
 - **Otimização automática:** toda busca passa pela Memory Optimization Layer
-  (`app/gateway/optimizer.py`, zero token). Guia: `docs/guides/OPTIMIZATION_LAYER.md`.
+  (`app/gateway/optimizer.py`, zero token). Guia: Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/OPTIMIZATION_LAYER.md).
 - **REST:** `http://127.0.0.1:8000` (bind padrão `127.0.0.1`; `/docs` lista as rotas; ver `docs/INTERFACES.md`).
 - **CLI:** `python -m memory_gateway search "pergunta"` (11 subcomandos; ver `docs/INTERFACES.md`).
 
@@ -73,10 +73,13 @@ benchmark só em `#/compare/*`. Guia e limitações: `docs/guides/FRONTEND_WORKS
 ## Segurança
 
 - Nunca ler, imprimir ou logar segredos (`.env`, chaves de API).
+- Arquivos locais `docker/*.env` são privados e ignorados; publicar somente exemplos `*.env.example` sem caminhos pessoais.
 - Não modificar firewall, não fazer commit/push sem pedido.
 
 Detalhes operacionais (estrutura de pastas, testes, onde criar cada coisa): ver `CLAUDE.md`.
 Modelo de ameaça (hard / soft / best-effort): `SECURITY.md` — não trate soft/best-effort como garantia.
+Relatórios/notas/decisões/benchmarks humanos vão SEMPRE para o Cérebro IA (`<CEREBRO_ROOT>/30-Projetos/Anamnesia`), nunca para `docs/`;
+saída de geradores/medições: `data/reports-out/` (ignorado). `docs/` guarda só índice, guias de usuário/CI/distribuição, gerados e fixtures consumidas (ver `CLAUDE.md`).
 Índice da documentação: `docs/README.md`; `docs/INTERFACES.md` e `docs/ENVIRONMENT_REFERENCE.md` são gerados do
 código (não edite à mão; `tests/test_docs_*.py` falham se ficarem velhos). Python mínimo: 3.12.
-Estado verificado do ambiente e armadilhas conhecidas (Hermes + modelos locais, Graphify, JEV): `docs/guides/ENVIRONMENT.md`.
+Estado verificado do ambiente e armadilhas conhecidas (Hermes + modelos locais, Graphify, JEV): Cérebro IA (Anamnesia/Guias-de-usuario-2026-10-24/ENVIRONMENT.md).

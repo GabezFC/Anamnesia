@@ -77,7 +77,7 @@ class Plan:
 
 
 def hotset_enabled() -> bool:
-    """ANAM-037: MG_HOTSET flag (see docs/bench/anam-036-037.md for the default and why)."""
+    """ANAM-037: MG_HOTSET flag (see Cerebro IA (Anamnesia/Migracao-docs-repo-2026-10-24/bench/anam-036-037.md) for the default and why)."""
     return os.environ.get("MG_HOTSET", HOTSET_DEFAULT).strip().lower() in ("1", "true", "yes", "on")
 
 
@@ -306,7 +306,7 @@ class MemoryOptimizer:
         server started was invisible until a restart — exactly the growth scenario the brain is
         designed for. The check is stat-only (count, total size, newest mtime).
         """
-        if not self.cfg.enabled or self.cfg.refresh_interval_s < 0:
+        if self.cfg.refresh_interval_s < 0:
             return {}
         now = time.time()
         if self._vault_fp is not None and now - self._last_check < self.cfg.refresh_interval_s:
@@ -318,12 +318,17 @@ class MemoryOptimizer:
             if self._vault_fp is None:
                 self._vault_fp, self._manifest = fp, (man.files if man else None)
                 return {"vault_fingerprint_checked": True, "index_rebuilt": False}
-            if fp == self._vault_fp:
+            files_changed = (man is not None and self._manifest is not None
+                             and man.files != self._manifest)
+            if fp == self._vault_fp and not files_changed:
                 if self._manifest is None and man is not None:
                     self._manifest = man.files
                 return {"vault_fingerprint_checked": True, "index_rebuilt": False}
             t0 = time.perf_counter()
             m = self._apply_change(gw, man)
+            # Aggregate fingerprints can collide even when individual files changed.
+            self._prov = None
+            self._prov_fp = None
             self._vault_fp, self._manifest = fp, (man.files if man else None)
             self.index_rebuilds += 1
             m.update({"vault_fingerprint_checked": True, "index_rebuilt": True,
@@ -438,7 +443,10 @@ class MemoryOptimizer:
             "stages": _d(gw.optional_stages_cfg.resolved(plan.pipeline)),
             "retrieval": {k: getattr(rc, k, None) for k in (
                 "max_candidates", "snippet_max_tokens", "dedup_max_per_note", "model_context_budget",
-                "per_source_max_tokens", "prefilter_top_k", "prefilter_lexical_weight", "jev_min_survivors")},
+                "per_source_max_tokens", "prefilter_top_k", "prefilter_lexical_weight", "jev_min_survivors",
+                "graphify_bin", "graphify_hybrid", "graphify_text_seeds", "graphify_graph_expand",
+                "graphify_query_budget", "graphify_timeout_s", "graphify_stale_fallback_s",
+                "ppr_enabled", "ppr_alpha", "ppr_iters", "ppr_top_n")},
             "jev": _d(gw.jev_cfg),
             "optimizer": _d(self.cfg),
             "opt": _d(getattr(gw, "opt_cfg", None)),
