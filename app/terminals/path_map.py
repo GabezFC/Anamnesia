@@ -168,10 +168,14 @@ def _not_mapped(raw: str, roots: list[PathRoot]) -> PathMapError:
 
 
 def _step(base: str, comp: str) -> str:
-    """Desce um componente; casefold/NFC como fallback (Windows ignora maiúsculas; o contêiner não)."""
+    """Desce um componente; casefold/NFC como fallback (Windows ignora maiúsculas; o contêiner não).
+
+    Num FS insensível a maiúsculas (APFS/HFS+ em macOS, ext4 casefold) `lexists` aceita
+    'meu projeto' mesmo quando o nome real é 'Meu Projeto' e o realpath pode preservar o
+    caso digitado. O nome canônico vem do diretório: com exatamente um casefold-hit, o nome
+    real do disco é usado sempre (casing canônico); ambíguo só se houver nomes distintos.
+    """
     cand = os.path.join(base, comp)
-    if os.path.lexists(cand):
-        return cand
     want = _key(comp)
     try:
         with os.scandir(base) as it:
@@ -181,10 +185,14 @@ def _step(base: str, comp: str) -> str:
                            "ajuste as permissões da pasta no host (o contêiner a lê como somente leitura)") from e
     except OSError as e:
         raise PathMapError("path_not_found", f"pasta não encontrada: {base}") from e
+    matches = [name for name in hits if name == comp]  # igualdade byte a byte (FS case-sensitive)
+    if len(matches) == 1:
+        return os.path.join(base, matches[0])
     if len(hits) == 1:
-        return os.path.join(base, hits[0])
-    raise PathMapError("path_not_found", f"'{comp}' não existe em {base}" if not hits
-                       else f"'{comp}' é ambíguo em {base} (várias pastas diferem só por maiúsculas)")
+        return os.path.join(base, hits[0])  # FS insensível a caso: casing canônico do disco
+    if len(hits) > 1:
+        raise PathMapError("path_not_found", f"'{comp}' é ambíguo em {base} (várias pastas diferem só por maiúsculas)")
+    raise PathMapError("path_not_found", f"'{comp}' não existe em {base}")
 
 
 def _finish(real: str, root_container: str, root: PathRoot | None, host_disp: str, shown: str) -> Translation:
@@ -205,6 +213,14 @@ def resolve_project_path(raw: str, roots: list[PathRoot] | None = None) -> Trans
     """
     roots = parse_path_map() if roots is None else roots
     text = (raw or "").strip()
+    # ANA-026: guard ANTES do existence-check, sem revelar presença (Linux 404 != 403).
+    try:
+        from app.services import project_guard as pg
+        pg.check(text)
+    except pg.ProjectDenied:
+        raise
+    except Exception:  # noqa: BLE001  (path malformado etc.: segue fluxo normal)
+        pass
     if not roots:
         return _native(text)
     if looks_like_host_path(text) or (_MNT.match(text.replace("\\", "/")) and not os.path.exists(text)):

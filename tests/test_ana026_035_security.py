@@ -25,23 +25,56 @@ def _hdr():
 
 
 # -- ANA-026 ------------------------------------------------------------------------------------
-def test_ana026_project_roots_denied(monkeypatch):
+@pytest.fixture
+def guarded_home(tmp_path, monkeypatch):
+    """Synthetic HOME outside the guard's temp exemption; never inspect real credentials."""
+    from app.services import project_guard as pg
+    home = tmp_path / "user-home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setattr(pg.tempfile, "gettempdir", lambda: str(tmp_path / "scratch"))
+    monkeypatch.setenv("ANAMNESIA_PROJECT_GUARD", "enforce")
+    monkeypatch.delenv("ANAMNESIA_PATH_MAP", raising=False)
+    monkeypatch.delenv("MG_PROJECT_ROOTS", raising=False)
+    return home
+
+
+def test_ana026_project_roots_denied(monkeypatch, guarded_home):
     from app.services import project_guard as pg
     home = Path.home()
     for bad in (home, home / ".ssh", home / "AppData" / "Local", Path(home.anchor or "/")):
         assert pg.violation(bad.resolve()), bad
 
 
-def test_ana026_post_ssh_is_403(monkeypatch, tmp_path):
-    ssh = Path.home() / ".ssh"
+@pytest.mark.parametrize("exists", [False, True])
+def test_ana026_post_ssh_is_403(monkeypatch, tmp_path, guarded_home, exists):
+    ssh = guarded_home / ".ssh"
+    if exists:
+        ssh.mkdir()
     c = _client(monkeypatch)
     r = c.post("/api/projects", json={"name": "x", "path": str(ssh)}, headers=_hdr())
     assert r.status_code == 403, r.text
+    assert r.json()["error"]["code"] == "project_root_denied"
+    assert "exist" not in r.text.lower()
 
 
-def test_ana026_warn_mode_and_normal_dir_allowed(monkeypatch, tmp_path):
+def test_ana026_guard_precedes_strict_existence(monkeypatch, guarded_home):
     from app.services import project_guard as pg
-    assert pg.violation((tmp_path / "proj").resolve()) is None  # temp dir exempt
+    from app.terminals.path_map import resolve_project_path
+    original_resolve = Path.resolve
+
+    def no_strict_probe(self, strict=False):
+        assert not strict, "sensitive path existence must not be queried"
+        return original_resolve(self, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", no_strict_probe)
+    with pytest.raises(pg.ProjectDenied):
+        resolve_project_path(str(guarded_home / ".ssh"), roots=[])
+
+
+def test_ana026_warn_mode_and_normal_dir_allowed(monkeypatch, tmp_path, guarded_home):
+    from app.services import project_guard as pg
+    assert pg.violation((tmp_path / "scratch" / "proj").resolve()) is None  # temp dir exempt
     monkeypatch.setenv("ANAMNESIA_PROJECT_GUARD", "warn")
     pg.check(Path.home())  # warn: no raise
     monkeypatch.setenv("ANAMNESIA_PROJECT_GUARD", "enforce")

@@ -226,10 +226,22 @@ def test_windows_selection_matches_existing_path_case_insensitively(tmp_path, mo
     assert tasks.gather_import_path(tmp_path, selection, JOB) == [("Docs/Note.md", "Synthetic selected note")]
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="native POSIX case-sensitive path semantics")
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows selection covered by normcase tests")
+@pytest.mark.parametrize("selection", ["docs/note.md", "docs", "DOCS/NOTE.MD"])
+def test_posix_selection_matches_existing_path_on_folding_fs(tmp_path, selection):
+    (tmp_path / "Docs").mkdir()
+    (tmp_path / "Docs/Note.md").write_text("Synthetic folded note", encoding="utf-8")
+    if not tasks._fs_folds_case(tmp_path):
+        pytest.skip("filesystem is case-sensitive (Linux CI)")
+    assert tasks.gather_import_path(tmp_path, selection, JOB) == [("Docs/Note.md", "Synthetic folded note")]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows selection covered by normcase tests")
 def test_posix_selection_does_not_fold_case(tmp_path):
     (tmp_path / "Docs").mkdir()
     (tmp_path / "Docs/Note.md").write_text("Synthetic note", encoding="utf-8")
+    if tasks._fs_folds_case(tmp_path):
+        pytest.skip("filesystem is case-insensitive (macOS)")
     with pytest.raises(tasks.WorkspaceIOError) as error:
         tasks.gather_import_path(tmp_path, "docs/note.md", JOB)
     assert error.value.code == "not_found"

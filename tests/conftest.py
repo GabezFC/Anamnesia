@@ -34,11 +34,6 @@ def pytest_addoption(parser):
                 help="ANA-084: report (warn) or fail (strict) if the suite changed benchmark.db/.env/data/logs of the repo")
 
 
-def pytest_configure(config):
-    seed = ci_support.resolve_seed(config.getoption("--shuffle-seed"))
-    config._anamnesia_seed = seed
-
-
 def pytest_report_header(config):
     lines = [f"anamnesia: isolated ANAMNESIA_HOME={_SESSION_HOME}"]
     if config._anamnesia_seed is not None:
@@ -58,6 +53,83 @@ def pytest_collection_modifyitems(config, items):
     seed = config._anamnesia_seed
     if seed is not None:  # ANA-129 (deselection by -m/-k keeps relative order, so shuffling first is fine)
         items[:] = ci_support.shuffled(items, seed)
+
+
+# --- Isolamento do estado global do Decision Engine (ANA-129 shuffle expôs dois vazamentos) ---
+# 1. Env: `JevConfig` (config/jev.py) lê os defaults de JEV_* de `os.environ` na construção
+#    (`env_float("JEV_RELEVANCE_THRESHOLD", 0.78)`), e `app.decision.config._builtin_thresholds()` chama
+#    `JevConfig()` mesmo quando `load_config` recebe um env dict. Um teste que escreva JEV_*/MG_DECISION_*/
+#    TYPESAFE_* em `os.environ` sem restaurar muda os thresholds padrão de TODOS os testes seguintes
+#    (observado: `JEV_RELEVANCE_THRESHOLD=0.9` vazado fez `test_project_isolation_of_thresholds_and_cache`
+#    esperar 0.78 e obter 0.9). O ciclo de vida `env` de tests/test_jev_setup.py remove as chaves com
+#    `monkeypatch.delenv` no teardown — mas isso REGISTRA o valor vazado como "original" e a finalização do
+#    monkeypatch o regrava em `os.environ` DEPOIS da finalização de qualquer fixture; por isso a limpeza
+#    precisa acontecer num hook de teardown APÓS todo o desmonte (wrapper abaixo), restaurando o estado
+#    PRÍSTICO da sessão (mesmo padrão de `_isolated_local_files`, mas com snapshot único por sessão:
+#    um snapshot por teste regravaria o valor que o teste anterior acabou de vazar).
+# 2. `STATE.gateway`: `app.api.decision._engine()` faz `bind_jev(STATE.require_gateway().jev)` — um gateway
+#    deixado setado por um teste anterior (ex.: o lifespan de `create_app()` num TestClient, que nunca
+#    limpa `STATE.gateway` no shutdown) substitui o dublê do teste em questão pelo JEV real do gateway
+#    estranho, que falha offline e produz UNJUDGED (observado em `test_rest_routes_and_privacy`).
+#    Snapshot antes do teste / restore depois preserva gateways legítimos de fixtures de escopo maior.
+_DECISION_ENV_PRISTINE: dict[str, str | None] = {}
+_DECISION_ENV_PREFIXES = ("JEV_", "MG_DECISION_")
+_DECISION_ENV_EXACT = ("TYPESAFE_API_KEY", "TYPESAFE_BASE_URL")
+_GATEWAY_BEFORE: dict[str, object] = {}
+
+
+def _decision_env_keys() -> list[str]:
+    return [k for k in os.environ
+            if k.startswith(_DECISION_ENV_PREFIXES) or k in _DECISION_ENV_EXACT]
+
+
+def _restore_decision_env() -> None:
+    for k in _decision_env_keys():
+        pristine = _DECISION_ENV_PRISTINE.get(k)
+        if pristine is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = pristine
+
+
+def pytest_configure(config):
+    seed = ci_support.resolve_seed(config.getoption("--shuffle-seed"))
+    config._anamnesia_seed = seed
+    # Estado global de decisão PRÍSTICO da sessão (antes de qualquer teste tocar `os.environ`).
+    _DECISION_ENV_PRISTINE.clear()
+    _DECISION_ENV_PRISTINE.update({k: os.environ.get(k) for k in _decision_env_keys()})
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_setup(item):
+    try:
+        from app.core.state import STATE
+        _GATEWAY_BEFORE[item.nodeid] = STATE.gateway
+    except Exception:  # noqa: BLE001
+        _GATEWAY_BEFORE.pop(item.nodeid, None)
+    yield
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_teardown(item, nextitem):
+    yield  # roda DEPOIS de todo o desmonte de fixtures (incl. finalização do monkeypatch)
+    _restore_decision_env()
+    try:
+        # Memoria de verificacao de conexoes (_records) persiste estado entre testes;
+        # esvazia a cada teste (isolamento de shuffle, ANA-129).
+        from app.connections.verify import reset as _verify_reset
+        _verify_reset()
+    except Exception:  # noqa: BLE001
+        pass
+    saved = _GATEWAY_BEFORE.pop(item.nodeid, None)  # `None` também é estado legítimo a restaurar
+    if saved is None and "app.core.state" not in sys.modules:
+        return
+    try:
+        from app.core.state import STATE
+        if STATE.gateway is not saved:
+            STATE.gateway = saved
+    except Exception:  # noqa: BLE001
+        pass
 
 
 @pytest.fixture(autouse=True)

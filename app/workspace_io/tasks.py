@@ -485,6 +485,21 @@ def _read_import_file(path: Path, root: Path, scan: ScanResult) -> str | None:
         return None
 
 
+
+
+def _fs_folds_case(root: Path) -> bool:
+    """Detect a case-insensitive filesystem (macOS default); Windows is handled by normcase."""
+    if os.name != "posix":
+        return False
+    try:
+        for child in list(root.iterdir())[:50]:
+            variant = child.with_name(child.name[:1].swapcase() + child.name[1:])
+            if variant != child and variant.exists():
+                return True
+    except OSError:
+        return False
+    return False
+
 def gather_import_path(root: Path, rel: str, job: Job) -> list[tuple[str, str]]:
     """Select imports under the ORIGINAL root policy, including explicit files."""
     from app.terminals.projects import PathEscapeError, safe_join
@@ -498,10 +513,18 @@ def gather_import_path(root: Path, rel: str, job: Job) -> list[tuple[str, str]]:
     selected = os.path.normcase(Path((rel or ".").replace("\\", "/")).as_posix())
     if rel in ("/", "\\"):
         selected = "."
+    folds = _fs_folds_case(Path(root))
+    selected_lower = selected.lower()
+
     def include(name: str) -> bool:
+        if not name.lower().endswith(IMPORT_EXT):
+            return False
         matched = os.path.normcase(name)
-        return name.lower().endswith(IMPORT_EXT) and (
-            selected == "." or matched == selected or matched.startswith(selected + os.sep))
+        if selected == "." or matched == selected or matched.startswith(selected + os.sep):
+            return True
+        # Case-insensitive filesystems (macOS default, Windows shares) must still match.
+        return folds and (matched.lower() == selected_lower
+                          or matched.lower().startswith(selected_lower + os.sep.lower()))
     scan = scan_project(root, max_files=MAX_IMPORT_ITEMS * 20,
                         max_file_bytes=min(MAX_IMPORT_FILE_BYTES, DEFAULT_MAX_FILE_BYTES),
                         is_cancelled=lambda: job.cancelled, include_file=include)

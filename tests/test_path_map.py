@@ -73,6 +73,46 @@ def test_translate_variants_with_spaces(maps, raw):
     assert tr.host_path == "C:/Users/YourUser/Projetos_AI/Meu Projeto"
 
 
+@pytest.mark.parametrize("names,comp,expected", [
+    (["Meu Projeto"], "meu projeto", "/projects/Meu Projeto"),
+    (["Meu Projeto"], "Meu Projeto", "/projects/Meu Projeto"),
+    (["Meu Projeto", "meu projeto"], "meu projeto", "/projects/meu projeto"),
+    (["Meu Projeto", "MEU PROJETO"], "meu projeto", None),
+    ([], "meu projeto", None),
+])
+def test_step_posix_case_insensitive_lookup(monkeypatch, names, comp, expected):
+    """macOS realpath can retain input case even though lexists succeeds."""
+    import posixpath
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    listing = MagicMock()
+    listing.__enter__.return_value = iter(SimpleNamespace(name=name) for name in names)
+    fake_os = SimpleNamespace(
+        path=SimpleNamespace(join=posixpath.join, lexists=lambda p: bool(names)),
+        scandir=lambda base: listing,
+    )
+    monkeypatch.setattr(path_map, "os", fake_os)
+    if expected is None:
+        with pytest.raises(PathMapError) as exc:
+            path_map._step("/projects", comp)
+        assert exc.value.code == "path_not_found"
+    else:
+        assert path_map._step("/projects", comp) == expected
+
+
+def test_native_posix_case_sensitive_not_casefolded(tmp_path, monkeypatch):
+    if os.name == "nt":
+        pytest.skip("native POSIX case-sensitive filesystem required")
+    (tmp_path / "Meu Projeto").mkdir()
+    lower = tmp_path / "meu projeto"
+    if lower.exists():
+        pytest.skip("filesystem is case-insensitive")
+    with pytest.raises(PathMapError) as exc:
+        resolve_project_path(str(lower), roots=[])
+    assert exc.value.code == "path_not_found"
+
+
 def test_translate_accents_nfd_vs_nfc(maps):
     import unicodedata
     raw = "C:\\Users\\YourUser\\Projetos_AI\\" + unicodedata.normalize("NFD", "Café Açaí")

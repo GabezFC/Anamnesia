@@ -1,7 +1,9 @@
 """E2E real: registrar projeto Windows via ANAMNESIA_PATH_MAP -> remover (cancelar, confirmar) -> pasta intacta.
 
     ANAMNESIA_E2E=1 <python com playwright> -m pytest tests/e2e/test_workspace_remove_e2e.py -q
-Usa a pasta de demonstração (dados falsos) C:/Users/YourUser/Projetos_AI/_wio_ui_demo; criada aqui se faltar.
+Usa uma pasta de demonstração (dados falsos) FORA do repositório e portável: por padrão
+`<tempdir>/_wio_ui_demo` (tempdir do sistema — isenta do project_guard em qualquer OS);
+`E2E_DEMO_DIR` sobrepõe. Criada aqui se faltar.
 """
 from __future__ import annotations
 
@@ -10,6 +12,7 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -22,7 +25,7 @@ pw = pytest.importorskip("playwright.sync_api")
 ROOT = Path(__file__).resolve().parents[2]
 SHOTS = ROOT / "reports" / "workspace-e2e"
 TOKEN = "e2e-token"
-DEMO = Path(os.environ.get("E2E_DEMO_DIR", "C:/Users/YourUser/Projetos_AI/_wio_ui_demo"))
+DEMO = Path(os.environ.get("E2E_DEMO_DIR") or Path(tempfile.gettempdir()) / "_wio_ui_demo")
 WIN = DEMO.as_posix()
 
 

@@ -1156,6 +1156,31 @@
   max-width: 100%;
   line-height: 1.6;
 }
+
+/* Topbar encolhivel: em viewports estreitos (390px) ou fontes com metrica mais larga
+   (ex.: Liberation Sans no Linux) a soma dos min-content de breadcrumb + busca + botao
+   "Comparar Modelos" empurrava .main-viewport (scrollWidth > clientWidth). Cada secao
+   pode encolher e o texto corta com ellipsis em vez de estourar o viewport. */
+.topbar-left,
+.topbar-center,
+.topbar-right,
+.breadcrumb-trail,
+.command-trigger-btn,
+.app-topbar .btn-secondary-highlight {
+  min-width: 0;
+}
+.breadcrumb-trail span,
+.command-trigger-btn .u-598951 span,
+.app-topbar .btn-secondary-highlight span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.command-trigger-btn .u-598951,
+.app-topbar .btn-secondary-highlight {
+  overflow: hidden;
+}
 .md-content :is(h1, h2, h3, h4, h5, h6, p, li, blockquote, dd, dt, a, td, th, figcaption),
 .markdown-body :is(h1, h2, h3, h4, h5, h6, p, li, blockquote, dd, dt, a, td, th, figcaption),
 .prose :is(h1, h2, h3, h4, h5, h6, p, li, blockquote, dd, dt, a, td, th, figcaption) {
