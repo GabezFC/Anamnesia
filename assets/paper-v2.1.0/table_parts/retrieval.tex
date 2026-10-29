@@ -1,0 +1,9 @@
+\begin{table}[!htbp]\caption{Retrieval-only benchmark of 24 Oct 2026 (D2, test split, 56 queries/52 answerable, 5 measured repetitions, tiktoken \texttt{cl100k\_base}). Latency is p50 of the client round trip (MCP stdio for \emph{With}; in-process for \emph{Without}).}\label{tab:retrieval}\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrr@{}}\toprule Arm & Ctx tok & R@5 & R@10 & Ans.\ in ctx & Cold ms & Hot ms\\\midrule
+Without (OFF-A) & 11{,}207 & 0.77 & 0.83 & 0.83 & 0.7 & 0.7\\
+Section BM25 @ auto budget (OFF-B) & 1{,}437 & 0.67 & 0.73 & 0.67 & 5.6 & 4.3\\
+Baseline & 2{,}541 & 0.89 & 0.97 & 0.83 & 21.9 & 21.6\\
+Graphify hybrid & 2{,}333 & 0.89 & 0.97 & 0.56 & 14.7 & 12.3\\
+Auto + optimizer & 1{,}589 & 0.85 & 0.97 & 0.81 & 45.6 & 9.9\\
+Laya (local{,} CPU) & 6{,}715 & 0.73 & 0.75 & 0.83 & 3970.9 & 4062.6\\
+\bottomrule\end{tabular}}\end{table}

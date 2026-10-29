@@ -1,0 +1,9 @@
+{
+  "figure": "fig_accuracy_by_model",
+  "language": "en",
+  "text_count": 22,
+  "text_overlaps": [],
+  "box_overflows": [],
+  "clipped_boxes": [],
+  "scope": "Rendered text bounding boxes and diagram-box containment. Does not prove arrow/curve clearance."
+}

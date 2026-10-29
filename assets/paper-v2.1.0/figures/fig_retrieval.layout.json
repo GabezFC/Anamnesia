@@ -1,0 +1,9 @@
+{
+  "figure": "fig_retrieval",
+  "language": "en",
+  "text_count": 54,
+  "text_overlaps": [],
+  "box_overflows": [],
+  "clipped_boxes": [],
+  "scope": "Rendered text bounding boxes and diagram-box containment. Does not prove arrow/curve clearance."
+}

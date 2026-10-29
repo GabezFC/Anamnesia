@@ -1,0 +1,11 @@
+condition,dataset,pass_,p50_ms
+off_a,d2,cold,0.735
+off_a,d2,hot,0.698
+on_baseline_raw,d2,cold,21.915
+on_baseline_raw,d2,hot,21.634999999999998
+on_full,d2,cold,45.63
+on_full,d2,hot,9.89
+on_graphify_raw,d2,cold,14.69
+on_graphify_raw,d2,hot,12.254999999999999
+on_laya,d2,cold,3970.855
+on_laya,d2,hot,4062.6

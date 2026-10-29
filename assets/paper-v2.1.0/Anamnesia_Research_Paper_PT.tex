@@ -1,0 +1,335 @@
+\documentclass[conference,onecolumn,11pt]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{cite}
+\usepackage{microtype}
+\graphicspath{{figures_pt/}}
+\input{layout-common}
+\usepackage[brazil]{babel}
+\addto\captionsbrazil{\renewcommand{\abstractname}{Resumo}\renewcommand{\refname}{Referências}}
+\renewcommand{\IEEEkeywordsname}{Palavras-chave}
+\newcommand{\anam}{Anam\-n\'esia}
+\newcommand{\todo}[1]{\textcolor{red}{[#1]}}
+\hyphenation{Graph-ify OpenRouter}
+
+\begin{document}
+
+\title{Anam\-n\'esia: Um Gateway de Memória Independente de Agente para Recuperação de Contexto Persistente, Otimização de Tokens e Sistemas de IA Conscientes de Custos}
+
+\author{\IEEEauthorblockN{Gabriel (GabezFC)}
+\IEEEauthorblockA{\textit{Projeto Anam\-n\'esia (independente)}\\
+Relatório técnico v2.1.0 (independente; não é uma publicação IEEE)\\
+Preparado com o agente Hermes, 25 de outubro de 2026\\
+Repositório: \texttt{GabezFC/Anamnesia}}}
+
+\maketitle
+
+\begin{abstract}
+Agentes de programação e assistentes de conversação pagam repetidamente para reler as mesmas notas, decisões e informações de projetos, e perdem esse conhecimento quando uma sessão termina. \anam{} é um \emph{gateway de memória} aberto e independente de agente: um serviço local situado entre um agente e um cofre Markdown/Obsidian, que recupera os poucos trechos relevantes para uma consulta com SQLite FTS5/BM25 (opcionalmente enriquecidos por um grafo de conhecimento do Graphify e um avaliador pago de relevância, JEV), os recorta e remove duplicatas dentro de um orçamento de tokens, e retorna um contexto auditável, com sinalização de injeção, por meio do Model Context Protocol (MCP) ou de uma API REST, enquanto registra tokens e custos em um livro de registros. Este artigo (i) documenta a arquitetura implementada a partir do código-fonte, (ii) separa as contribuições originais das funcionalidades fornecidas por componentes externos e (iii) relata um benchmark generativo real, executado anteriormente: 82 perguntas sobre um recorte sanitizado do próprio cofre do autor, nove modelos (oito remotos via OpenRouter, um local via Ollama), cinco pipelines de contexto e 3\,797 chamadas de geração registradas. Em comparação com uma referência BM25 de notas completas, o pipeline padrão (recuperação baseline mais o otimizador) reduziu os tokens de entrada informados pelo provedor de 11{,}103 para 1{,}776 por consulta e o custo efetivo dos oito modelos remotos em 81.7\%, enquanto a acurácia agregada, pontuada por um avaliador LLM, foi estatisticamente indistinguível (86.9\% contra\ 86.6\%; $\Delta{=}{+}0.3$ pp pareado, IC de 95\% $[-7.4,+8.0]$). Três resultados negativos ou qualificadores são igualmente importantes: o pipeline híbrido Graphify perdeu 15.0 pp de acurácia; o avaliador pago JEV acrescentou custo sem ganho de acurácia; e uma reanálise estratificada mostra que a paridade do resultado principal esconde uma compensação---nas perguntas em que a referência recuperou um contexto, \anam{} foi 6.9 pp \emph{menos} acurado, enquanto foi muito melhor nas perguntas em que o mecanismo de abstenção da referência não retornou nada. A persistência da memória entre sessões reais de agentes e a recuperação após conversas longas \emph{não} foram medidas; nós as declaramos não comprovadas. O pacote público do artigo, em \texttt{assets/paper-v2.1.0/}, contém os fontes, as figuras e os PDFs; os logs originais e os dados de execução permanecem locais em \texttt{data/reports-out}.
+\end{abstract}
+
+\begin{IEEEkeywords}
+gateway de memória, geração aumentada por recuperação, Model Context Protocol, BM25, grafo de conhecimento, otimização de tokens, contabilização de custos de LLM, memória de agentes
+\end{IEEEkeywords}
+
+%=====================================================================
+\section{Introdução}
+Agentes baseados em grandes modelos de linguagem (LLM) não mantêm estado entre sessões e pagam por token dentro delas. Disso decorrem dois problemas práticos. Primeiro, a \emph{continuidade}: decisões, fatos e convenções estabelecidos em sessões anteriores precisam ser fornecidos novamente, geralmente colando notas ou arquivos completos no prompt. Segundo, o \emph{custo}: tokens de entrada dominam a cobrança de cargas de trabalho intensivas em recuperação, e contextos longos também podem degradar a qualidade das respostas \cite{liu2024lostmiddle}. Uma resposta conhecida é a geração aumentada por recuperação (RAG) \cite{lewis2020rag,gao2023ragsurvey}; sistemas de memória específicos de agentes a estendem com escrita, consolidação e paginação \cite{packer2023memgpt,park2023generative,zhong2024memorybank,chhikara2025mem0}.
+
+\anam{} (anteriormente \emph{Memory Gateway}) visa a um ponto restrito e prático nesse espaço de projeto: um gateway \emph{local}, \emph{independente de agente} e \emph{auditável} para um cofre Markdown com curadoria humana. Ele não treina modelos e não exige embeddings. A recuperação é lexical (SQLite FTS5 com ordenação BM25 \cite{sqlitefts5,robertson2009bm25}), opcionalmente combinada com um grafo de conhecimento de código/documentos produzido pela ferramenta externa Graphify \cite{graphify} e com um avaliador pago de relevância/injeção, \emph{JEV}, oferecido pela TypeSafe AI \cite{typesafedocs}. Os resultados são entregues por MCP \cite{mcpspec} ou REST (FastAPI \cite{fastapi}), para que qualquer agente que se comunique por MCP---Hermes, Claude Code, Codex, entre outros---possa usar a mesma memória.
+
+\textbf{Contribuições.} (1) Uma descrição do sistema implementado no nível do código-fonte (Seções~\ref{sec:arch}--\ref{sec:persist}), com oito diagramas que refletem os caminhos do código. (2) Um modelo de custos que atribui cada etapa, inclusive o avaliador JEV, ao pipeline que a utiliza (Seção~\ref{sec:cost}). (3) Um benchmark generativo documentado, incluindo resultados negativos (Seções~\ref{sec:method}--\ref{sec:results}); os fontes, os dados agregados das figuras, os scripts de visualização e os PDFs integram o pacote público \texttt{assets/paper-v2.1.0/}, enquanto os logs originais permanecem locais em \texttt{data/reports-out}. (4) Uma separação explícita entre benefícios demonstrados e capacidades ainda não comprovadas (Seções~\ref{sec:limits}, \ref{sec:future}).
+
+\textbf{O que este artigo não afirma.} Ele não afirma superioridade sobre recuperadores densos, sistemas graph-RAG ou produtos comerciais de memória (nenhum deles foi avaliado), nem afirma que a memória de agentes entre sessões melhora o sucesso em tarefas (isso não foi medido).
+
+%=====================================================================
+\section{Fundamentos e Trabalhos Relacionados}
+\textbf{RAG e recuperação lexical.} RAG condiciona a geração a trechos recuperados \cite{lewis2020rag}; revisões catalogam opções de segmentação, recuperação e reordenação \cite{gao2023ragsurvey}. Recuperadores densos \cite{karpukhin2020dpr} dominam muitos benchmarks de domínio aberto, mas BM25 \cite{robertson2009bm25} continua sendo uma referência forte e sem treinamento, especialmente para pequenos corpora privados com identificadores exatos (nomes de testes, flags, números de versão), comuns em notas de engenharia. Métodos de fusão de ordenações, como RRF \cite{cormack2009rrf}, combinam sinais lexicais e de outros tipos; \anam{} implementa um modo RRF, mas o desativa por padrão.
+
+\textbf{Recuperação baseada em grafos.} GraphRAG constrói um grafo de entidades e resumos de comunidades para sumarização orientada a consultas \cite{edge2024graphrag}; HippoRAG aplica PageRank personalizado sobre um grafo de conhecimento para memória de longo prazo \cite{gutierrez2024hipporag,page1999pagerank}. A ferramenta Graphify usada aqui é de outra natureza: mapeia uma pasta para um grafo com ASTs de tree-sitter para código e extração conduzida por assistente para documentos, e suas arestas são marcadas como extraídas ou inferidas \cite{graphify}. Conforme medido pelos autores de \anam{} em 27 de setembro de 2026, o grafo produzido a partir do cofre contém apenas rótulos de páginas e títulos, nunca o texto do corpo (Seção~\ref{sec:graphify}).
+
+\textbf{Memória de agentes.} MemGPT gerencia uma hierarquia de camadas de memória \cite{packer2023memgpt}; Generative Agents armazenam fluxos de experiências e refletem sobre eles \cite{park2023generative}; MemoryBank acrescenta curvas de esquecimento \cite{zhong2024memorybank}; Mem0 extrai e consolida fatos \cite{chhikara2025mem0}. LoCoMo e LongMemEval medem memória conversacional de longo horizonte \cite{maharana2024locomo,wu2025longmemeval}. \anam{} se diferencia por ser independente de agente e baseado em arquivos (as notas continuam sendo Markdown comum), e \emph{não} foi avaliado nesses benchmarks.
+
+\textbf{Otimização de contexto e custos.} Compressores de prompts, como LLMLingua \cite{jiang2023llmlingua,jiang2023longllmlingua}, encurtam textos com um modelo de linguagem pequeno; FrugalGPT e RouteLLM reduzem gastos por encadeamento ou roteamento entre modelos \cite{chen2023frugalgpt,ong2024routellm}. \anam{} reduz custos \emph{enviando menos contexto}; seus módulos de roteamento e compressão existem, mas são opcionais e não fizeram parte do benchmark. A remoção de quase duplicatas usa ideias de SimHash e MinHash \cite{charikar2002simhash,manku2007nearduplicates,broder1997resemblance}.
+
+\textbf{LLM como avaliador.} Usar um LLM para pontuar respostas livres é comum e apresenta vieses conhecidos \cite{zheng2023judge}; nós o utilizamos, documentamos um defeito de pontuação que ele apresentou e fornecemos uma análise de sensibilidade (Seção~\ref{sec:strata}).
+
+%=====================================================================
+\section{Arquitetura do Sistema}\label{sec:arch}
+A Fig.~\ref{fig:arch} mostra o sistema conforme implementado. Agentes acessam o gateway por MCP sobre stdio (conjunto padrão: a ferramenta única \texttt{memory\_search}; o conjunto completo tem sete ferramentas, com \texttt{memory\_save} e \texttt{memory\_feedback} habilitadas opcionalmente), por REST (cerca de 130 operações, com escritas protegidas por verificação de loopback, correspondência de Origin/Referer e um \texttt{X-MG-Token}), ou por uma ferramenta de linha de comando (\texttt{anamnesia}: \texttt{doctor}, \texttt{start}, \texttt{mcp}). Uma ponte opcional MCP-para-REST encaminha apenas \texttt{memory\_search}. Todos os caminhos entram no mesmo objeto em processo, \texttt{MemoryGateway}, cuja implementação de busca executa as etapas detalhadas na Seção~\ref{sec:retrieval}.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_architecture.pdf}
+\caption{Arquitetura do sistema conforme implementada. Caixas tracejadas são opcionais ou experimentais. O espelho do cofre é somente leitura; notas escritas por agentes ficam em uma pasta separada \texttt{saved\_context/}.}\label{fig:arch}
+\end{figure}
+
+\textbf{Estado.} O cofre do usuário é espelhado byte a byte em um diretório de dados e aberto somente para leitura por chamadas confinadas de \texttt{open(rb)}; fluxos de dados alternativos do NTFS e nomes reservados de dispositivos são rejeitados. Notas escritas por agentes são armazenadas separadamente em \texttt{saved\_context/} (Seção~\ref{sec:persist}). Um arquivo SQLite (\texttt{benchmark.db}) mantém o \emph{livro de registros} (\texttt{runs}, \texttt{candidates}, \texttt{budgets}, \texttt{routing\_decisions}, \texttt{verification\_results}, \texttt{jev\_cache} e outros); um segundo arquivo mantém estatísticas de uso. Os campos de tokens e custos não são colunas, mas chaves de um blob JSON (\texttt{metrics\_json}: \texttt{jev\_input\_tokens}, \texttt{jev\_cost}, \texttt{context\_tokens}, \texttt{total\_tokens\_spent}, \dots).
+
+\textbf{Componentes e procedência.} A Tabela~\ref{tab:credits} separa o que \anam{} implementa do que utiliza.
+
+\begin{table}[t]\caption{Papel e procedência dos componentes. ``Original'' significa implementado no repositório de \anam{}.}\label{tab:credits}\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\columnwidth}{@{}p{0.22\columnwidth}Xp{0.25\columnwidth}@{}}\toprule
+Componente & Papel em \anam{} & Procedência\\\midrule
+SQLite FTS5 & índice lexical, ordenação \texttt{bm25()} \cite{sqlitefts5} & externo\\
+Graphify CLI & constrói \texttt{graph.json} a partir do espelho do cofre \cite{graphify} & externo (Apache-2.0)\\
+Recuperação híbrida & sementes BM25 + expansão BFS no grafo & original\\
+Otimizador & corte, quase duplicatas, sinalização de injeção, cache, orçamento & original\\
+JEV (TypeSafe) & avaliador pago de relevância/injeção \cite{typesafedocs} & serviço externo; lógica cliente original\\
+Servidor MCP & interface de ferramentas para agentes \cite{mcpspec} & protocolo externo; servidor original\\
+FastAPI/\allowbreak uvicorn & camada REST \cite{fastapi} & externo\\
+Ollama & ambiente de execução de modelo local no benchmark \cite{ollama} & externo\\
+Registros/\allowbreak modelo de custos & contabilização de tokens e custos & original\\
+Laya & modelo local opcional de relevância \cite{laya} & externo, opcional\\
+Decision Engine & estrutura de manutenção/descarte independente de provedor & original, \emph{experimental}\\\bottomrule
+\end{tabularx}\end{table}
+
+A lista de dependências Python do repositório é curta (FastAPI, uvicorn, \texttt{mcp}, \texttt{httpx}, Pydantic \cite{pydantic}, \texttt{typesafe-sdk}, PyYAML, \texttt{anthropic}); em particular, \emph{não} há pacote BM25 separado nem modelo de embeddings, e \texttt{tiktoken} \cite{tiktoken} não é uma dependência de execução (foi usado somente pelo aparato de benchmark para uma contagem independente de tokens).
+
+%=====================================================================
+\section{Recuperação e Otimização de Memória}\label{sec:retrieval}
+\subsection{Caminho da consulta}
+A Fig.~\ref{fig:flow} resume as etapas de uma busca; sua ordem é fixa no gateway: (1) uma verificação de atualização que compara um manifesto de metadados stat do cofre no máximo a cada \texttt{MG\_VAULT\_REFRESH\_S}\,$=5$\,s e reconstrói o índice quando há mudanças (limpando os caches); (2) classificação da consulta em SIMPLE/MEDIUM/COMPLEX/AMBIGUOUS e roteamento (todas as classes usam o pipeline \texttt{baseline} por padrão, portanto \texttt{pipeline=auto} resolve para baseline, a menos que a política opcional \emph{economy} selecione um pipeline JEV); (3) proteção opcional de orçamento; (4) consulta ao cache de resultados; (5) pipeline de recuperação; (6) nova verificação de escopo; (7) pós-filtro; (8) construção do contexto; (9) gravação de métricas/registros e inserção no cache.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_query_flow.pdf}
+\caption{Fluxo da consulta à resposta. JEV participa apenas dos pipelines \texttt{graphify\_jev*}.}\label{fig:flow}
+\end{figure}
+
+\subsection{Recuperação lexical}
+As notas são divididas em seções (título mais corpo) e indexadas em uma tabela virtual FTS5 com o tokenizador \texttt{unicode61 remove\_diacritics 2}. A ordenação usa a função nativa \texttt{bm25(sec,0,w,1,0,0)}, com peso de título $w=2.0$ e peso de corpo 1. O \texttt{bm25()} do SQLite implementa a forma Okapi \cite{sqlitefts5,robertson2009bm25}
+\begin{equation}
+\begin{aligned}
+s(d,q)={}&\sum_{t\in q}\mathrm{IDF}(t)\\
+&{}\cdot\frac{f(t,d)\,(k_1+1)}{f(t,d)+k_1\bigl(1-b+b\,\tfrac{|d|}{\mathrm{avgdl}}\bigr)},
+\end{aligned}\label{eq:bm25}
+\end{equation}
+onde SQLite fixa $k_1{=}1.2$ e $b{=}0.75$; o código de \anam{} não os sobrescreve (esta é nossa inferência a partir do código, não uma declaração explícita nele). SQLite retorna pontuações com sinal invertido, que \anam{} reverte. Até \texttt{MAX\_CANDIDATES}\,$=100$ seções são mantidas por consulta.
+
+\subsection{Recuperação híbrida Graphify}\label{sec:graphify}
+A CLI externa Graphify (\texttt{graphify update}, somente AST neste uso) transforma o espelho do cofre em \texttt{graph.json}. Uma nota de projeto no repositório registra que, no cofre do autor, esse grafo continha 1,109 nós (74 páginas e 1,035 títulos) e \emph{nenhum texto de corpo}, de modo que iniciar apenas pelos rótulos do grafo recuperou 8 de 10 perguntas de desenvolvimento e falhou quando a resposta estava apenas no corpo de uma nota. Por isso, \anam{} implementa sua própria busca \emph{híbrida} (Fig.~\ref{fig:graph}): os primeiros dez arquivos distintos de BM25 são sementes textuais; a expansão em largura no grafo acrescenta até 15 arquivos relacionados. Candidatos-semente recebem a pontuação em escada de posições $1.0-0.45\,r/n_{\text{seeds}}$ (faixa $1.0\to\approx0.55$), e candidatos apenas do grafo recebem $0.5-0.2\,i/n_{\text{rel}}$ ($0.5\to0.3$). A expansão por PageRank personalizado ($\alpha{=}0.85$, 30 iterações, top-15) existe, mas fica desativada por padrão. Essas pontuações são \emph{posições, não probabilidades de relevância}, um fato com consequências na Seção~\ref{sec:results}.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_graphify_jev.pdf}
+\caption{Recuperação híbrida Graphify e avaliador JEV. O grafo fornece estrutura; BM25 fornece pontos de entrada endereçáveis por conteúdo.}\label{fig:graph}
+\end{figure}
+
+\subsection{Camada de Otimização de Memória}\label{sec:opt}
+Após a recuperação, cada trecho candidato tem seus espaços em branco normalizados, é truncado a \texttt{SNIPPET\_MAX\_TOKENS}\,$=300$ e recebe um hash. O pós-filtro (Fig.~\ref{fig:opt}) aplica, nesta ordem:
+\begin{enumerate}
+\item \textbf{Corte adaptativo} (somente pipelines gratuitos; consultas SIMPLE/MEDIUM): manter o candidato $i$ se $i<3$ ou $\mathrm{score}_i\ge 0.5\cdot\max_j \mathrm{score}_j$. Como as pontuações BM25 de baseline não têm limite superior, enquanto as do Graphify formam uma escada de posições, a mesma razão atua de modo diferente nos dois pipelines.
+\item \textbf{Colapso de quase duplicatas}: SimHash de 64 bits com 8 bandas LSH (Hamming $\le12$) e um pré-filtro Jaccard de 4-shingles selecionam pares de candidatos, confirmados por uma razão de similaridade de sequências $\ge 0.88$ \cite{charikar2002simhash,manku2007nearduplicates,broder1997resemblance}. Uma seção por nota é mantida por padrão (\texttt{DEDUP\_MAX\_PER\_NOTE}\,$=1$).
+\item \textbf{Sinalização de injeção}: uma triagem por expressões regulares (``inj-screen-v2'', inglês e português, normalizada em Unicode) marca notas suspeitas com um atributo de aviso. Ela \emph{sinaliza, mas nunca descarta}, e resultados sinalizados não são armazenados em cache.
+\item \textbf{Rebaixamento temporal e por conflito}: notas históricas ou conflitantes têm sua pontuação multiplicada por 0.5.
+\end{enumerate}
+O \emph{construtor de contexto} então ordena os candidatos, intercala-os por arquivo em round-robin, limita cada fonte a 1,500 tokens e preenche de forma gulosa um orçamento total de 6,000 tokens, descartando um bloco se restassem menos de 120 tokens. Cada bloco é envolvido em um elemento \texttt{<note source=\dots>}, e todo o contexto é declarado não confiável.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_optimization_layer.pdf}
+\caption{Camada de Otimização de Memória: operações de pós-filtro, cache de resultados e estimador de tokens.}\label{fig:opt}
+\end{figure}
+
+\textbf{Cache.} O cache de resultados é um LRU em processo (256 entradas, TTL de 900\,s), cuja chave reúne consulta canônica, pipeline, escopo, orçamento, resumo criptográfico da configuração e época do índice; a cada acerto, novos hashes dos arquivos entregues são calculados para detectar desatualização, e regras contra envenenamento recusam armazenar resultados sinalizados. \emph{Não} encontramos cache semântico baseado em embeddings para resultados de busca; o único cache com consultas normalizadas é o de vereditos do avaliador (termos da consulta mais hash do conteúdo da nota).
+
+\textbf{Estimativa de tokens.} Sem uma dependência de tokenizador, \anam{} estima $\hat n=\lceil \max(c/4,\,1.3w)\cdot 1.13\rceil$ a partir das contagens de caracteres e palavras, onde 1.13 é um fator de calibração para português que o próprio código descreve como não medido recentemente. Todas as contagens de tokens dos nossos resultados vêm do \emph{provedor} (\texttt{usage.prompt\_tokens}) ou de \texttt{tiktoken} (tamanho do contexto), não desse estimador.
+
+\subsection{Avaliador JEV e modelo de custos}\label{sec:cost}
+Nos pipelines \texttt{graphify\_jev*}, um pré-filtro lexical mantém os 8 primeiros candidatos, que JEV (modelo \texttt{jev-1.13.0}) pontua quanto à relevância e à injeção. Um candidato recebe \texttt{QUARANTINE} se injeção $\ge0.80$, \texttt{KEEP} se relevância $\ge0.78$, \texttt{REVIEW} se $\ge0.55$, ou é descartado nos demais casos; falhas do avaliador seguem \texttt{fail\_open} por padrão (candidatos não avaliados sobrevivem), e, se tudo for descartado, os 3 primeiros candidatos não avaliados são restaurados como rede de segurança. O ajuste por mínimos quadrados do repositório sobre dez requisições reais fornece
+\begin{equation}
+\begin{aligned}
+\hat n_{\mathrm{JEV}}&\approx 340\,R+209\,Q\quad\text{(tokens de entrada)},\\
+C_{\mathrm{JEV}}&=\frac{n_{\mathrm{JEV}}}{10^{6}}\cdot 0.042\ \text{US\$},
+\end{aligned}\label{eq:jev}
+\end{equation}
+para $R$ requisições HTTP e $Q$ perguntas avaliadas; tokens de saída são gratuitos na tarifa citada. O custo efetivo de um pipeline que atende a um modelo $m$ é, portanto,
+\begin{equation}
+\begin{aligned}
+C^{\text{with}}_m&=\sum_{q}\Bigl[C_{\mathrm{gen}}\bigl(m,\mathrm{ctx}_q\bigr)+C_{\mathrm{JEV}}(q)\Bigr],\\
+C^{\text{without}}_m&=\sum_{q}C_{\mathrm{gen}}\bigl(m,\mathrm{notes}_q\bigr),
+\end{aligned}\label{eq:cost}
+\end{equation}
+com recuperação e otimização locais custando zero dólares (apenas CPU; energia não medida). Uma economia é $1-C^{\text{with}}/C^{\text{without}}$. A redução de contexto, isoladamente, \emph{não} é economia a menos que a Eq.~\eqref{eq:cost} a confirme; a Fig.~\ref{fig:costacct} mostra o que é cobrado. O Decision Engine experimental encapsula JEV e outros provedores em uma interface única com cache e alternativa por operação; ele não foi usado em nenhum experimento relatado aqui, e sua própria telemetria identifica os dólares de JEV como desconhecidos.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_cost_accounting.pdf}
+\caption{Contabilização de custos usada em todo o artigo. O avaliador da avaliação é uma despesa adicional do experimento e é excluído de ambos os braços.}\label{fig:costacct}
+\end{figure}
+
+%=====================================================================
+\section{Memória Persistente e Integração com Agentes}\label{sec:persist}
+\textbf{Modelo de armazenamento.} Com \texttt{MG\_MCP\_SAVE=1}, \texttt{memory\_save} grava uma nota Markdown com frontmatter YAML (projeto, confiança, confiabilidade e contadores de feedback) em \texttt{saved\_context/}, nunca no cofre do usuário. As escritas são atômicas (arquivo temporário, \texttt{fsync}, \texttt{os.replace}) sob um bloqueio de arquivo entre processos (\texttt{msvcrt.locking} no Windows, \texttt{fcntl.flock} nos demais sistemas). Gravações passam por uma validação de projeto, limites de tamanho e frequência, e um detector de segredos que rejeita textos semelhantes a segredos. A pasta é montada como uma raiz extra somente leitura do índice, de modo que uma atualização (Fig.~\ref{fig:persist}) torna uma nota salva recuperável por buscas posteriores, inclusive em outros processos e sessões. \texttt{memory\_feedback} ajusta a confiança de uma nota em $+0.05$ (útil), $-0.2$ (errada) ou $-0.05$ (desatualizada); uma ordenação composta (``v2'') que a utiliza é opcional.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_persistence_cycle.pdf}
+\caption{Ciclo de memória persistente. O mecanismo está implementado; seu benefício de ponta a ponta para agentes não foi medido.}\label{fig:persist}
+\end{figure}
+
+\textbf{Isolamento.} Buscas aceitam um escopo como \texttt{projeto:X}; \texttt{MG\_SCOPE} pode fixar uma sessão de modo que ferramentas possam apenas \emph{restringi-lo}. Por padrão, o escopo é aplicado após o corte dos 100 primeiros candidatos, portanto um escopo restrito pode retornar menos resultados do que os existentes naquele projeto. Uma nova verificação de defesa em profundidade conta e bloqueia resultados vazados.
+
+\textbf{Integração com agentes.} A Fig.~\ref{fig:agents} mostra os caminhos de comunicação. Existem adaptadores para Hermes, Claude Code e Codex; OpenCode tem apenas detecção e não foi validado; não encontramos integração com Cursor. Modelos locais e remotos são acessados por um cliente genérico compatível com OpenAI (adaptadores Ollama, vLLM, OpenRouter, OpenAI, Anthropic; vLLM não testado contra um servidor real). Leituras na vinculação loopback padrão não precisam de token; rotas de alteração exigem cliente loopback, Origin e Referer correspondentes, e \texttt{X-MG-Token}. Notas recuperadas carregam \texttt{trust="untrusted"}. O painel no navegador usa módulos ES puros com um roteador por hash e sem etapa de compilação.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_agent_mcp_gateway.pdf}
+\caption{Comunicação entre agentes, servidor MCP e gateway.}\label{fig:agents}
+\end{figure}
+
+\textbf{Experimental ou inacabado.} As predefinições do Decision Engine, Colibr\`i (backend JEV local), compressores e reordenadores LLMLingua/Provence (ambiente Python separado) e o catálogo de notas SQLite não estão conectados à execução padrão; Laya executa em CPU, mas é opcional e, segundo as próprias medições do repositório, é um modelo fraco de relevância (AUC 0.64--0.68 contra 0.975 para sobreposição lexical).
+
+%=====================================================================
+\FloatBarrier
+\section{Metodologia Experimental}\label{sec:method}
+\textbf{Escopo das evidências.} Todos os resultados abaixo foram produzidos \emph{antes} deste artigo por duas execuções anteriores: um benchmark apenas de recuperação (24 de outubro de 2026) e um benchmark generativo (25 de outubro de 2026). Nenhum experimento foi executado para o artigo; tabelas e figuras são regeneradas a partir dos logs armazenados. Quando calculamos novas estatísticas a partir dos dados armazenados (bootstraps pareados, estratificação, uma regra de sensibilidade), isso é declarado, e os vereditos originais permanecem inalterados.
+
+\textbf{Corpus e perguntas.} \emph{D2} é um instantâneo sanitizado das notas reais de projetos do autor (português, 379 notas), congelado em uma cópia; o cofre original nunca recebeu escritas. As 82 perguntas têm fontes de referência verificáveis e respostas em expressões regulares: 36 factuais, 28 numéricas, 10 sem resposta, 3 ambíguas, 3 de duplicatas/versões, 2 de documentos longos. (Existe um corpus sintético reproduzível, D1, mas ele não foi usado generativamente.)
+
+\textbf{Braços (Fig.~\ref{fig:design}).} \emph{Sem}: um aparato independente (importações de \anam{} são bloqueadas por uma proteção) com BM25 sobre notas completas, entregando as 5 primeiras notas; seu limiar de abstenção $\theta$ é calibrado em uma partição de desenvolvimento, e ele retornou contexto vazio para 22 de 82 perguntas (10 sem resposta, 12 respondíveis). \emph{Com}: o \anam{} real via MCP stdio, com diretório pessoal novo e cópia do cofre por bloco, offline: \textbf{baseline} (seções BM25), \textbf{Graphify} (híbrido), \textbf{auto+otimizador} (\texttt{pipeline=auto}, que resolve para baseline, mais o otimizador e o cache) e \textbf{Graphify+JEV} (pago). Contextos foram produzidos uma vez (passagem fria) e reapresentados \emph{de forma idêntica byte a byte} a cada modelo, portanto o único fator variável entre os braços é o contexto.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_with_vs_without.pdf}
+\caption{Desenho experimental: prompt, modelo e temperatura idênticos; apenas o contexto difere.}\label{fig:design}
+\end{figure}
+
+\textbf{Geração.} Um prompt de sistema fixo instrui o modelo a responder apenas com base no contexto, citar fontes e, caso contrário, responder ``N\~ao encontrei essa informa\c{c}\~ao no contexto''. Temperatura 0, seed 42, 512 tokens de saída, uma repetição por célula. Oito modelos via OpenRouter \cite{openrouter} (gpt-4o-mini, gpt-4.1-mini, gemini-2.5-flash-lite, deepseek-chat-v3.1, llama-3.3-70b-instruct, qwen3-235b-a22b-2507, mistral-small-3.2-24b-instruct, claude-haiku-4.5) e um modelo local (qwen3.5:9b via Ollama em uma RTX\,3060 compartilhada com outros processos). O custo remoto é o \texttt{usage.cost} informado pelo provedor; o custo JEV é \emph{calculado} (Eq.~\ref{eq:jev}); nenhuma fatura da TypeSafe estava disponível.
+
+\textbf{Pontuação.} Um avaliador LLM independente (gpt-4.1-mini, temperatura 0) comparou cada resposta com o trecho de referência e retornou CORRECT, INCORRECT ou ABSTAIN (para perguntas sem resposta: ABSTAIN é correto). A acurácia é a proporção de CORRECT nas 72 perguntas respondíveis. Intervalos para proporções individuais são intervalos de Wilson \cite{wilson1927}; diferenças pareadas usam um bootstrap no nível da pergunta \cite{efron1979bootstrap} (4,000 reamostragens, seed 20261025), agregando os nove modelos e tratando perguntas como unidade amostral.
+
+\textbf{Volume.} Foram registradas 3,797 linhas de geração, 3,690 válidas (9 modelos $\times$ 5 braços $\times$ 82 consultas) e 107 tentativas malsucedidas (HTTP 429/400), repetidas até cada célula ter 82 respostas; foram produzidos 3,690 julgamentos. O custo de geração foi US\$4.60, e o de avaliação US\$0.75; o saldo do OpenRouter caiu cerca de US\$5.38.
+
+\textbf{Benchmark apenas de recuperação (24 de outubro).} Conjuntos D1 (sintético), D2 (real) e D3 (D2 antes/depois de uma alteração na estrutura do cofre), 5 repetições medidas após um aquecimento descartado, passagens frias e quentes, tiktoken \texttt{cl100k\_base} para todas as contagens de tokens, bootstrap pareado com 2,000 reamostragens (seed 20261024). Ele também inclui uma referência \emph{OFF-B} mais forte: BM25 sobre \emph{seções} com o mesmo orçamento de tokens da execução correspondente de \anam{}.
+
+%=====================================================================
+\FloatBarrier
+\section{Resultados Experimentais}\label{sec:results}
+\subsection{Tokens, custo e acurácia}
+A Tabela~\ref{tab:headline} e a Fig.~\ref{fig:headline} apresentam os resultados agregados. Os tokens de entrada informados pelo provedor caem de 11,103 (Sem) para 1,776 (auto+otimizador), uma redução de 84\%; o tamanho médio do contexto entregue, medido com tiktoken, cai de 10,889 (máximo 71,308) para 1,637. O comprimento médio de saída é de cerca de 60--70 tokens em todos os braços, portanto o custo é quase inteiramente de entrada. O custo efetivo dos oito modelos remotos cai 81.7\% para auto+otimizador (80--86\% por modelo, Fig.~\ref{fig:heat}); JEV acrescenta US\$0.0101 por execução de 82 consultas (252,404 tokens do avaliador), mas, como o braço JEV também entrega contextos maiores, sua economia agregada é de apenas 68.8\% (59--73\% por modelo).
+
+\input{table_parts_pt/headline}
+\input{table_parts_pt/paired}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_headline.pdf}
+\caption{Resultados principais agregados. (a) Tokens de entrada por consulta informados pelo provedor. (b) Custo efetivo dos oito modelos remotos; hachurado = JEV (calculado). (c) Acurácia nas 72 perguntas respondíveis; barras de erro são ICs bootstrap de 95\% da diferença pareada em relação a \emph{Sem}, desenhados em torno do valor de cada braço.}\label{fig:headline}
+\end{figure}
+
+A acurácia é estatisticamente indistinguível da referência para auto+otimizador ($+0.3$ pp; Tabela~\ref{tab:paired}), assim como para o pipeline baseline simples ($+2.2$ pp) e para Graphify+JEV ($-1.5$ pp). Graphify sem JEV é o único braço com perda significativa ($-15.0$ pp, IC excluindo zero). Quatro de nove modelos pontuam pelo menos tão bem com auto+otimizador quanto sem ele. A acurácia em uma única célula tem IC de 95\% de aproximadamente $\pm 8$ pp (Fig.~\ref{fig:accmodel}); apenas comparações agregadas são informativas.
+
+\input{table_parts_pt/models}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_accuracy_by_model.pdf}
+\caption{Acurácia por modelo e pipeline (72 perguntas por barra, execução única).}\label{fig:accmodel}
+\end{figure}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_cost_by_model.pdf}
+\caption{Custo efetivo por modelo (escala logarítmica), incluindo JEV.}\label{fig:costmodel}
+\end{figure}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_saving_heatmap.pdf}
+\caption{Economia de custo efetivo em relação a \emph{Sem}, por modelo e pipeline (\%).}\label{fig:heat}
+\end{figure}
+
+As economias acompanham o preço do modelo: para claude-haiku-4.5, o custo de 82 consultas cai de US\$1.10 para US\$0.22; para mistral-small-3.2, de US\$0.072 para US\$0.012, portanto a economia absoluta é pequena para modelos baratos. Para o modelo local não há economia em dólares (custo de API zero em todos os braços), embora sua latência mediana de geração tenha caído de 8.1\,s para 2.6\,s com auto+otimizador; essa comparação é confundida pelo compartilhamento de GPU e pelo carregamento do modelo no Ollama (a primeira chamada levou 6.8\,s). A latência de geração remota mudou menos (média dos p50 por modelo: 2.98\,s Sem contra\ 2.30\,s auto+otimizador) e é dominada pelas filas do provedor com seis chamadas simultâneas. A Fig.~\ref{fig:pareto} apresenta custo em função da acurácia.
+
+\begin{figure}[!htbp]\centering
+\paperfigure[0.52\linewidth]{fig_pareto.pdf}
+\caption{Compensação entre custo e qualidade. O formato do marcador identifica o modelo.}\label{fig:pareto}
+\end{figure}
+
+\subsection{Qualidade por classe de pergunta}
+A Tabela~\ref{tab:class} e a Fig.~\ref{fig:class} mostram que a perda de Graphify se concentra nas perguntas numéricas (57\% contra\ 94\% Sem), nas quais o número exato está em corpos de notas que o grafo apenas de rótulos não indexa. A resposta de referência estava presente no contexto entregue em 53\% das perguntas respondíveis com Graphify, contra 81\% (Sem), 85\% (baseline), 83\% (auto+otimizador) e 82\% (JEV), conforme medido pela expressão regular da resposta nos contextos armazenados (uma aproximação). A classe duplicatas/versões (3 perguntas) é a única em que auto+otimizador fica muito abaixo de Sem (41\% contra\ 67\%), coerente com a observação do benchmark de recuperação de que algumas notas \texttt{-pre-} substituídas ainda são entregues; a amostra é anedótica.
+
+\input{table_parts_pt/class}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_by_class.pdf}
+\caption{Acurácia por classe de pergunta (nove modelos agregados).}\label{fig:class}
+\end{figure}
+
+\input{table_parts_pt/strata}
+
+\subsection{Análise estratificada e um defeito de pontuação}\label{sec:strata}
+O aparato \emph{Sem} se abstém quando sua maior pontuação BM25 fica abaixo de $\theta$, portanto forneceu contexto vazio para 12 das 72 perguntas respondíveis. A divisão por esse evento (Tabela~\ref{tab:strata}) revela que a diferença agregada próxima de zero é a soma de dois efeitos opostos. Nas 60 perguntas em que \emph{Sem} recuperou algo, ele obteve 94.3\%, contra 87.4\% de auto+otimizador ($-6.9$ pp pareados, IC $[-12.4,-1.9]$), 89.3\% de baseline ($-5.0$, IC $[-10.0,-0.7]$) e 83.0\% de JEV ($-11.3$). Nas 12 perguntas com contexto \emph{Sem} vazio, \anam{} foi muito melhor (+36 a +47 pp).
+
+A pontuação de \emph{Sem} nessas 12 perguntas (48.1\%) é implausivelmente alta para uma resposta que deveria ser uma abstenção. A inspeção das respostas armazenadas mostrou que o avaliador rotulou como CORRECT algumas respostas consistindo apenas na frase de abstenção exigida, apesar das instruções. Como isso é um defeito da nossa avaliação, relatamos uma regra determinística de sensibilidade R1 (uma resposta que começa com a frase de abstenção nunca é CORRECT em uma pergunta respondível), aplicada ao texto armazenado; ela altera 63 vereditos de \emph{Sem} e entre 31 e 102 por braço de \anam{}. Sob R1, a acurácia agregada passa a 76.9\% (Sem), 84.0\% (baseline), 55.9\% (Graphify), 81.6\% (auto+otimizador) e 80.2\% (JEV); as diferenças pareadas agregadas ($+4.8$ para auto+otimizador, IC $[-5.6,+15.3]$) continuam estatisticamente indistinguíveis de zero, mas o padrão estratificado persiste ($-8.9$ pp nas 60 perguntas com recuperação, IC $[-17.0,-1.7]$). Portanto, consideramos a seguinte leitura a mais bem sustentada: \emph{\anam{} reduz os tokens em cerca de 84\% e é mais robusto do que um BM25 de notas completas com limiar quando esse BM25 não recupera nada, mas, quando o BM25 de notas completas recupera algo, fornecer ao modelo notas inteiras produz acurácia mensuravelmente maior do que o contexto recortado}. O resultado principal ``86.9\% contra\ 86.6\%'' é exato como valor avaliado na execução original, mas não deve ser interpretado como ``sem custo de qualidade''.
+
+\subsection{Perguntas sem resposta}
+Todos os nove modelos, em todos os cinco braços, abstiveram-se corretamente em todas as dez perguntas sem resposta, conforme a avaliação. Isso reflete o seguimento de instruções pelo gerador, não o gateway: o benchmark de recuperação mostra que \anam{} \emph{sempre} retorna um contexto (taxa de abstenção de 0\% no conjunto sem resposta, taxa de falsos positivos de 100\%), enquanto o aparato \emph{Sem} com limiar se abstém corretamente em 100\% das vezes, mas também se abstém incorretamente em 16.7\% das perguntas respondíveis.
+
+\subsection{Evidências apenas de recuperação (24 de outubro, medições reais)}
+A Tabela~\ref{tab:retrieval} e a Fig.~\ref{fig:retr} resumem D2. Em relação a \emph{Sem} (OFF-A), os pipelines de \anam{} entregam 77--86\% menos tokens de contexto, com maior recall@10 (0.97 contra\ 0.83); a taxa de presença da resposta de referência no contexto de Graphify (0.56) fica muito abaixo de baseline (0.83), correspondendo à perda generativa. Em relação ao OFF-B mais forte (BM25 por seções com o mesmo orçamento), \anam{} entrega 8--10\% \emph{mais} tokens (IC inclui zero), mas maior recall@10 ($\Delta{=}+0.21$ a $+0.24$ pareado, ICs excluindo zero) e maior presença da resposta no contexto ($+0.10$ baseline; $+0.135$ auto, IC $[0.02,0.25]$). Assim, diante de uma referência competente com segmentação, a vantagem está na qualidade da recuperação, não no custo de tokens; o benchmark generativo não incluiu OFF-B. Latência (Fig.~\ref{fig:lat}): auto+otimizador tem p50 de 45.6\,ms a frio e 9.9\,ms a quente (cache de resultados), contra 0.7\,ms da referência em processo, isto é, dezenas de vezes mais lento, porém desprezível em relação à latência de segundos dos LLMs; Laya (CPU local) precisa de $\approx4$\,s por consulta e entregou 6.7k tokens (redução de 40\%) com recall@10 de 0.75.
+
+\input{table_parts_pt/retrieval}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_retrieval.pdf}
+\caption{Benchmark apenas de recuperação em D2 (partição de teste): tokens de contexto, recall@10 e presença da resposta no contexto entregue.}\label{fig:retr}
+\end{figure}
+
+\begin{figure}[!htbp]\centering
+\paperfigure[0.52\linewidth]{fig_retrieval_latency.pdf}
+\caption{Latência de recuperação, a frio contra\ a quente.}\label{fig:lat}
+\end{figure}
+
+\subsection{Cenários de persistência, atualização e isolamento (24 de outubro)}
+Pequenos cenários controlados exercitaram os mecanismos de memória. (i) \emph{Gravação e busca com escopo} (F9-01): 18/18 verificações passaram para os três pipelines de \anam{} (uma nota salva em um projeto é encontrada no seu escopo, mas não em outro). (ii) \emph{Isolamento} no corpus sintético: sem escopo, 68--82\% das fontes entregues vinham de outros projetos; com \texttt{projeto:X}, 0\% de vazamento com hit@10 $\ge0.97$. (iii) \emph{Atualização com o servidor em execução}: 3\,s após editar uma nota, a versão antiga ainda era servida; aos 7\,s, a nova versão era servida por baseline e auto, mas o braço Graphify não refletiu a edição em nenhum dos momentos (o grafo é construído por sessão). (iv) \emph{Injeção/desinformação} ($N{=}5$ e 3): a nota-isca foi entregue por todos os pipelines; o otimizador sinalizou injeção em 5/5 e desinformação em 2/3 casos, sem bloquear. (v) D3 (antes/depois de uma alteração estrutural do cofre, 67 perguntas pareadas): recall@10 e presença da resposta no contexto inalterados ($\Delta=0$), mudanças de recall@5 de $-0.5$ a $-3.5$ pp com ICs tocando zero. Estas são \emph{verificações de mecanismos com $N$ pequeno}; não demonstram que um agente se lembra de conversas anteriores.
+
+%=====================================================================
+\FloatBarrier
+\section{Discussão}
+\textbf{O que foi demonstrado.} (1) O gateway reduz de forma confiável o prompt em aproximadamente 84\% em relação a BM25 de notas completas e, com os preços do próprio modelo, converte isso em economia de custos de 80--86\% para o pipeline padrão em oito modelos remotos (custo de geração medido; zero dólares de recuperação). (2) A acurácia agregada conforme avaliada não é distinguível da referência de notas completas, tanto para o pipeline padrão quanto para a recuperação baseline simples. (3) A qualidade da recuperação do pipeline padrão supera BM25 de notas completas e de seções quanto à recuperação das fontes de referência.
+
+\textbf{O que não foi mostrado, ou foi contradito.} (a) O avaliador pago não compensou seu custo aqui: acrescentou US\$0.08 em oito execuções e ampliou os contextos (2,908 contra\ 1,776 tokens), sem ganho de acurácia (85.0\% contra\ 86.9\%). Uma razão plausível é que o pipeline JEV parte do conjunto de candidatos de Graphify, cuja recuperação de seções contendo respostas é baixa; não isolamos isso. (b) O grafo de Graphify é a ferramenta errada para \emph{encontrar} texto: contém rótulos, não corpos, e as pontuações em escada de posições interagem mal com o corte adaptativo de 0.5. O híbrido corrige a recuperação de \emph{arquivos} (recall@10 0.97), mas não de \emph{trechos contendo respostas} (0.56). (c) A paridade do resultado principal esconde um déficit estratificado em relação a BM25 de notas completas quando este recupera algo (Seção~\ref{sec:strata}).
+
+\textbf{Por que o contexto recortado pode perder.} Um corte adaptativo e um limite de 300 tokens por trecho podem remover a frase exata que contém um número; notas completas a incluem. A perda nas perguntas numéricas para Graphify (57\%) sustenta essa interpretação; para baseline e auto, ela é de poucos pontos. Ajustar os parâmetros de trecho e orçamento em uma partição de desenvolvimento e acrescentar alternativas de notas completas no nível de seção são soluções naturais que não tentamos.
+
+\textbf{Onde a economia importa.} Economias absolutas são relevantes apenas para modelos cobrados e contextos longos; para modelos baratos, o custo adicional de JEV consome até um terço da economia (mistral: 83\% $\to$ 59\%). Para modelos locais, o benefício está na latência e na pressão sobre a janela de contexto, não em dólares.
+
+%=====================================================================
+\section{Limitações e Ameaças à Validade}\label{sec:limits}
+\textbf{Validade interna.} Uma repetição por célula; ICs de 95\% por célula são de cerca de $\pm8$ pp. O avaliador é um único LLM, não foi validado contra humanos e apresentou o defeito de pontuação de abstenções da Seção~\ref{sec:strata}; R1 é uma correção heurística, não uma nova avaliação. O mecanismo de contexto vazio ($\theta$) do braço \emph{Sem} é, por si só, uma escolha de projeto que interage com a acurácia. As expressões regulares de referência foram escritas para contextos, não para respostas livres, e são usadas apenas na análise de presença no contexto. Avaliador, gerador e alguns modelos avaliados pertencem às mesmas famílias de fornecedores, portanto não se pode excluir autopreferência.
+
+\textbf{Força da referência.} \emph{Sem} entrega notas completas (média de 10.9k tokens, máximo de 71k), o que é uma referência fraca para custo; um BM25 por seções (OFF-B) foi avaliado apenas para recuperação, não para geração. Parte da economia de tokens é atribuível à segmentação, que não é exclusiva de \anam{}.
+
+\textbf{Validade de construto.} Custo significa custo de tokens; energia, tempo de engenharia e custo de manutenção do gateway são excluídos. O custo JEV é calculado a partir de tarifa publicada e contagens de tokens, não de fatura. Tokenizadores de provedores diferem, portanto ``tokens de entrada'' não são comparáveis entre modelos em termos absolutos.
+
+\textbf{Validade externa.} Um único cofre de engenharia em português, de um único autor (379 notas); 82 perguntas; um retrato dos modelos em 2026. Resultados podem não se transferir para outros idiomas, corpora ou para um cofre com muitas paráfrases, no qual a recuperação lexical seja fraca.
+
+\textbf{Não avaliado.} Persistência entre sessões reais de agentes, recuperação após conversas longas com múltiplos turnos, consolidação de memória, sucesso em tarefas de ponta a ponta, comparação com sistemas densos ou graph-RAG, Decision Engine, Laya na geração, estratégias híbridas/ensemble sem rota de recuperação, modelos premium e provedores cujas chaves existem, mas que não foram testados. Afirmações presentes no README do projeto (por exemplo, ``$-39.7\%$/$-24.2\%$ de contexto com recall inalterado'' e comparações de tokens de esquema) não têm artefato armazenado no material auditado, e o benchmark de 24 de outubro mostra recall@5 em D1 caindo de 0.903 para 0.799 no braço do otimizador, enquanto recall@10 permanece inalterado.
+
+\textbf{Segurança.} A triagem de injeção é heurística e não bloqueante; notas recuperadas são rotuladas como não confiáveis, mas o agente consumidor decide o que fazer com elas. Endpoints de escrita são protegidos por loopback e token; leituras em loopback não exigem token.
+
+%=====================================================================
+\section{Trabalhos Futuros}\label{sec:future}
+\begin{enumerate}
+\item \textbf{Avaliação de memória de longo horizonte}: executar tarefas no estilo LoCoMo e LongMemEval \cite{maharana2024locomo,wu2025longmemeval} com agentes reais entre sessões, medindo a recuperação de decisões após dezenas de turnos com e sem \texttt{memory\_save}.
+\item \textbf{Referências generativas justas}: acrescentar OFF-B (BM25 por seções com orçamento igual) e um recuperador denso ao estudo generativo; acrescentar repetições e avaliação validada por humanos.
+\item \textbf{Ajuste de parâmetros}: limite de trechos, razão do corte adaptativo e orçamento ajustados em uma partição de desenvolvimento; alternativas no nível de seção para perguntas numéricas.
+\item \textbf{Um grafo autossuficiente}: gerar o grafo de links/títulos dentro de \anam{} (wikilinks, títulos, frontmatter) e medir recall em relação ao grafo de Graphify, removendo a dependência externa da construção do grafo.
+\item \textbf{Economia do avaliador}: avaliar JEV em um conjunto de candidatos com maior recall (baseline em vez de sementes Graphify), com custo faturado, não calculado.
+\item \textbf{Atualização de grafos}: atualização incremental do grafo para que edições se tornem visíveis dentro do intervalo de atualização do cofre.
+\item \textbf{Defesas mais fortes contra injeção}: políticas de bloqueio e detectores aprendidos, avaliados em um conjunto adversarial maior.
+\end{enumerate}
+
+%=====================================================================
+\section{Conclusão}
+\anam{} é um gateway de memória funcional, local e independente de agente, que implementa recuperação lexical, recuperação enriquecida por grafo, recorte de contexto, remoção de quase duplicatas, cache, sinalização de injeção e registro de custos por trás de interfaces MCP e REST. Em um benchmark real, integralmente registrado, seu pipeline padrão reduziu os tokens de entrada em cerca de 84\% e o custo efetivo em cerca de 82\% em oito modelos remotos, com acurácia agregada estatisticamente indistinguível de uma referência BM25 de notas completas; porém, uma reanálise estratificada mostra menor acurácia quando essa referência efetivamente recuperou algo, o pipeline Graphify prejudicou a acurácia em 15 pp e o avaliador pago JEV não teve boa relação custo-benefício nesse cenário. Se o projeto de memória persistente melhora a continuidade de agentes em sessões reais e longas continua sendo uma questão empírica em aberto que este artigo deliberadamente não responde.
+
+\section*{Disponibilidade}
+O pacote público \texttt{assets/paper-v2.1.0/} contém os fontes LaTeX, os PDFs em inglês e português, as figuras bilíngues, os dados agregados das figuras e os scripts de visualização. Os logs originais de geração e avaliação (\texttt{calls.jsonl}, \texttt{judge.jsonl}), o instantâneo privado do cofre e as entradas originais da avaliação permanecem locais em \texttt{data/reports-out/}; não estão incluídos no pacote público. Os agregados publicados reproduzem as figuras, não o experimento generativo completo. O artigo não acrescenta novos experimentos com modelos nem novos gastos com APIs.
+
+\section*{Agradecimentos}
+Agradecemos aos mantenedores de Graphify, SQLite, FastAPI, Model Context Protocol, Ollama, OpenRouter e TypeSafe AI, sobre cujo trabalho \anam{} se apoia.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

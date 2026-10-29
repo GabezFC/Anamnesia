@@ -1,0 +1,4 @@
+# Tested rendering environment (Python 3.14). No model/API packages required.
+matplotlib==3.11.2
+numpy==2.5.4
+pillow==13.0.0

@@ -1,0 +1,13 @@
+\begin{table}[!htbp]\caption{Per-model results (single run, temperature 0, 82 queries). Cost = measured generation cost (+ calculated JEV for the last column) in US\$; ``save'' is the effective-cost saving vs.\ \emph{Without}; accuracy over 72 answerable questions. The local model has zero API cost and is excluded from saving columns.}\label{tab:models}\centering\footnotesize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrrrrrrr@{}}\toprule & \multicolumn{2}{c}{Without} & \multicolumn{2}{c}{Baseline} & \multicolumn{2}{c}{Graphify} & \multicolumn{2}{c}{Auto+opt.} & \multicolumn{3}{c}{Graphify+JEV}\\\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-12}
+Model & Cost & Acc. & Save\% & Acc. & Save\% & Acc. & Save\% & Acc. & Cost & Save\% & Acc.\\\midrule
+local:qwen3.5:9b & 0 & 86 & -- & 90 & -- & 69 & -- & 92 & 0.010 & -- & 86\\
+mistral-small-3.2-24b-instruct & 0.072 & 88 & 74 & 88 & 76 & 74 & 83 & 85 & 0.030 & 59 & 85\\
+gemini-2.5-flash-lite & 0.096 & 88 & 74 & 92 & 77 & 71 & 82 & 83 & 0.036 & 62 & 83\\
+qwen3-235b-a22b-2507 & 0.111 & 88 & 75 & 89 & 76 & 75 & 83 & 86 & 0.040 & 64 & 86\\
+gpt-4o-mini & 0.128 & 88 & 74 & 83 & 77 & 68 & 82 & 81 & 0.046 & 65 & 83\\
+llama-3.3-70b-instruct & 0.148 & 88 & 74 & 86 & 75 & 72 & 82 & 86 & 0.048 & 67 & 82\\
+deepseek-chat-v3.1 & 0.340 & 83 & 79 & 93 & 78 & 74 & 86 & 88 & 0.090 & 73 & 89\\
+gpt-4.1-mini & 0.344 & 88 & 74 & 88 & 76 & 69 & 82 & 89 & 0.107 & 69 & 88\\
+claude-haiku-4.5 & 1.102 & 85 & 72 & 90 & 74 & 72 & 80 & 93 & 0.334 & 70 & 83\\
+\bottomrule\end{tabular}}\end{table}

@@ -1,0 +1,27 @@
+% Shared, language-neutral layout constraints for the independent report.
+\usepackage{tabularx}
+\usepackage{placeins}
+% Graphic dimensions refer to the current float: column or full text width.
+% Preserve aspect ratio and reserve room for captions and surrounding text.
+\newcommand{\paperfigure}[2][\linewidth]{%
+  \includegraphics[width=#1,keepaspectratio]{#2}%
+}
+\setlength{\emergencystretch}{3em}
+\sloppy
+\setlength{\textfloatsep}{14pt plus 3pt minus 2pt}
+\setlength{\dbltextfloatsep}{16pt plus 3pt minus 2pt}
+\setlength{\floatsep}{12pt plus 2pt minus 2pt}
+\setlength{\dblfloatsep}{14pt plus 2pt minus 2pt}
+% Keep floats in normal LaTeX flow; never force them over body text.
+\renewcommand{\topfraction}{0.88}
+\renewcommand{\dbltopfraction}{0.88}
+\renewcommand{\textfraction}{0.10}
+\renewcommand{\floatpagefraction}{0.65}
+\renewcommand{\dblfloatpagefraction}{0.65}
+
+% Keep float-only pages top-aligned instead of centering widely spaced objects.
+\makeatletter
+\setlength{\@fptop}{0pt}
+\setlength{\@fpsep}{16pt}
+\setlength{\@fpbot}{0pt plus 1fil}
+\makeatother

@@ -1,0 +1,263 @@
+{
+  "openai/gpt-4o-mini|on_full": {
+    "model": "openai/gpt-4o-mini",
+    "cost_effective": 0.02251725,
+    "acc": 0.8055555555555556,
+    "saving_cost_pct": 82.46999995328915
+  },
+  "openai/gpt-4o-mini|off_a": {
+    "model": "openai/gpt-4o-mini",
+    "cost_effective": 0.1284498,
+    "acc": 0.875
+  },
+  "openai/gpt-4o-mini|on_baseline_raw": {
+    "model": "openai/gpt-4o-mini",
+    "cost_effective": 0.03285375,
+    "acc": 0.8333333333333334,
+    "saving_cost_pct": 74.42288738479935
+  },
+  "openai/gpt-4o-mini|on_jev": {
+    "model": "openai/gpt-4o-mini",
+    "cost_effective": 0.045538350000000005,
+    "acc": 0.8333333333333334,
+    "saving_cost_pct": 64.54774550057687
+  },
+  "ollama:qwen3.5:9b|on_full": {
+    "model": "ollama:qwen3.5:9b",
+    "cost_effective": 0.0,
+    "acc": 0.9166666666666666,
+    "saving_cost_pct": null
+  },
+  "ollama:qwen3.5:9b|off_a": {
+    "model": "ollama:qwen3.5:9b",
+    "cost_effective": 0.0,
+    "acc": 0.8611111111111112
+  },
+  "ollama:qwen3.5:9b|on_baseline_raw": {
+    "model": "ollama:qwen3.5:9b",
+    "cost_effective": 0.0,
+    "acc": 0.9027777777777778,
+    "saving_cost_pct": null
+  },
+  "openai/gpt-4.1-mini|off_a": {
+    "model": "openai/gpt-4.1-mini",
+    "cost_effective": 0.3439376,
+    "acc": 0.875
+  },
+  "openai/gpt-4.1-mini|on_baseline_raw": {
+    "model": "openai/gpt-4.1-mini",
+    "cost_effective": 0.0907124,
+    "acc": 0.875,
+    "saving_cost_pct": 73.62533203697414
+  },
+  "openai/gpt-4.1-mini|on_full": {
+    "model": "openai/gpt-4.1-mini",
+    "cost_effective": 0.0631804,
+    "acc": 0.8888888888888888,
+    "saving_cost_pct": 81.63027246802909
+  },
+  "openai/gpt-4.1-mini|on_jev": {
+    "model": "openai/gpt-4.1-mini",
+    "cost_effective": 0.10748564999999999,
+    "acc": 0.875,
+    "saving_cost_pct": 68.74850263536176
+  },
+  "ollama:qwen3.5:9b|on_jev": {
+    "model": "ollama:qwen3.5:9b",
+    "cost_effective": 0.01009125,
+    "acc": 0.8611111111111112,
+    "saving_cost_pct": null
+  },
+  "google/gemini-2.5-flash-lite|off_a": {
+    "model": "google/gemini-2.5-flash-lite",
+    "cost_effective": 0.0957525,
+    "acc": 0.875
+  },
+  "google/gemini-2.5-flash-lite|on_baseline_raw": {
+    "model": "google/gemini-2.5-flash-lite",
+    "cost_effective": 0.0244523,
+    "acc": 0.9166666666666666,
+    "saving_cost_pct": 74.46301663141955
+  },
+  "google/gemini-2.5-flash-lite|on_full": {
+    "model": "google/gemini-2.5-flash-lite",
+    "cost_effective": 0.0169212,
+    "acc": 0.8333333333333334,
+    "saving_cost_pct": 82.32818986449439
+  },
+  "google/gemini-2.5-flash-lite|on_jev": {
+    "model": "google/gemini-2.5-flash-lite",
+    "cost_effective": 0.03592356,
+    "acc": 0.8333333333333334,
+    "saving_cost_pct": 62.4829012297329
+  },
+  "deepseek/deepseek-chat-v3.1|off_a": {
+    "model": "deepseek/deepseek-chat-v3.1",
+    "cost_effective": 0.33958407,
+    "acc": 0.8333333333333334
+  },
+  "deepseek/deepseek-chat-v3.1|on_baseline_raw": {
+    "model": "deepseek/deepseek-chat-v3.1",
+    "cost_effective": 0.07191109,
+    "acc": 0.9305555555555556,
+    "saving_cost_pct": 78.82377403627915
+  },
+  "deepseek/deepseek-chat-v3.1|on_full": {
+    "model": "deepseek/deepseek-chat-v3.1",
+    "cost_effective": 0.04871492,
+    "acc": 0.875,
+    "saving_cost_pct": 85.65453320587153
+  },
+  "deepseek/deepseek-chat-v3.1|on_jev": {
+    "model": "deepseek/deepseek-chat-v3.1",
+    "cost_effective": 0.09032783999999999,
+    "acc": 0.8888888888888888,
+    "saving_cost_pct": 73.40044837792303
+  },
+  "meta-llama/llama-3.3-70b-instruct|off_a": {
+    "model": "meta-llama/llama-3.3-70b-instruct",
+    "cost_effective": 0.147597716,
+    "acc": 0.875
+  },
+  "meta-llama/llama-3.3-70b-instruct|on_baseline_raw": {
+    "model": "meta-llama/llama-3.3-70b-instruct",
+    "cost_effective": 0.038331472,
+    "acc": 0.8611111111111112,
+    "saving_cost_pct": 74.02976615166592
+  },
+  "meta-llama/llama-3.3-70b-instruct|on_full": {
+    "model": "meta-llama/llama-3.3-70b-instruct",
+    "cost_effective": 0.02705566,
+    "acc": 0.8611111111111112,
+    "saving_cost_pct": 81.66932339251103
+  },
+  "meta-llama/llama-3.3-70b-instruct|on_jev": {
+    "model": "meta-llama/llama-3.3-70b-instruct",
+    "cost_effective": 0.048034270000000004,
+    "acc": 0.8194444444444444,
+    "saving_cost_pct": 67.45595304469344
+  },
+  "qwen/qwen3-235b-a22b-2507|off_a": {
+    "model": "qwen/qwen3-235b-a22b-2507",
+    "cost_effective": 0.11131512,
+    "acc": 0.875
+  },
+  "qwen/qwen3-235b-a22b-2507|on_baseline_raw": {
+    "model": "qwen/qwen3-235b-a22b-2507",
+    "cost_effective": 0.0273825,
+    "acc": 0.8888888888888888,
+    "saving_cost_pct": 75.40091588635937
+  },
+  "qwen/qwen3-235b-a22b-2507|on_full": {
+    "model": "qwen/qwen3-235b-a22b-2507",
+    "cost_effective": 0.01887875,
+    "acc": 0.8611111111111112,
+    "saving_cost_pct": 83.040264431283
+  },
+  "qwen/qwen3-235b-a22b-2507|on_jev": {
+    "model": "qwen/qwen3-235b-a22b-2507",
+    "cost_effective": 0.03990191,
+    "acc": 0.8611111111111112,
+    "saving_cost_pct": 64.15409694567997
+  },
+  "mistralai/mistral-small-3.2-24b-instruct|off_a": {
+    "model": "mistralai/mistral-small-3.2-24b-instruct",
+    "cost_effective": 0.0715001,
+    "acc": 0.875
+  },
+  "mistralai/mistral-small-3.2-24b-instruct|on_baseline_raw": {
+    "model": "mistralai/mistral-small-3.2-24b-instruct",
+    "cost_effective": 0.0182763125,
+    "acc": 0.875,
+    "saving_cost_pct": 74.43875952621045
+  },
+  "mistralai/mistral-small-3.2-24b-instruct|on_full": {
+    "model": "mistralai/mistral-small-3.2-24b-instruct",
+    "cost_effective": 0.01223214375,
+    "acc": 0.8472222222222222,
+    "saving_cost_pct": 82.89213057044675
+  },
+  "mistralai/mistral-small-3.2-24b-instruct|on_jev": {
+    "model": "mistralai/mistral-small-3.2-24b-instruct",
+    "cost_effective": 0.02964289875,
+    "acc": 0.8472222222222222,
+    "saving_cost_pct": 58.54145833362471
+  },
+  "anthropic/claude-haiku-4.5|off_a": {
+    "model": "anthropic/claude-haiku-4.5",
+    "cost_effective": 1.101601,
+    "acc": 0.8472222222222222
+  },
+  "anthropic/claude-haiku-4.5|on_baseline_raw": {
+    "model": "anthropic/claude-haiku-4.5",
+    "cost_effective": 0.303922,
+    "acc": 0.9027777777777778,
+    "saving_cost_pct": 72.41088197995462
+  },
+  "anthropic/claude-haiku-4.5|on_full": {
+    "model": "anthropic/claude-haiku-4.5",
+    "cost_effective": 0.218138,
+    "acc": 0.9305555555555556,
+    "saving_cost_pct": 80.19809350209377
+  },
+  "anthropic/claude-haiku-4.5|on_jev": {
+    "model": "anthropic/claude-haiku-4.5",
+    "cost_effective": 0.33422925,
+    "acc": 0.8333333333333334,
+    "saving_cost_pct": 69.65968168147995
+  },
+  "openai/gpt-4o-mini|on_graphify_raw": {
+    "model": "openai/gpt-4o-mini",
+    "cost_effective": 0.029681700000000002,
+    "acc": 0.6805555555555556,
+    "saving_cost_pct": 76.892373518682
+  },
+  "openai/gpt-4.1-mini|on_graphify_raw": {
+    "model": "openai/gpt-4.1-mini",
+    "cost_effective": 0.081772,
+    "acc": 0.6944444444444444,
+    "saving_cost_pct": 76.22475704895307
+  },
+  "google/gemini-2.5-flash-lite|on_graphify_raw": {
+    "model": "google/gemini-2.5-flash-lite",
+    "cost_effective": 0.0220599,
+    "acc": 0.7083333333333334,
+    "saving_cost_pct": 76.96154147411295
+  },
+  "deepseek/deepseek-chat-v3.1|on_graphify_raw": {
+    "model": "deepseek/deepseek-chat-v3.1",
+    "cost_effective": 0.07302257,
+    "acc": 0.7361111111111112,
+    "saving_cost_pct": 78.49646775244787
+  },
+  "meta-llama/llama-3.3-70b-instruct|on_graphify_raw": {
+    "model": "meta-llama/llama-3.3-70b-instruct",
+    "cost_effective": 0.036581105,
+    "acc": 0.7222222222222222,
+    "saving_cost_pct": 75.21567000399925
+  },
+  "qwen/qwen3-235b-a22b-2507|on_graphify_raw": {
+    "model": "qwen/qwen3-235b-a22b-2507",
+    "cost_effective": 0.02630274,
+    "acc": 0.75,
+    "saving_cost_pct": 76.37091888325683
+  },
+  "mistralai/mistral-small-3.2-24b-instruct|on_graphify_raw": {
+    "model": "mistralai/mistral-small-3.2-24b-instruct",
+    "cost_effective": 0.01709550625,
+    "acc": 0.7361111111111112,
+    "saving_cost_pct": 76.09023448918254
+  },
+  "anthropic/claude-haiku-4.5|on_graphify_raw": {
+    "model": "anthropic/claude-haiku-4.5",
+    "cost_effective": 0.284466,
+    "acc": 0.7222222222222222,
+    "saving_cost_pct": 74.17703869186755
+  },
+  "ollama:qwen3.5:9b|on_graphify_raw": {
+    "model": "ollama:qwen3.5:9b",
+    "cost_effective": 0.0,
+    "acc": 0.6944444444444444,
+    "saving_cost_pct": null
+  }
+}

@@ -1,0 +1,61 @@
+\begin{table*}[tp]\caption{Resultados agregados de nove modelos (72 perguntas respondíveis cada; acurácia $n{=}648$ por braço). O custo soma os oito modelos remotos (US\$ por 82 consultas por modelo); o custo JEV é calculado e, para comparabilidade, atribuído a cada modelo (o contexto do avaliador foi produzido uma vez; o gasto real com JEV foi de cerca de US\$0.010); o custo de geração é medido. As economias são relativas ao braço \emph{Sem}.}\label{tab:headline}\centering\footnotesize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrr@{}}\toprule Braço & Tok. entrada & Acur.\ (\%) & Custo & dos quais JEV & Economia & US\$/correta$\times10^3$\\\midrule
+Sem (BM25{,} notas completas) & 11{,}103 & 86.6 & 2.340 & 0.0000 & -- & 4.69\\
+Com: baseline & 2{,}688 & 88.7 & 0.608 & 0.0000 & 74.0\% & 1.19\\
+Com: Graphify híbrido & 2{,}460 & 71.6 & 0.571 & 0.0000 & 75.6\% & 1.38\\
+Com: auto + otimizador & 1{,}776 & 86.9 & 0.428 & 0.0000 & 81.7\% & 0.86\\
+Com: Graphify + JEV & 2{,}908 & 85.0 & 0.731 & 0.0807 & 68.8\% & 1.50\\
+\bottomrule\end{tabular}}\end{table*}
+\begin{table}[t]\caption{Diferença pareada de acurácia em relação a \emph{Sem} (pontos percentuais; bootstrap no nível da pergunta sobre as 72 perguntas respondíveis, 4000 reamostragens, seed 20261025, nove modelos agregados).}\label{tab:paired}\centering\footnotesize
+\resizebox{\columnwidth}{!}{\begin{tabular}{@{}lrr@{}}\toprule Braço & $\Delta$ acur.\ (pp) & IC de 95\%\\\midrule
+Com: baseline & +2.2 & [-4.9, +9.4]\\
+Com: Graphify híbrido & -15.0 & [-25.5, -4.2]\\
+Com: auto + otimizador & +0.3 & [-7.4, +8.0]\\
+Com: Graphify + JEV & -1.5 & [-10.6, +7.9]\\
+\bottomrule\end{tabular}}\end{table}
+\begin{table*}[tp]\caption{Resultados por modelo (execução única, temperatura 0, 82 consultas). Custo = custo medido de geração (+ JEV calculado na última coluna) em US\$; ``economia'' é a economia de custo efetivo em relação a\ \emph{Sem}; acurácia sobre 72 perguntas respondíveis. O modelo local tem custo de API zero e é excluído das colunas de economia.}\label{tab:models}\centering\footnotesize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrrrrrrr@{}}\toprule & \multicolumn{2}{c}{Sem} & \multicolumn{2}{c}{Baseline} & \multicolumn{2}{c}{Graphify} & \multicolumn{2}{c}{Auto+otim.} & \multicolumn{3}{c}{Graphify+JEV}\\\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-12}
+Modelo & Custo & Acur. & Econ.\% & Acur. & Econ.\% & Acur. & Econ.\% & Acur. & Custo & Econ.\% & Acur.\\\midrule
+local:qwen3.5:9b & 0 & 86 & -- & 90 & -- & 69 & -- & 92 & 0.010 & -- & 86\\
+mistral-small-3.2-24b-instruct & 0.072 & 88 & 74 & 88 & 76 & 74 & 83 & 85 & 0.030 & 59 & 85\\
+gemini-2.5-flash-lite & 0.096 & 88 & 74 & 92 & 77 & 71 & 82 & 83 & 0.036 & 62 & 83\\
+qwen3-235b-a22b-2507 & 0.111 & 88 & 75 & 89 & 76 & 75 & 83 & 86 & 0.040 & 64 & 86\\
+gpt-4o-mini & 0.128 & 88 & 74 & 83 & 77 & 68 & 82 & 81 & 0.046 & 65 & 83\\
+llama-3.3-70b-instruct & 0.148 & 88 & 74 & 86 & 75 & 72 & 82 & 86 & 0.048 & 67 & 82\\
+deepseek-chat-v3.1 & 0.340 & 83 & 79 & 93 & 78 & 74 & 86 & 88 & 0.090 & 73 & 89\\
+gpt-4.1-mini & 0.344 & 88 & 74 & 88 & 76 & 69 & 82 & 89 & 0.107 & 69 & 88\\
+claude-haiku-4.5 & 1.102 & 85 & 72 & 90 & 74 & 72 & 80 & 93 & 0.334 & 70 & 83\\
+\bottomrule\end{tabular}}\end{table*}
+\begin{table}[t]\caption{Acurácia (\%) por classe de pergunta, nove modelos agregados. Classes com $n\le3$ perguntas são anedóticas.}\label{tab:class}\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\resizebox{\columnwidth}{!}{\begin{tabular}{@{}lrrrrrr@{}}\toprule Classe & $n$ & Sem & Base. & Graph. & Auto & G+JEV\\\midrule
+factual & 36 & 87 & 94 & 85 & 91 & 89\\
+numérica & 28 & 94 & 91 & 57 & 91 & 87\\
+duplicatas/versões & 3 & 67 & 48 & 67 & 41 & 67\\
+ambígua & 3 & 63 & 70 & 70 & 67 & 70\\
+documento longo & 2 & 39 & 56 & 50 & 56 & 50\\
+\bottomrule\end{tabular}}\end{table}
+\begin{table*}[tp]\caption{Benchmark apenas de recuperação de 24 de outubro de 2026 (D2, partição de teste, 56 consultas/52 respondíveis, 5 repetições medidas, tiktoken \texttt{cl100k\_base}). A latência é o p50 da ida e volta do cliente (MCP stdio para \emph{Com}; em processo para \emph{Sem}).}\label{tab:retrieval}\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrr@{}}\toprule Braço & Tok. ctx & R@5 & R@10 & Resp.\ no ctx & Frio ms & Quente ms\\\midrule
+Sem (OFF-A) & 11{,}207 & 0.77 & 0.83 & 0.83 & 0.7 & 0.7\\
+BM25 por seções @ orçamento auto (OFF-B) & 1{,}437 & 0.67 & 0.73 & 0.67 & 5.6 & 4.3\\
+Baseline & 2{,}541 & 0.89 & 0.97 & 0.83 & 21.9 & 21.6\\
+Graphify híbrido & 2{,}333 & 0.89 & 0.97 & 0.56 & 14.7 & 12.3\\
+Auto + otimizador & 1{,}589 & 0.85 & 0.97 & 0.81 & 45.6 & 9.9\\
+Laya (local{,} CPU) & 6{,}715 & 0.73 & 0.75 & 0.83 & 3970.9 & 4062.6\\
+\bottomrule\end{tabular}}\end{table*}
+\begin{table*}[tp]\caption{Acurácia estratificada (\%), nove modelos agregados. \emph{Com recuperação} = as 60 perguntas respondíveis para as quais o aparato \emph{Sem} entregou um contexto; \emph{Sem-vazio} = as 12 perguntas respondíveis nas quais seu mecanismo $\theta$ se absteve (contexto vazio). Bloco superior: vereditos exatamente como produzidos pelo avaliador LLM. Bloco inferior: regra de sensibilidade R1 (uma resposta que começa com a frase de abstenção exigida nunca é pontuada como correta). $\Delta$ = diferença pareada em relação a\ \emph{Sem} em pp, com IC bootstrap de 95\%.}\label{tab:strata}\centering\footnotesize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}llrrrrr@{}}\toprule Pontuação & Estrato ($n$) & Sem & Baseline & Graphify & Auto+otim. & G+JEV\\\midrule
+Avaliador original & todas respondíveis (72) & 86.6 & 88.7 & 71.6 & 86.9 & 85.0\\
+ & & $\Delta$ & $+$2.2 [$-$4.9,$+$9.4] & $-$15.0 [$-$25.5,$-$4.2] & $+$0.3 [$-$7.4,$+$8.0] & $-$1.5 [$-$10.6,$+$7.9]\\
+Avaliador original & com recuperação (60) & 94.3 & 89.3 & 68.0 & 87.4 & 83.0\\
+ & & $\Delta$ & $-$5.0 [$-$10.0,$-$0.7] & $-$26.3 [$-$36.5,$-$17.0] & $-$6.9 [$-$12.4,$-$1.9] & $-$11.3 [$-$18.9,$-$4.6]\\
+Avaliador original & Sem-vazio (12) & 48.1 & 86.1 & 89.8 & 84.3 & 95.4\\
+ & & $\Delta$ & $+$38.0 [$+$10.2,$+$67.6] & $+$41.7 [$+$16.7,$+$66.7] & $+$36.1 [$+$6.5,$+$64.8] & $+$47.2 [$+$16.7,$+$75.9]\\
+\midrule
+Regra R1 & todas respondíveis (72) & 76.9 & 84.0 & 55.9 & 81.6 & 80.2\\
+ & & $\Delta$ & $+$7.1 [$-$2.6,$+$16.5] & $-$21.0 [$-$35.8,$-$6.0] & $+$4.8 [$-$5.6,$+$15.3] & $+$3.4 [$-$9.4,$+$15.7]\\
+Regra R1 & com recuperação (60) & 92.2 & 85.6 & 50.6 & 83.3 & 77.8\\
+ & & $\Delta$ & $-$6.7 [$-$14.3,$-$0.4] & $-$41.7 [$-$53.7,$-$29.3] & $-$8.9 [$-$17.0,$-$1.7] & $-$14.4 [$-$23.7,$-$5.6]\\
+Regra R1 & Sem-vazio (12) & 0.0 & 75.9 & 82.4 & 73.1 & 92.6\\
+ & & $\Delta$ & $+$75.9 [$+$54.6,$+$94.4] & $+$82.4 [$+$62.0,$+$98.1] & $+$73.1 [$+$49.1,$+$92.6] & $+$92.6 [$+$77.8,$+$100.0]\\
+\bottomrule\end{tabular}}\end{table*}

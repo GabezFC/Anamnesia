@@ -1,0 +1,16 @@
+\begin{table}[!htbp]\caption{Acurácia estratificada (\%), nove modelos agregados. \emph{Com recuperação} = as 60 perguntas respondíveis para as quais o aparato \emph{Sem} entregou um contexto; \emph{Sem-vazio} = as 12 perguntas respondíveis nas quais seu mecanismo $\theta$ se absteve (contexto vazio). Bloco superior: vereditos exatamente como produzidos pelo avaliador LLM. Bloco inferior: regra de sensibilidade R1 (uma resposta que começa com a frase de abstenção exigida nunca é pontuada como correta). $\Delta$ = diferença pareada em relação a\ \emph{Sem} em pp, com IC bootstrap de 95\%.}\label{tab:strata}\centering\footnotesize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}llrrrrr@{}}\toprule Pontuação & Estrato ($n$) & Sem & Baseline & Graphify & Auto+otim. & G+JEV\\\midrule
+Avaliador original & todas respondíveis (72) & 86.6 & 88.7 & 71.6 & 86.9 & 85.0\\
+ & & $\Delta$ & $+$2.2 [$-$4.9,$+$9.4] & $-$15.0 [$-$25.5,$-$4.2] & $+$0.3 [$-$7.4,$+$8.0] & $-$1.5 [$-$10.6,$+$7.9]\\
+Avaliador original & com recuperação (60) & 94.3 & 89.3 & 68.0 & 87.4 & 83.0\\
+ & & $\Delta$ & $-$5.0 [$-$10.0,$-$0.7] & $-$26.3 [$-$36.5,$-$17.0] & $-$6.9 [$-$12.4,$-$1.9] & $-$11.3 [$-$18.9,$-$4.6]\\
+Avaliador original & Sem-vazio (12) & 48.1 & 86.1 & 89.8 & 84.3 & 95.4\\
+ & & $\Delta$ & $+$38.0 [$+$10.2,$+$67.6] & $+$41.7 [$+$16.7,$+$66.7] & $+$36.1 [$+$6.5,$+$64.8] & $+$47.2 [$+$16.7,$+$75.9]\\
+\midrule
+Regra R1 & todas respondíveis (72) & 76.9 & 84.0 & 55.9 & 81.6 & 80.2\\
+ & & $\Delta$ & $+$7.1 [$-$2.6,$+$16.5] & $-$21.0 [$-$35.8,$-$6.0] & $+$4.8 [$-$5.6,$+$15.3] & $+$3.4 [$-$9.4,$+$15.7]\\
+Regra R1 & com recuperação (60) & 92.2 & 85.6 & 50.6 & 83.3 & 77.8\\
+ & & $\Delta$ & $-$6.7 [$-$14.3,$-$0.4] & $-$41.7 [$-$53.7,$-$29.3] & $-$8.9 [$-$17.0,$-$1.7] & $-$14.4 [$-$23.7,$-$5.6]\\
+Regra R1 & Sem-vazio (12) & 0.0 & 75.9 & 82.4 & 73.1 & 92.6\\
+ & & $\Delta$ & $+$75.9 [$+$54.6,$+$94.4] & $+$82.4 [$+$62.0,$+$98.1] & $+$73.1 [$+$49.1,$+$92.6] & $+$92.6 [$+$77.8,$+$100.0]\\
+\bottomrule\end{tabular}}\end{table}

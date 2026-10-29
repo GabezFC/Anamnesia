@@ -1,0 +1,13 @@
+{
+  "figure": "diag_graphify_jev",
+  "language": "en",
+  "text_count": 18,
+  "text_overlaps": [],
+  "box_overflows": [],
+  "clipped_boxes": [],
+  "scope": "300-DPI actual regular/bold text bounds, box containment, and flattened arrow paths against text bounds (+2 px). Manual PNG inspection still required for composition and print-scale legibility.",
+  "renderer_dpi": 300,
+  "arrow_text_overlaps": [],
+  "min_box_font_pt": 6.2,
+  "bold_text_count": 9
+}

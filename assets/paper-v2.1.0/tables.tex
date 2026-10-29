@@ -1,0 +1,61 @@
+\begin{table*}[tp]\caption{Pooled results over nine models (72 answerable questions each; accuracy $n{=}648$ per arm). Cost sums the eight remote models (US\$ per 82 queries per model); JEV cost is calculated and, for comparability, attributed to each model (the judge context was produced once; actual JEV spend was about US\$0.010); generation cost is measured. Savings are relative to the \emph{Without} arm.}\label{tab:headline}\centering\footnotesize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrr@{}}\toprule Arm & In-tok & Acc.\ (\%) & Cost & of which JEV & Saving & US\$/correct$\times10^3$\\\midrule
+Without (BM25{,} whole notes) & 11{,}103 & 86.6 & 2.340 & 0.0000 & -- & 4.69\\
+With: baseline & 2{,}688 & 88.7 & 0.608 & 0.0000 & 74.0\% & 1.19\\
+With: Graphify hybrid & 2{,}460 & 71.6 & 0.571 & 0.0000 & 75.6\% & 1.38\\
+With: auto + optimizer & 1{,}776 & 86.9 & 0.428 & 0.0000 & 81.7\% & 0.86\\
+With: Graphify + JEV & 2{,}908 & 85.0 & 0.731 & 0.0807 & 68.8\% & 1.50\\
+\bottomrule\end{tabular}}\end{table*}
+\begin{table}[t]\caption{Paired difference in accuracy versus \emph{Without} (percentage points; question-level bootstrap over the 72 answerable questions, 4000 resamples, seed 20261025, nine models pooled).}\label{tab:paired}\centering\footnotesize
+\resizebox{\columnwidth}{!}{\begin{tabular}{@{}lrr@{}}\toprule Arm & $\Delta$ acc.\ (pp) & 95\% CI\\\midrule
+With: baseline & +2.2 & [-4.9, +9.4]\\
+With: Graphify hybrid & -15.0 & [-25.5, -4.2]\\
+With: auto + optimizer & +0.3 & [-7.4, +8.0]\\
+With: Graphify + JEV & -1.5 & [-10.6, +7.9]\\
+\bottomrule\end{tabular}}\end{table}
+\begin{table*}[tp]\caption{Per-model results (single run, temperature 0, 82 queries). Cost = measured generation cost (+ calculated JEV for the last column) in US\$; ``save'' is the effective-cost saving vs.\ \emph{Without}; accuracy over 72 answerable questions. The local model has zero API cost and is excluded from saving columns.}\label{tab:models}\centering\footnotesize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrrrrrrr@{}}\toprule & \multicolumn{2}{c}{Without} & \multicolumn{2}{c}{Baseline} & \multicolumn{2}{c}{Graphify} & \multicolumn{2}{c}{Auto+opt.} & \multicolumn{3}{c}{Graphify+JEV}\\\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-12}
+Model & Cost & Acc. & Save\% & Acc. & Save\% & Acc. & Save\% & Acc. & Cost & Save\% & Acc.\\\midrule
+local:qwen3.5:9b & 0 & 86 & -- & 90 & -- & 69 & -- & 92 & 0.010 & -- & 86\\
+mistral-small-3.2-24b-instruct & 0.072 & 88 & 74 & 88 & 76 & 74 & 83 & 85 & 0.030 & 59 & 85\\
+gemini-2.5-flash-lite & 0.096 & 88 & 74 & 92 & 77 & 71 & 82 & 83 & 0.036 & 62 & 83\\
+qwen3-235b-a22b-2507 & 0.111 & 88 & 75 & 89 & 76 & 75 & 83 & 86 & 0.040 & 64 & 86\\
+gpt-4o-mini & 0.128 & 88 & 74 & 83 & 77 & 68 & 82 & 81 & 0.046 & 65 & 83\\
+llama-3.3-70b-instruct & 0.148 & 88 & 74 & 86 & 75 & 72 & 82 & 86 & 0.048 & 67 & 82\\
+deepseek-chat-v3.1 & 0.340 & 83 & 79 & 93 & 78 & 74 & 86 & 88 & 0.090 & 73 & 89\\
+gpt-4.1-mini & 0.344 & 88 & 74 & 88 & 76 & 69 & 82 & 89 & 0.107 & 69 & 88\\
+claude-haiku-4.5 & 1.102 & 85 & 72 & 90 & 74 & 72 & 80 & 93 & 0.334 & 70 & 83\\
+\bottomrule\end{tabular}}\end{table*}
+\begin{table}[t]\caption{Accuracy (\%) by question class, nine models pooled. Classes with $n\le3$ questions are anecdotal.}\label{tab:class}\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\resizebox{\columnwidth}{!}{\begin{tabular}{@{}lrrrrrr@{}}\toprule Class & $n$ & Without & Base. & Graph. & Auto & G+JEV\\\midrule
+factual & 36 & 87 & 94 & 85 & 91 & 89\\
+numeric & 28 & 94 & 91 & 57 & 91 & 87\\
+duplicate/version & 3 & 67 & 48 & 67 & 41 & 67\\
+ambiguous & 3 & 63 & 70 & 70 & 67 & 70\\
+long document & 2 & 39 & 56 & 50 & 56 & 50\\
+\bottomrule\end{tabular}}\end{table}
+\begin{table*}[tp]\caption{Retrieval-only benchmark of 24 Oct 2026 (D2, test split, 56 queries/52 answerable, 5 measured repetitions, tiktoken \texttt{cl100k\_base}). Latency is p50 of the client round trip (MCP stdio for \emph{With}; in-process for \emph{Without}).}\label{tab:retrieval}\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrr@{}}\toprule Arm & Ctx tok & R@5 & R@10 & Ans.\ in ctx & Cold ms & Hot ms\\\midrule
+Without (OFF-A) & 11{,}207 & 0.77 & 0.83 & 0.83 & 0.7 & 0.7\\
+Section BM25 @ auto budget (OFF-B) & 1{,}437 & 0.67 & 0.73 & 0.67 & 5.6 & 4.3\\
+Baseline & 2{,}541 & 0.89 & 0.97 & 0.83 & 21.9 & 21.6\\
+Graphify hybrid & 2{,}333 & 0.89 & 0.97 & 0.56 & 14.7 & 12.3\\
+Auto + optimizer & 1{,}589 & 0.85 & 0.97 & 0.81 & 45.6 & 9.9\\
+Laya (local{,} CPU) & 6{,}715 & 0.73 & 0.75 & 0.83 & 3970.9 & 4062.6\\
+\bottomrule\end{tabular}}\end{table*}
+\begin{table*}[tp]\caption{Stratified accuracy (\%), nine models pooled. \emph{Retrieved} = the 60 answerable questions for which the \emph{Without} harness delivered a context; \emph{Without-empty} = the 12 answerable questions on which its $\theta$ gate abstained (empty context). Upper block: verdicts exactly as produced by the LLM judge. Lower block: sensitivity rule R1 (an answer that begins with the mandated abstention sentence is never scored correct). $\Delta$ = paired difference vs.\ \emph{Without} in pp with 95\% bootstrap CI.}\label{tab:strata}\centering\footnotesize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}llrrrrr@{}}\toprule Scoring & Stratum ($n$) & Without & Baseline & Graphify & Auto+opt. & G+JEV\\\midrule
+Judge as run & all answerable (72) & 86.6 & 88.7 & 71.6 & 86.9 & 85.0\\
+ & & $\Delta$ & $+$2.2 [$-$4.9,$+$9.4] & $-$15.0 [$-$25.5,$-$4.2] & $+$0.3 [$-$7.4,$+$8.0] & $-$1.5 [$-$10.6,$+$7.9]\\
+Judge as run & retrieved (60) & 94.3 & 89.3 & 68.0 & 87.4 & 83.0\\
+ & & $\Delta$ & $-$5.0 [$-$10.0,$-$0.7] & $-$26.3 [$-$36.5,$-$17.0] & $-$6.9 [$-$12.4,$-$1.9] & $-$11.3 [$-$18.9,$-$4.6]\\
+Judge as run & Without-empty (12) & 48.1 & 86.1 & 89.8 & 84.3 & 95.4\\
+ & & $\Delta$ & $+$38.0 [$+$10.2,$+$67.6] & $+$41.7 [$+$16.7,$+$66.7] & $+$36.1 [$+$6.5,$+$64.8] & $+$47.2 [$+$16.7,$+$75.9]\\
+\midrule
+Rule R1 & all answerable (72) & 76.9 & 84.0 & 55.9 & 81.6 & 80.2\\
+ & & $\Delta$ & $+$7.1 [$-$2.6,$+$16.5] & $-$21.0 [$-$35.8,$-$6.0] & $+$4.8 [$-$5.6,$+$15.3] & $+$3.4 [$-$9.4,$+$15.7]\\
+Rule R1 & retrieved (60) & 92.2 & 85.6 & 50.6 & 83.3 & 77.8\\
+ & & $\Delta$ & $-$6.7 [$-$14.3,$-$0.4] & $-$41.7 [$-$53.7,$-$29.3] & $-$8.9 [$-$17.0,$-$1.7] & $-$14.4 [$-$23.7,$-$5.6]\\
+Rule R1 & Without-empty (12) & 0.0 & 75.9 & 82.4 & 73.1 & 92.6\\
+ & & $\Delta$ & $+$75.9 [$+$54.6,$+$94.4] & $+$82.4 [$+$62.0,$+$98.1] & $+$73.1 [$+$49.1,$+$92.6] & $+$92.6 [$+$77.8,$+$100.0]\\
+\bottomrule\end{tabular}}\end{table*}

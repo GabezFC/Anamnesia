@@ -1,0 +1,58 @@
+[
+  {
+    "export": "summary_gen.json",
+    "source": "benchmark-generativo-2026-10-25/summary_gen.json",
+    "source_sha256": "2143af9cbd55ddbe35386376a375ed4dd54c62250dc4a07eb0d000a263032ff3",
+    "fields": [
+      "model",
+      "cost_effective",
+      "acc",
+      "saving_cost_pct"
+    ],
+    "transform": "field selection only; numerical values unchanged"
+  },
+  {
+    "export": "paper_stats.json",
+    "source": "benchmark-generativo-2026-10-25/paper_stats.json",
+    "source_sha256": "89ce221f9d2758b0267430aba814ea2d3edba42cea57a56dfa9777096d4136fc",
+    "fields": [
+      "tin_mean",
+      "cost_gen_remote",
+      "cost_remote",
+      "pooled_acc",
+      "paired",
+      "by_class"
+    ],
+    "transform": "field selection only; numerical values unchanged"
+  },
+  {
+    "export": "summary.csv",
+    "source": "Benchmark-Anamnesia-2026-10-24/retrieval/resultados/summary.csv",
+    "source_sha256": "6d72a14e8033485dd352ffe4cea6bf48cbfdf8dc180d578f5c159880cb21867b",
+    "fields": [
+      "condition",
+      "dataset",
+      "split",
+      "tokens_mean",
+      "recall@10",
+      "answer_in_ctx"
+    ],
+    "filter": "conditions=off_a,on_baseline_raw,on_graphify_raw,on_full,on_laya; dataset=d2 and split=test",
+    "rows": 5,
+    "transform": "row/field selection only; CSV metric strings unchanged"
+  },
+  {
+    "export": "summary_latency.csv",
+    "source": "Benchmark-Anamnesia-2026-10-24/retrieval/resultados/summary_latency.csv",
+    "source_sha256": "042460d39a99c6ac13d43b4a28c29e02bcad9ffbec302501e3c81dfccc000be7",
+    "fields": [
+      "condition",
+      "dataset",
+      "pass_",
+      "p50_ms"
+    ],
+    "filter": "conditions=off_a,on_baseline_raw,on_graphify_raw,on_full,on_laya; dataset=d2",
+    "rows": 10,
+    "transform": "row/field selection only; CSV metric strings unchanged"
+  }
+]

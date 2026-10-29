@@ -1,0 +1,16 @@
+\begin{table}[!htbp]\caption{Stratified accuracy (\%), nine models pooled. \emph{Retrieved} = the 60 answerable questions for which the \emph{Without} harness delivered a context; \emph{Without-empty} = the 12 answerable questions on which its $\theta$ gate abstained (empty context). Upper block: verdicts exactly as produced by the LLM judge. Lower block: sensitivity rule R1 (an answer that begins with the mandated abstention sentence is never scored correct). $\Delta$ = paired difference vs.\ \emph{Without} in pp with 95\% bootstrap CI.}\label{tab:strata}\centering\footnotesize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}llrrrrr@{}}\toprule Scoring & Stratum ($n$) & Without & Baseline & Graphify & Auto+opt. & G+JEV\\\midrule
+Judge as run & all answerable (72) & 86.6 & 88.7 & 71.6 & 86.9 & 85.0\\
+ & & $\Delta$ & $+$2.2 [$-$4.9,$+$9.4] & $-$15.0 [$-$25.5,$-$4.2] & $+$0.3 [$-$7.4,$+$8.0] & $-$1.5 [$-$10.6,$+$7.9]\\
+Judge as run & retrieved (60) & 94.3 & 89.3 & 68.0 & 87.4 & 83.0\\
+ & & $\Delta$ & $-$5.0 [$-$10.0,$-$0.7] & $-$26.3 [$-$36.5,$-$17.0] & $-$6.9 [$-$12.4,$-$1.9] & $-$11.3 [$-$18.9,$-$4.6]\\
+Judge as run & Without-empty (12) & 48.1 & 86.1 & 89.8 & 84.3 & 95.4\\
+ & & $\Delta$ & $+$38.0 [$+$10.2,$+$67.6] & $+$41.7 [$+$16.7,$+$66.7] & $+$36.1 [$+$6.5,$+$64.8] & $+$47.2 [$+$16.7,$+$75.9]\\
+\midrule
+Rule R1 & all answerable (72) & 76.9 & 84.0 & 55.9 & 81.6 & 80.2\\
+ & & $\Delta$ & $+$7.1 [$-$2.6,$+$16.5] & $-$21.0 [$-$35.8,$-$6.0] & $+$4.8 [$-$5.6,$+$15.3] & $+$3.4 [$-$9.4,$+$15.7]\\
+Rule R1 & retrieved (60) & 92.2 & 85.6 & 50.6 & 83.3 & 77.8\\
+ & & $\Delta$ & $-$6.7 [$-$14.3,$-$0.4] & $-$41.7 [$-$53.7,$-$29.3] & $-$8.9 [$-$17.0,$-$1.7] & $-$14.4 [$-$23.7,$-$5.6]\\
+Rule R1 & Without-empty (12) & 0.0 & 75.9 & 82.4 & 73.1 & 92.6\\
+ & & $\Delta$ & $+$75.9 [$+$54.6,$+$94.4] & $+$82.4 [$+$62.0,$+$98.1] & $+$73.1 [$+$49.1,$+$92.6] & $+$92.6 [$+$77.8,$+$100.0]\\
+\bottomrule\end{tabular}}\end{table}

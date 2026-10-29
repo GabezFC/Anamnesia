@@ -1,0 +1,8 @@
+\begin{table}[!htbp]\caption{Resultados agregados de nove modelos (72 perguntas respondíveis cada; acurácia $n{=}648$ por braço). O custo soma os oito modelos remotos (US\$ por 82 consultas por modelo); o custo JEV é calculado e, para comparabilidade, atribuído a cada modelo (o contexto do avaliador foi produzido uma vez; o gasto real com JEV foi de cerca de US\$0.010); o custo de geração é medido. As economias são relativas ao braço \emph{Sem}.}\label{tab:headline}\centering\footnotesize
+\resizebox{\textwidth}{!}{\begin{tabular}{@{}lrrrrrr@{}}\toprule Braço & Tok. entrada & Acur.\ (\%) & Custo & dos quais JEV & Economia & US\$/correta$\times10^3$\\\midrule
+Sem (BM25{,} notas completas) & 11{,}103 & 86.6 & 2.340 & 0.0000 & -- & 4.69\\
+Com: baseline & 2{,}688 & 88.7 & 0.608 & 0.0000 & 74.0\% & 1.19\\
+Com: Graphify híbrido & 2{,}460 & 71.6 & 0.571 & 0.0000 & 75.6\% & 1.38\\
+Com: auto + otimizador & 1{,}776 & 86.9 & 0.428 & 0.0000 & 81.7\% & 0.86\\
+Com: Graphify + JEV & 2{,}908 & 85.0 & 0.731 & 0.0807 & 68.8\% & 1.50\\
+\bottomrule\end{tabular}}\end{table}

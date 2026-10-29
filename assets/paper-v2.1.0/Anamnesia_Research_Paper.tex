@@ -1,0 +1,333 @@
+\documentclass[conference,onecolumn,11pt]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{cite}
+\usepackage{microtype}
+\graphicspath{{figures/}}
+\input{layout-common}
+\newcommand{\anam}{Anam\-n\'esia}
+\newcommand{\todo}[1]{\textcolor{red}{[#1]}}
+\hyphenation{Graph-ify OpenRouter}
+
+\begin{document}
+
+\title{Anam\-n\'esia: An Agent-Independent Memory Gateway for Persistent Context Retrieval, Token Optimization, and Cost-Aware AI Systems}
+
+\author{\IEEEauthorblockN{Gabriel (GabezFC)}
+\IEEEauthorblockA{\textit{Anam\-n\'esia project (independent)}\\
+Technical report v2.1.0 (independent; not an IEEE publication)\\
+Prepared with the Hermes agent, 25 October 2026\\
+Repository: \texttt{GabezFC/Anamnesia}}}
+
+\maketitle
+
+\begin{abstract}
+Coding agents and chat assistants repeatedly pay to re-read the same notes, decisions and project facts, and lose that knowledge when a session ends. \anam{} is an open, agent-independent \emph{memory gateway}: a local service that sits between an agent and a Markdown/Obsidian vault, retrieves the few passages relevant to a query with SQLite FTS5/BM25 (optionally enriched by a Graphify knowledge graph and a paid relevance judge, JEV), trims and de-duplicates them under a token budget, and returns an auditable, injection-flagged context through the Model Context Protocol (MCP) or a REST API, while recording tokens and cost in a ledger. This paper (i) documents the implemented architecture from the source code, (ii) separates original contributions from functionality supplied by external components, and (iii) reports a real, previously executed generative benchmark: 82 questions over a sanitized slice of the author's own vault, nine models (eight remote through OpenRouter, one local through Ollama), five context pipelines, and 3\,797 logged generation calls. Compared with a whole-note BM25 baseline, the default pipeline (baseline retrieval plus the optimizer) cut provider-reported input tokens from 11{,}103 to 1{,}776 per query and the effective cost of the eight remote models by 81.7\%, while pooled accuracy as scored by an LLM judge was statistically indistinguishable (86.9\% vs.\ 86.6\%; paired $\Delta{=}{+}0.3$ pp, 95\% CI $[-7.4,+8.0]$). Three negative or qualifying findings are equally important: the Graphify-hybrid pipeline lost 15.0 pp of accuracy; the paid JEV judge added cost without any accuracy gain; and a stratified re-analysis shows that the headline parity hides a trade-off---on questions where the baseline retrieved a context, \anam{} was 6.9 pp \emph{less} accurate, whereas it was far better on questions where the baseline's abstention gate returned nothing. Persistence of memory across real agent sessions and recall after long conversations were \emph{not} measured; we state them as unproven. Aggregate figure data, plotting scripts and bilingual figures are released with the paper; raw experiment logs remain private.
+\end{abstract}
+
+\begin{IEEEkeywords}
+memory gateway, retrieval-augmented generation, Model Context Protocol, BM25, knowledge graph, token optimization, LLM cost accounting, agent memory
+\end{IEEEkeywords}
+
+%=====================================================================
+\section{Introduction}
+Large-language-model (LLM) agents are stateless between sessions and pay per token within them. Two practical problems follow. First, \emph{continuity}: decisions, facts and conventions established in earlier sessions must be re-supplied, usually by pasting notes or whole files into the prompt. Second, \emph{cost}: input tokens dominate the bill of retrieval-heavy workloads, and long contexts can also degrade answer quality \cite{liu2024lostmiddle}. A well-known response is retrieval-augmented generation (RAG) \cite{lewis2020rag,gao2023ragsurvey}; agent-specific memory systems extend it with writing, consolidation and paging \cite{packer2023memgpt,park2023generative,zhong2024memorybank,chhikara2025mem0}.
+
+\anam{} (formerly \emph{Memory Gateway}) targets a narrow, practical point in this design space: a \emph{local}, \emph{agent-independent}, \emph{auditable} gateway for a human-curated Markdown vault. It does not train models and it does not require embeddings. Retrieval is lexical (SQLite FTS5 with BM25 ranking \cite{sqlitefts5,robertson2009bm25}), optionally combined with a code/document knowledge graph produced by the external Graphify tool \cite{graphify} and with a paid relevance/injection judge, \emph{JEV}, offered by TypeSafe AI \cite{typesafedocs}. Results are delivered over MCP \cite{mcpspec} or REST (FastAPI \cite{fastapi}) so that any agent that speaks MCP---Hermes, Claude Code, Codex, among others---can use the same memory.
+
+\textbf{Contributions.} (1) A source-level description of the implemented system (Sections~\ref{sec:arch}--\ref{sec:persist}), with eight diagrams that mirror the code paths. (2) A cost model that charges every stage, including the JEV judge, to the pipeline that uses it (Section~\ref{sec:cost}). (3) A documented generative benchmark with public aggregate figure data and plotting scripts (raw benchmark logs remain local and unpublished), including negative results (Sections~\ref{sec:method}--\ref{sec:results}). (4) An explicit separation between demonstrated benefits and capabilities that remain unproven (Sections~\ref{sec:limits}, \ref{sec:future}).
+
+\textbf{What this paper does not claim.} It does not claim superiority over dense retrievers, graph-RAG systems or commercial memory products (none were evaluated), and it does not claim that cross-session agent memory improves task success (not measured).
+
+%=====================================================================
+\section{Background and Related Work}
+\textbf{RAG and lexical retrieval.} RAG conditions generation on retrieved passages \cite{lewis2020rag}; surveys catalogue chunking, retrieval and reranking choices \cite{gao2023ragsurvey}. Dense retrievers \cite{karpukhin2020dpr} dominate many open-domain benchmarks, but BM25 \cite{robertson2009bm25} remains a strong, training-free baseline, especially for small private corpora with exact identifiers (test names, flags, version numbers), which are common in engineering notes. Rank-fusion methods such as RRF \cite{cormack2009rrf} combine lexical and other signals; \anam{} implements an RRF mode but disables it by default.
+
+\textbf{Graph-based retrieval.} GraphRAG builds an entity graph and community summaries for query-focused summarization \cite{edge2024graphrag}; HippoRAG applies personalized PageRank over a knowledge graph for long-term memory \cite{gutierrez2024hipporag,page1999pagerank}. The Graphify tool used here is different in kind: it maps a folder to a graph with tree-sitter ASTs for code and assistant-driven extraction for documents, and its edges are tagged as extracted or inferred \cite{graphify}. As measured by the \anam{} authors on 27 Sep 2026, the graph produced from the vault contains only page and heading labels, never body text (Section~\ref{sec:graphify}).
+
+\textbf{Agent memory.} MemGPT manages a hierarchy of memory tiers \cite{packer2023memgpt}; Generative Agents store and reflect on experience streams \cite{park2023generative}; MemoryBank adds forgetting curves \cite{zhong2024memorybank}; Mem0 extracts and consolidates facts \cite{chhikara2025mem0}. LoCoMo and LongMemEval measure long-horizon conversational memory \cite{maharana2024locomo,wu2025longmemeval}. \anam{} differs in being agent-independent and file-based (notes remain ordinary Markdown), and it has \emph{not} been evaluated on these benchmarks.
+
+\textbf{Context and cost optimization.} Prompt compressors such as LLMLingua \cite{jiang2023llmlingua,jiang2023longllmlingua} shorten text with a small LM; FrugalGPT and RouteLLM reduce spend by cascading or routing among models \cite{chen2023frugalgpt,ong2024routellm}. \anam{} reduces cost by \emph{sending less context}; its routing and compression modules exist but are optional and were not part of the benchmark. Near-duplicate removal uses SimHash and MinHash ideas \cite{charikar2002simhash,manku2007nearduplicates,broder1997resemblance}.
+
+\textbf{LLM-as-a-judge.} Using an LLM to grade free-form answers is common and carries known biases \cite{zheng2023judge}; we use it, document a scoring defect it exhibited, and give a sensitivity analysis (Section~\ref{sec:strata}).
+
+%=====================================================================
+\section{System Architecture}\label{sec:arch}
+Fig.~\ref{fig:arch} shows the system as implemented. Agents reach the gateway by MCP over stdio (default toolset: the single tool \texttt{memory\_search}; the full set has seven tools, with \texttt{memory\_save} and \texttt{memory\_feedback} opt-in), by REST (about 130 operations, writes guarded by a loopback check, Origin/Referer matching and an \texttt{X-MG-Token}), or by a command-line tool (\texttt{anamnesia}: \texttt{doctor}, \texttt{start}, \texttt{mcp}). An optional MCP-to-REST bridge forwards only \texttt{memory\_search}. All paths enter the same in-process object, \texttt{MemoryGateway}, whose search implementation executes the stages detailed in Section~\ref{sec:retrieval}.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_architecture.pdf}
+\caption{System architecture as implemented. Dashed boxes are optional or experimental. The vault mirror is read-only; agent-written notes live in a separate \texttt{saved\_context/} folder.}\label{fig:arch}
+\end{figure}
+
+\textbf{State.} The user's vault is mirrored byte-for-byte into a data directory and opened read-only through confined \texttt{open(rb)} calls; NTFS alternate data streams and reserved device names are rejected. Notes written by agents are stored separately under \texttt{saved\_context/} (Section~\ref{sec:persist}). A SQLite file (\texttt{benchmark.db}) holds the \emph{ledger} (\texttt{runs}, \texttt{candidates}, \texttt{budgets}, \texttt{routing\_decisions}, \texttt{verification\_results}, \texttt{jev\_cache}, and others); a second file holds usage statistics. Token and cost fields are not columns but keys of a JSON blob (\texttt{metrics\_json}: \texttt{jev\_input\_tokens}, \texttt{jev\_cost}, \texttt{context\_tokens}, \texttt{total\_tokens\_spent}, \dots).
+
+\textbf{Components and provenance.} Table~\ref{tab:credits} separates what \anam{} implements from what it consumes.
+
+\begin{table}[t]\caption{Role and provenance of components. ``Original'' means implemented in the \anam{} repository.}\label{tab:credits}\centering\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\columnwidth}{@{}p{0.22\columnwidth}Xp{0.25\columnwidth}@{}}\toprule
+Component & Role in \anam{} & Provenance\\\midrule
+SQLite FTS5 & lexical index, \texttt{bm25()} ranking \cite{sqlitefts5} & external\\
+Graphify CLI & builds \texttt{graph.json} from the vault mirror \cite{graphify} & external (Apache-2.0)\\
+Hybrid retrieval & BM25 seeds + graph BFS expansion & original\\
+Optimizer & cut, near-dup, injection flag, cache, budget & original\\
+JEV (TypeSafe) & paid relevance/injection judge \cite{typesafedocs} & external service; client logic original\\
+MCP server & tool surface for agents \cite{mcpspec} & protocol external; server original\\
+FastAPI/uvicorn & REST layer \cite{fastapi} & external\\
+Ollama & local model runtime in benchmark \cite{ollama} & external\\
+Ledger/cost model & token and cost accounting & original\\
+Laya & optional local relevance model \cite{laya} & external, opt-in\\
+Decision Engine & provider-agnostic keep/drop framework & original, \emph{experimental}\\\bottomrule
+\end{tabularx}\end{table}
+
+The Python dependency list of the repository is short (FastAPI, uvicorn, \texttt{mcp}, \texttt{httpx}, Pydantic \cite{pydantic}, \texttt{typesafe-sdk}, PyYAML, \texttt{anthropic}); notably there is \emph{no} separate BM25 package and \emph{no} embedding model, and \texttt{tiktoken} \cite{tiktoken} is not a runtime dependency (it was used only by the benchmark harness for an independent token count).
+
+%=====================================================================
+\section{Memory Retrieval and Optimization}\label{sec:retrieval}
+\subsection{Query path}
+Fig.~\ref{fig:flow} summarizes the stages of a search; their order is fixed in the gateway: (1) a freshness check that compares a stat manifest of the vault at most every \texttt{MG\_VAULT\_REFRESH\_S}\,$=5$\,s and rebuilds the index on change (clearing caches); (2) query classification into SIMPLE/MEDIUM/COMPLEX/AMBIGUOUS and routing (every class defaults to the \texttt{baseline} pipeline, so \texttt{pipeline=auto} resolves to baseline unless the opt-in \emph{economy} policy selects a JEV pipeline); (3) optional budget guard; (4) result-cache lookup; (5) the retrieval pipeline; (6) scope re-check; (7) the post-filter; (8) context construction; (9) metric/ledger write and cache insertion.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_query_flow.pdf}
+\caption{Query-to-answer flow. JEV participates only in the \texttt{graphify\_jev*} pipelines.}\label{fig:flow}
+\end{figure}
+
+\subsection{Lexical retrieval}
+Notes are split into sections (heading plus body) and indexed in an FTS5 virtual table with the \texttt{unicode61 remove\_diacritics 2} tokenizer. Ranking uses the built-in function \texttt{bm25(sec,0,w,1,0,0)} with a heading weight $w=2.0$ and body weight 1. SQLite's \texttt{bm25()} implements the Okapi form \cite{sqlitefts5,robertson2009bm25}
+\begin{equation}
+\begin{aligned}
+s(d,q)={}&\sum_{t\in q}\mathrm{IDF}(t)\\
+&{}\cdot\frac{f(t,d)\,(k_1+1)}{f(t,d)+k_1\bigl(1-b+b\,\tfrac{|d|}{\mathrm{avgdl}}\bigr)},
+\end{aligned}\label{eq:bm25}
+\end{equation}
+where SQLite fixes $k_1{=}1.2$ and $b{=}0.75$; the \anam{} code does not override them (this is our inference from the code, not an explicit statement in it). SQLite returns negated scores, which \anam{} reverses. Up to \texttt{MAX\_CANDIDATES}\,$=100$ sections are kept per query.
+
+\subsection{Graphify hybrid retrieval}\label{sec:graphify}
+The external Graphify CLI (\texttt{graphify update}, AST-only for this use) turns the vault mirror into \texttt{graph.json}. A design note in the repository records that, on the author's vault, this graph held 1,109 nodes (74 pages and 1,035 headings) and \emph{no body text}, so that seeding from graph labels alone recovered 8 of 10 development questions and failed when the answer lived only in a note body. \anam{} therefore implements its own \emph{hybrid} search (Fig.~\ref{fig:graph}): the first ten distinct BM25 files are text seeds; breadth-first expansion over the graph adds up to 15 related files. Seed candidates receive the rank-ladder score $1.0-0.45\,r/n_{\text{seeds}}$ (range $1.0\to\approx0.55$) and graph-only candidates $0.5-0.2\,i/n_{\text{rel}}$ ($0.5\to0.3$). Personalized PageRank expansion ($\alpha{=}0.85$, 30 iterations, top-15) exists but is off by default. These scores are \emph{ranks, not relevance probabilities}, a fact with consequences in Section~\ref{sec:results}.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_graphify_jev.pdf}
+\caption{Graphify hybrid retrieval and the JEV judge. The graph supplies structure; BM25 supplies content-addressable entry points.}\label{fig:graph}
+\end{figure}
+
+\subsection{Memory Optimization Layer}\label{sec:opt}
+After retrieval, each candidate snippet is whitespace-normalized, truncated to \texttt{SNIPPET\_MAX\_TOKENS}\,$=300$ and hashed. The post-filter (Fig.~\ref{fig:opt}) applies, in order:
+\begin{enumerate}
+\item \textbf{Adaptive cut} (free pipelines only; SIMPLE/MEDIUM queries): keep candidate $i$ if $i<3$ or $\mathrm{score}_i\ge 0.5\cdot\max_j \mathrm{score}_j$. Because baseline BM25 scores are unbounded while Graphify scores are a rank ladder, the same ratio acts differently in the two pipelines.
+\item \textbf{Near-duplicate collapse}: 64-bit SimHash with 8 LSH bands (Hamming $\le12$) and a 4-shingle Jaccard pre-gate select candidate pairs, confirmed by a sequence-similarity ratio $\ge 0.88$ \cite{charikar2002simhash,manku2007nearduplicates,broder1997resemblance}. One section per note is kept by default (\texttt{DEDUP\_MAX\_PER\_NOTE}\,$=1$).
+\item \textbf{Injection flagging}: a regular-expression screen (``inj-screen-v2'', English and Portuguese, Unicode-normalized) marks suspicious notes with a warning attribute. It \emph{flags but never drops}, and flagged results are not cached.
+\item \textbf{Temporal and conflict demotion}: historical or conflicting notes have their score multiplied by 0.5.
+\end{enumerate}
+The \emph{context builder} then ranks candidates, interleaves them round-robin by file, caps each source at 1,500 tokens and fills a total budget of 6,000 tokens greedily, dropping a block if fewer than 120 tokens would remain. Each block is wrapped as a \texttt{<note source=\dots>} element and the whole context is declared untrusted.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_optimization_layer.pdf}
+\caption{Memory Optimization Layer: post-filter operations, result cache and token estimator.}\label{fig:opt}
+\end{figure}
+
+\textbf{Caching.} The result cache is an in-process LRU (256 entries, 900\,s TTL) keyed by the canonical query, pipeline, scope, budget, configuration digest and index epoch; on every hit the delivered files are re-hashed to detect staleness, and anti-poisoning rules refuse to cache flagged results. We found \emph{no} embedding-based semantic cache for search results; the only query-normalized cache is the judge-verdict cache (query terms plus note content hash).
+
+\textbf{Token estimation.} Without a tokenizer dependency, \anam{} estimates $\hat n=\lceil \max(c/4,\,1.3w)\cdot 1.13
+ceil$ from character and word counts, where 1.13 is a Portuguese calibration factor that the code itself describes as not freshly measured. All token counts in our results come from the \emph{provider} (\texttt{usage.prompt\_tokens}) or from \texttt{tiktoken} (context size), not from this estimator.
+
+\subsection{JEV judge and cost model}\label{sec:cost}
+In the \texttt{graphify\_jev*} pipelines, a lexical prefilter keeps the top 8 candidates, which JEV (model \texttt{jev-1.13.0}) scores for relevance and injection. A candidate is \texttt{QUARANTINE}d if injection $\ge0.80$, \texttt{KEEP} if relevance $\ge0.78$, \texttt{REVIEW} if $\ge0.55$, else dropped; judge failures follow \texttt{fail\_open} by default (unjudged candidates survive), and if everything is dropped the top 3 unjudged candidates are restored as a safety net. The repository's least-squares fit over ten real requests gives
+\begin{equation}
+\begin{aligned}
+\hat n_{\mathrm{JEV}}&\approx 340\,R+209\,Q\quad\text{(input tokens)},\\
+C_{\mathrm{JEV}}&=\frac{n_{\mathrm{JEV}}}{10^{6}}\cdot 0.042\ \text{US\$},
+\end{aligned}\label{eq:jev}
+\end{equation}
+for $R$ HTTP requests and $Q$ judged questions; output tokens are free at the quoted tariff. The effective cost of a pipeline that serves a model $m$ is therefore
+\begin{equation}
+\begin{aligned}
+C^{\text{with}}_m&=\sum_{q}\Bigl[C_{\mathrm{gen}}\bigl(m,\mathrm{ctx}_q\bigr)+C_{\mathrm{JEV}}(q)\Bigr],\\
+C^{\text{without}}_m&=\sum_{q}C_{\mathrm{gen}}\bigl(m,\mathrm{notes}_q\bigr),
+\end{aligned}\label{eq:cost}
+\end{equation}
+with local retrieval and optimization costing zero dollars (CPU only; energy not measured). A saving is $1-C^{\text{with}}/C^{\text{without}}$. Reduction of context alone is \emph{not} a saving unless Eq.~\eqref{eq:cost} confirms it; Fig.~\ref{fig:costacct} shows what is charged. The experimental Decision Engine wraps JEV and other providers behind one interface with caching and per-operation fallback; it was not used in any experiment reported here, and its own telemetry labels JEV dollars as unknown.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_cost_accounting.pdf}
+\caption{Cost accounting used throughout. The evaluation judge is overhead of the experiment and is excluded from both arms.}\label{fig:costacct}
+\end{figure}
+
+%=====================================================================
+\section{Persistent Memory and Agent Integration}\label{sec:persist}
+\textbf{Storage model.} With \texttt{MG\_MCP\_SAVE=1}, \texttt{memory\_save} writes a Markdown note with YAML frontmatter (project, confidence, trust and feedback counters) into \texttt{saved\_context/}, never into the user's vault. Writes are atomic (temporary file, \texttt{fsync}, \texttt{os.replace}) under a cross-process file lock (\texttt{msvcrt.locking} on Windows, \texttt{fcntl.flock} elsewhere). Saves pass a project gate, size and rate limits, and a secret scanner that rejects secret-like text. The folder is mounted as a read-only extra root of the index, so a refresh (Fig.~\ref{fig:persist}) makes a saved note retrievable by later searches, including in other processes and sessions. \texttt{memory\_feedback} adjusts a note's confidence by $+0.05$ (useful), $-0.2$ (wrong) or $-0.05$ (stale); a composite rank (``v2'') that uses it is opt-in.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_persistence_cycle.pdf}
+\caption{Persistent-memory cycle. The mechanism is implemented; its end-to-end benefit for agents was not measured.}\label{fig:persist}
+\end{figure}
+
+\textbf{Isolation.} Searches accept a scope such as \texttt{projeto:X}; \texttt{MG\_SCOPE} can pin a session so that tools can only \emph{narrow} it. By default scope is applied after the top-100 candidate cut, so a narrow scope can return fewer results than exist in that project. A defence-in-depth re-check counts and blocks leaked results.
+
+\textbf{Agent integration.} Fig.~\ref{fig:agents} shows the communication paths. Adapters exist for Hermes, Claude Code and Codex; OpenCode is detection-only and unvalidated; we found no Cursor integration. Local and remote models are reached through a generic OpenAI-compatible client (Ollama, vLLM, OpenRouter, OpenAI, Anthropic adapters; vLLM untested against a real server). Reads on the default loopback bind need no token; mutating routes require a loopback client, matching Origin and Referer, and \texttt{X-MG-Token}. Retrieved notes carry \texttt{trust="untrusted"}. The browser dashboard is vanilla ES modules with a hash router and no build step.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_agent_mcp_gateway.pdf}
+\caption{Communication between agents, the MCP server and the gateway.}\label{fig:agents}
+\end{figure}
+
+\textbf{Experimental or unfinished.} The Decision Engine presets, Colibr\`i (local JEV backend), LLMLingua/Provence compressors and rerankers (separate Python environment), and the SQLite note catalog are not wired into the default runtime; Laya runs on CPU but is opt-in and, per the repository's own measurements, is a weak relevance model (AUC 0.64--0.68 versus 0.975 for lexical overlap).
+
+%=====================================================================
+\FloatBarrier
+\section{Experimental Methodology}\label{sec:method}
+\textbf{Scope of evidence.} All results below were produced \emph{before} this paper by two earlier executions: a retrieval-only benchmark (24 Oct 2026) and a generative benchmark (25 Oct 2026). No experiment was run for the paper; tables and figures are regenerated from the stored logs. Where we computed new statistics from stored data (paired bootstraps, stratification, a sensitivity rule), this is stated and the original verdicts remain unaltered.
+
+\textbf{Corpus and questions.} \emph{D2} is a sanitized snapshot of the author's real project notes (Portuguese, 379 notes), frozen in a copy; the original vault was never written. The 82 questions have verifiable gold sources and regular-expression answers: 36 factual, 28 numeric, 10 unanswerable, 3 ambiguous, 3 duplicate/version, 2 long-document. (A synthetic reproducible corpus, D1, exists but was not used generatively.)
+
+\textbf{Arms (Fig.~\ref{fig:design}).} \emph{Without}: an independent harness (imports of \anam{} are blocked by a guard) with BM25 over whole notes, delivering the top-5 notes; its abstention threshold $\theta$ is calibrated on a development split, and it returned an empty context for 22 of 82 questions (10 unanswerable, 12 answerable). \emph{With}: the real \anam{} through MCP stdio, fresh home directory and vault copy per block, offline: \textbf{baseline} (BM25 sections), \textbf{Graphify} (hybrid), \textbf{auto+optimizer} (\texttt{pipeline=auto}, which resolves to baseline, plus the optimizer and cache), and \textbf{Graphify+JEV} (paid). Contexts were produced once (cold pass) and replayed \emph{byte-identically} to every model, so the sole varying factor between arms is the context.
+
+\begin{figure}[!htbp]\centering
+\paperfigure{diag_with_vs_without.pdf}
+\caption{Experimental design: identical prompt, model and temperature; only the context differs.}\label{fig:design}
+\end{figure}
+
+\textbf{Generation.} A fixed system prompt instructs the model to answer only from the context, cite sources, and otherwise reply ``N\~ao encontrei essa informa\c{c}\~ao no contexto''. Temperature 0, seed 42, 512 output tokens, one repetition per cell. Eight models via OpenRouter \cite{openrouter} (gpt-4o-mini, gpt-4.1-mini, gemini-2.5-flash-lite, deepseek-chat-v3.1, llama-3.3-70b-instruct, qwen3-235b-a22b-2507, mistral-small-3.2-24b-instruct, claude-haiku-4.5) and one local model (qwen3.5:9b via Ollama on an RTX\,3060 shared with other processes). Remote cost is the provider-reported \texttt{usage.cost}; JEV cost is \emph{calculated} (Eq.~\ref{eq:jev}); no TypeSafe invoice was available.
+
+\textbf{Scoring.} An independent LLM judge (gpt-4.1-mini, temperature 0) compared each answer with the gold passage and returned CORRECT, INCORRECT or ABSTAIN (for unanswerable questions: ABSTAIN is correct). Accuracy is the share of CORRECT on the 72 answerable questions. Intervals for single proportions are Wilson intervals \cite{wilson1927}; paired differences use a question-level bootstrap \cite{efron1979bootstrap} (4,000 resamples, seed 20261025) pooling the nine models, which treats questions as the sampling unit.
+
+\textbf{Volume.} 3,797 generation rows were logged, 3,690 valid (9 models $\times$ 5 arms $\times$ 82 queries) and 107 failed attempts (HTTP 429/400) that were retried until every cell had 82 answers; 3,690 judgments were produced. Generation cost was US\$4.60 and judging US\$0.75; the OpenRouter balance fell by about US\$5.38.
+
+\textbf{Retrieval-only benchmark (24 Oct).} Datasets D1 (synthetic), D2 (real) and D3 (D2 before/after a vault-structure change), 5 measured repetitions after one discarded warm-up, cold and hot passes, tiktoken \texttt{cl100k\_base} for all token counts, paired bootstrap with 2,000 resamples (seed 20261024). It also includes a stronger \emph{OFF-B} baseline: BM25 over \emph{sections} with the same token budget as the corresponding \anam{} run.
+
+%=====================================================================
+\FloatBarrier
+\section{Experimental Results}\label{sec:results}
+\subsection{Tokens, cost and accuracy}
+Table~\ref{tab:headline} and Fig.~\ref{fig:headline} give the pooled results. Provider-reported input tokens fall from 11,103 (Without) to 1,776 (auto+optimizer), a reduction of 84\%; the mean tiktoken size of the delivered context falls from 10,889 (maximum 71,308) to 1,637. Mean output length is about 60--70 tokens in all arms, so cost is almost entirely input cost. The effective cost of the eight remote models drops by 81.7\% for auto+optimizer (per model 80--86\%, Fig.~\ref{fig:heat}); JEV adds US\$0.0101 per 82-query run (252,404 judge tokens), yet because the JEV arm also delivers larger contexts, its saving is only 68.8\% pooled (59--73\% per model).
+
+\input{table_parts/headline}
+\input{table_parts/paired}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_headline.pdf}
+\caption{Pooled headline results. (a) Provider-reported input tokens per query. (b) Effective cost over the eight remote models; hatched = JEV (calculated). (c) Accuracy on 72 answerable questions; error bars are 95\% bootstrap CIs of the paired difference to \emph{Without}, plotted around each arm's value.}\label{fig:headline}
+\end{figure}
+
+Accuracy is statistically indistinguishable from the baseline for auto+optimizer ($+0.3$ pp; Table~\ref{tab:paired}), and also for the plain baseline pipeline ($+2.2$ pp) and for Graphify+JEV ($-1.5$ pp). Graphify without JEV is the only arm with a significant loss ($-15.0$ pp, CI excluding zero). Four of nine models score at least as high with auto+optimizer as without. Accuracy in a single cell has a 95\% CI of roughly $\pm 8$ pp (Fig.~\ref{fig:accmodel}); only pooled comparisons are informative.
+
+\input{table_parts/models}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_accuracy_by_model.pdf}
+\caption{Accuracy by model and pipeline (72 questions per bar, single run).}\label{fig:accmodel}
+\end{figure}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_cost_by_model.pdf}
+\caption{Effective cost per model (log scale), JEV included.}\label{fig:costmodel}
+\end{figure}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_saving_heatmap.pdf}
+\caption{Saving of effective cost relative to \emph{Without}, by model and pipeline (\%).}\label{fig:heat}
+\end{figure}
+
+Savings scale with model price: for claude-haiku-4.5 the cost of 82 queries falls from US\$1.10 to US\$0.22; for mistral-small-3.2 from US\$0.072 to US\$0.012, so the absolute saving is small for cheap models. For the local model there is no dollar saving (zero API cost in all arms), although its median generation latency fell from 8.1\,s to 2.6\,s with auto+optimizer; this comparison is confounded by GPU sharing and Ollama model loading (the first call took 6.8\,s). Remote generation latency changed less (mean of per-model p50: 2.98\,s Without vs.\ 2.30\,s auto+optimizer) and is dominated by provider queueing at six concurrent calls. Fig.~\ref{fig:pareto} plots cost against accuracy.
+
+\begin{figure}[!htbp]\centering
+\paperfigure[0.52\linewidth]{fig_pareto.pdf}
+\caption{Cost--quality trade-off. Marker shape identifies the model.}\label{fig:pareto}
+\end{figure}
+
+\subsection{Quality by question class}
+Table~\ref{tab:class} and Fig.~\ref{fig:class} show that Graphify's loss is concentrated on numeric questions (57\% vs.\ 94\% Without), where the exact figure sits in note bodies that the label-only graph does not index. The gold answer was present in the delivered context for 53\% of answerable questions with Graphify versus 81\% (Without), 85\% (baseline), 83\% (auto+optimizer) and 82\% (JEV), as measured by the answer regular expression on the stored contexts (a proxy). The duplicate/version class (3 questions) is the only one in which auto+optimizer is far below Without (41\% vs.\ 67\%), consistent with the retrieval benchmark's observation that some superseded \texttt{-pre-} notes are still delivered; the sample is anecdotal.
+
+\input{table_parts/class}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_by_class.pdf}
+\caption{Accuracy by question class (nine models pooled).}\label{fig:class}
+\end{figure}
+
+\input{table_parts/strata}
+
+\subsection{Stratified analysis and a scoring defect}\label{sec:strata}
+The \emph{Without} harness abstains when its top BM25 score is below $\theta$, so for 12 of the 72 answerable questions it supplied an empty context. Splitting by this event (Table~\ref{tab:strata}) reveals that the near-zero pooled difference is the sum of two opposite effects. On the 60 questions where \emph{Without} retrieved something, it scored 94.3\% against 87.4\% for auto+optimizer (paired $-6.9$ pp, CI $[-12.4,-1.9]$), 89.3\% for baseline ($-5.0$, CI $[-10.0,-0.7]$) and 83.0\% for JEV ($-11.3$). On the 12 questions with empty \emph{Without} context, \anam{} was far better (+36 to +47 pp).
+
+The \emph{Without} score on those 12 questions (48.1\%) is implausibly high for an answer that should be an abstention. Inspection of stored answers showed that the judge labelled some replies consisting only of the mandated abstention sentence as CORRECT, despite instructions. Since this is a defect of our evaluation, we report a deterministic sensitivity rule R1 (an answer beginning with the abstention sentence is never CORRECT on an answerable question) applied to the stored text; it changes 63 \emph{Without} verdicts and between 31 and 102 per \anam{} arm. Under R1 pooled accuracy becomes 76.9\% (Without), 84.0\% (baseline), 55.9\% (Graphify), 81.6\% (auto+optimizer) and 80.2\% (JEV); the pooled paired differences ($+4.8$ for auto+optimizer, CI $[-5.6,+15.3]$) remain statistically indistinguishable from zero, but the stratified pattern persists ($-8.9$ pp on the 60 retrieved questions, CI $[-17.0,-1.7]$). We therefore regard the following as the best-supported reading: \emph{\anam{} reduces tokens by about 84\% and is more robust than a thresholded whole-note BM25 when that BM25 retrieves nothing, but when the whole-note BM25 does retrieve, giving the model entire notes yields measurably higher accuracy than the trimmed context}. The headline ``86.9\% vs.\ 86.6\%'' is accurate as the as-run judged value, but it should not be read as ``no quality cost''.
+
+\subsection{Unanswerable questions}
+All nine models in all five arms abstained correctly on all ten unanswerable questions, as judged. This reflects the instruction-following of the generator, not the gateway: the retrieval benchmark shows that \anam{} \emph{always} returns a context (abstention rate 0\% on the unanswerable set, false-positive rate 100\%), whereas the thresholded \emph{Without} harness abstains correctly 100\% of the time but also wrongly abstains on 16.7\% of answerable questions.
+
+\subsection{Retrieval-only evidence (24 Oct, real measurements)}
+Table~\ref{tab:retrieval} and Fig.~\ref{fig:retr} summarize D2. Against \emph{Without} (OFF-A), the \anam{} pipelines deliver 77--86\% fewer context tokens at higher recall@10 (0.97 vs.\ 0.83); Graphify's gold-answer-in-context rate (0.56) is far below baseline (0.83), matching the generative loss. Against the stronger OFF-B (section-level BM25 at the same budget), \anam{} delivers 8--10\% \emph{more} tokens (CI includes zero) but higher recall@10 (paired $\Delta{=}+0.21$ to $+0.24$, CIs excluding zero) and higher answer-in-context ($+0.10$ baseline; $+0.135$ auto, CI $[0.02,0.25]$). Thus against a competent chunked baseline the advantage is retrieval quality, not token cost; the generative benchmark did not include OFF-B. Latency (Fig.~\ref{fig:lat}): auto+optimizer has p50 of 45.6\,ms cold and 9.9\,ms hot (result cache), versus 0.7\,ms for the in-process baseline, i.e.\ tens of times slower but negligible relative to LLM latency of seconds; Laya (local CPU) needs $\approx4$\,s per query and delivered 6.7k tokens (40\% reduction) with recall@10 of 0.75.
+
+\input{table_parts/retrieval}
+
+\begin{figure}[!htbp]\centering
+\paperfigure{fig_retrieval.pdf}
+\caption{Retrieval-only benchmark on D2 (test split): context tokens, recall@10 and presence of the answer in the delivered context.}\label{fig:retr}
+\end{figure}
+
+\begin{figure}[!htbp]\centering
+\paperfigure[0.52\linewidth]{fig_retrieval_latency.pdf}
+\caption{Retrieval latency, cold vs.\ hot.}\label{fig:lat}
+\end{figure}
+
+\subsection{Persistence, update and isolation scenarios (24 Oct)}
+Small controlled scenarios exercised the memory mechanisms. (i) \emph{Save and scoped search} (F9-01): 18/18 checks passed for the three \anam{} pipelines (a note saved under a project is found in its scope and not in another). (ii) \emph{Isolation} on the synthetic corpus: without scope, 68--82\% of delivered sources came from other projects; with \texttt{projeto:X}, 0\% leakage at hit@10 $\ge0.97$. (iii) \emph{Update with the server running}: 3\,s after editing a note the old version was still served; at 7\,s the new version was served by baseline and auto, but the Graphify arm did not reflect the edit at either time (the graph is built per session). (iv) \emph{Injection/disinformation} ($N{=}5$ and 3): the decoy note was delivered by every pipeline; the optimizer flagged injection in 5/5 and misinformation in 2/3 cases without blocking. (v) D3 (before/after a structural change of the vault, 67 paired questions): recall@10 and answer-in-context unchanged ($\Delta=0$), recall@5 changes of $-0.5$ to $-3.5$ pp with CIs touching zero. These are \emph{mechanism checks with small $N$}; they do not establish that an agent remembers earlier conversations.
+
+%=====================================================================
+\FloatBarrier
+\section{Discussion}
+\textbf{What is demonstrated.} (1) The gateway reliably shrinks the prompt by roughly 84\% against whole-note BM25 and, with the model's own pricing, converts this into a cost saving of 80--86\% for the default pipeline across eight remote models (measured generation cost; zero retrieval dollars). (2) Pooled accuracy as judged is not distinguishable from the whole-note baseline, for the default pipeline and for plain baseline retrieval. (3) Retrieval quality of the default pipeline exceeds both whole-note and section-level BM25 on recall of gold sources.
+
+\textbf{What is not shown, or is contradicted.} (a) The paid judge did not pay for itself here: it added US\$0.08 across eight runs and enlarged contexts (2,908 vs.\ 1,776 tokens), without accuracy gain (85.0\% vs.\ 86.9\%). One plausible reason is that the JEV pipeline starts from the Graphify candidate set, whose recall of answer-bearing sections is low; we have not isolated this. (b) Graphify's graph is the wrong tool for \emph{finding} text: it holds labels, not bodies, and the rank-ladder scores interact poorly with the 0.5 adaptive cut. The hybrid fixes recall of \emph{files} (recall@10 0.97) but not of \emph{answer-bearing passages} (0.56). (c) The headline parity hides a stratified deficit versus whole-note BM25 when the latter retrieves (Section~\ref{sec:strata}).
+
+\textbf{Why trimmed context can lose.} An adaptive cut and a 300-token snippet cap may remove the exact sentence that contains a number; whole notes include it. The loss on numeric questions for Graphify (57\%) supports this view; for baseline and auto it is a few points. Tuning the snippet and budget parameters on a development split, and adding section-level whole-note fallbacks, are natural remedies that we have not tried.
+
+\textbf{Where cost savings matter.} Absolute savings are material only for priced models and long contexts; for cheap models the JEV overhead consumes up to a third of the savings (mistral: 83\% $\to$ 59\%). For local models the benefit is latency and context-window pressure, not dollars.
+
+%=====================================================================
+\section{Limitations and Threats to Validity}\label{sec:limits}
+\textbf{Internal validity.} One repetition per cell; per-cell 95\% CIs are about $\pm8$ pp. The judge is a single LLM, was not validated against humans, and exhibited the abstention-scoring defect of Section~\ref{sec:strata}; R1 is a heuristic correction, not a re-judgement. The \emph{Without} arm's empty-context gate ($\theta$) is itself a design choice that interacts with accuracy. The gold regular expressions were written against contexts rather than free-form answers and are used only for context-presence analysis. Judge, generator and some evaluated models belong to the same vendor families, so self-preference cannot be excluded.
+
+\textbf{Baseline strength.} \emph{Without} delivers whole notes (mean 10.9k tokens, maximum 71k), which is a weak baseline for cost; a section-level BM25 (OFF-B) was evaluated for retrieval only, not generation. Part of the token saving is attributable to chunking, which is not unique to \anam{}.
+
+\textbf{Construct validity.} Cost is token cost; energy, engineering time and the cost of maintaining the gateway are excluded. JEV cost is calculated from a published tariff and token counts, not invoiced. Provider tokenizers differ, so ``input tokens'' are not comparable across models in absolute terms.
+
+\textbf{External validity.} One Portuguese-language, single-author engineering vault (379 notes); 82 questions; a 2026 model snapshot. Results may not transfer to other languages, corpora, or to a vault with heavy paraphrase where lexical retrieval is weak.
+
+\textbf{Not evaluated.} Persistence across real agent sessions, recall after long multi-turn conversations, memory consolidation, end-to-end task success, comparison with dense or graph-RAG systems, the Decision Engine, Laya in generation, hybrid/ensemble strategies without a retrieval route, premium models, and providers whose keys exist but which were not tested. Deployed claims in the project README (for instance ``$-39.7\%$/$-24.2\%$ context at unchanged recall'' and schema-token comparisons) have no stored artifact in the audited material, and the 24 Oct benchmark shows recall@5 on D1 dropping from 0.903 to 0.799 for the optimizer arm while recall@10 is unchanged.
+
+\textbf{Security.} The injection screen is heuristic and non-blocking; retrieved notes are labelled untrusted but the consuming agent decides what to do with them. Write endpoints are loopback- and token-guarded; reads on loopback require no token.
+
+%=====================================================================
+\section{Future Work}\label{sec:future}
+\begin{enumerate}
+\item \textbf{Long-horizon memory evaluation}: run LoCoMo- and LongMemEval-style tasks \cite{maharana2024locomo,wu2025longmemeval} with real agents across sessions, measuring recall of decisions after dozens of turns with and without \texttt{memory\_save}.
+\item \textbf{Fair generative baselines}: add OFF-B (section BM25 at equal budget) and a dense retriever to the generative study; add repetitions and human-validated judging.
+\item \textbf{Parameter tuning}: snippet cap, adaptive-cut ratio and budget tuned on a development split; section-level fallbacks for numeric questions.
+\item \textbf{A self-contained graph}: generate the link/heading graph inside \anam{} (wikilinks, headings, frontmatter) and measure recall against the Graphify graph, removing the external dependency for graph construction.
+\item \textbf{Judge economics}: evaluate JEV on a candidate set with higher recall (baseline rather than Graphify seeds), with invoiced rather than calculated cost.
+\item \textbf{Freshness for graphs}: incremental graph refresh so edits become visible within the vault refresh interval.
+\item \textbf{Stronger injection defences}: blocking policies and learned detectors, evaluated on a larger adversarial set.
+\end{enumerate}
+
+%=====================================================================
+\section{Conclusion}
+\anam{} is a working, local, agent-independent memory gateway that implements lexical retrieval, graph-enhanced retrieval, context trimming, near-duplicate removal, caching, injection flagging and cost ledgering behind MCP and REST interfaces. In a real, fully logged benchmark, its default pipeline reduced input tokens by about 84\% and effective cost by about 82\% across eight remote models with pooled accuracy statistically indistinguishable from a whole-note BM25 baseline; but a stratified re-analysis shows lower accuracy when that baseline did retrieve, the Graphify pipeline hurt accuracy by 15 pp, and the paid JEV judge was not cost-effective in this setting. Whether the persistent-memory design improves agent continuity over real, long sessions remains an open empirical question that this paper deliberately does not answer.
+
+\section*{Availability}
+The public package \texttt{assets/paper-v2.1.0/} contains the LaTeX sources, English and Portuguese PDFs, bilingual figures, aggregate figure data and plotting scripts. The original generation and evaluation logs (\texttt{calls.jsonl}, \texttt{judge.jsonl}), the private vault snapshot and the original scoring inputs remain local under \texttt{data/reports-out/}; they are not included in the public package. The published aggregates reproduce the figures, not the full generative experiment. This paper adds no new model experiments or API expenditure.
+
+\section*{Acknowledgments}
+We thank the maintainers of Graphify, SQLite, FastAPI, the Model Context Protocol, Ollama, OpenRouter and TypeSafe AI, whose work \anam{} builds on.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

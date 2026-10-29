@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="645.777pt" height="272.196pt" viewBox="0 0 645.777 272.196" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-10-28T23:56:22.250196</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 272.196 
+L 645.777 272.196 
+L 645.777 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 21.47085 120.20058 
+L 191.85615 120.20058 
+Q 198.77535 120.20058 198.77535 113.32602 
+L 198.77535 51.45498 
+Q 198.77535 44.58042 191.85615 44.58042 
+L 21.47085 44.58042 
+Q 14.55165 44.58042 14.55165 51.45498 
+L 14.55165 113.32602 
+Q 14.55165 120.20058 21.47085 120.20058 
+z
+" clip-path="url(#p99da1da967)" style="fill: #922b21"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 220.39785 120.20058 
+L 390.78315 120.20058 
+Q 397.70235 120.20058 397.70235 113.32602 
+L 397.70235 51.45498 
+Q 397.70235 44.58042 390.78315 44.58042 
+L 220.39785 44.58042 
+Q 213.47865 44.58042 213.47865 51.45498 
+L 213.47865 113.32602 
+Q 213.47865 120.20058 220.39785 120.20058 
+z
+" clip-path="url(#p99da1da967)" style="fill: #7d3c98"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 419.32485 120.20058 
+L 619.98165 120.20058 
+Q 626.90085 120.20058 626.90085 113.32602 
+L 626.90085 51.45498 
+Q 626.90085 44.58042 619.98165 44.58042 
+L 419.32485 44.58042 
+Q 412.40565 44.58042 412.40565 51.45498 
+L 412.40565 113.32602 
+Q 412.40565 120.20058 419.32485 120.20058 
+z
+" clip-path="url(#p99da1da967)" style="fill: #148f77"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 116.60985 236.20878 
+L 312.94215 236.20878 
+Q 319.86135 236.20878 319.86135 229.33422 
+L 319.86135 180.35298 
+Q 319.86135 173.47842 312.94215 173.47842 
+L 116.60985 173.47842 
+Q 109.69065 173.47842 109.69065 180.35298 
+L 109.69065 229.33422 
+Q 109.69065 236.20878 116.60985 236.20878 
+z
+" clip-path="url(#p99da1da967)" style="fill: #7f8c8d; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #2c3e50; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 350.13285 236.20878 
+L 615.65715 236.20878 
+Q 622.57635 236.20878 622.57635 229.33422 
+L 622.57635 180.35298 
+Q 622.57635 173.47842 615.65715 173.47842 
+L 350.13285 173.47842 
+Q 343.21365 173.47842 343.21365 180.35298 
+L 343.21365 229.33422 
+Q 343.21365 236.20878 350.13285 236.20878 
+z
+" clip-path="url(#p99da1da967)" style="fill: #6c3483"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 8px; font-family: 'DejaVu Sans'; text-anchor: middle" x="322.8885" y="19.23048" transform="rotate(-0 322.8885 19.23048)">Contabilização de tokens e custos usada no artigo</text>
+   </g>
+   <g id="text_2">
+    <text style="font-weight: 700; font-size: 8px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="106.6635" y="75.602625" transform="rotate(-0 106.6635 75.602625)">Geração</text>
+   </g>
+   <g id="text_3">
+    <text style="font-size: 6.2px; font-family: 'DejaVu Sans'; fill: #ffffff" transform="translate(65.502766 86.843312)">usage.cost do OpenRouter</text>
+    <text style="font-size: 6.2px; font-family: 'DejaVu Sans'; fill: #ffffff" transform="translate(69.031438 94.159312)">(MEDIDO, por chamada)</text>
+   </g>
+   <g id="text_4">
+    <text style="font-weight: 700; font-size: 8px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="305.5905" y="75.390125" transform="rotate(-0 305.5905 75.390125)">JEV</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 6.2px; font-family: 'DejaVu Sans'; fill: #ffffff" transform="translate(265.782141 86.757094)">jev_tokens × US$0.042/M</text>
+    <text style="font-size: 6.2px; font-family: 'DejaVu Sans'; fill: #ffffff" transform="translate(265.077375 94.395203)">(CALCULADO; sem fatura)</text>
+   </g>
+   <g id="text_6">
+    <text style="font-weight: 700; font-size: 8px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="519.65325" y="75.553875" transform="rotate(-0 519.65325 75.553875)">Recuperação local + otimizador</text>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 6.2px; font-family: 'DejaVu Sans'; fill: #ffffff" transform="translate(488.630484 87.032219)">US$0 (CPU, SQLite);</text>
+    <text style="font-size: 6.2px; font-family: 'DejaVu Sans'; fill: #ffffff" transform="translate(488.568969 94.212109)">energia não medida</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 7px; font-family: 'DejaVu Sans Mono'; text-anchor: middle" x="322.8885" y="134.37936" transform="rotate(-0 322.8885 134.37936)">C_with = Σ C_gen(ctx_with) + C_JEV        C_without = Σ C_gen(ctx_notes)</text>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 8px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="214.776" y="197.90385" transform="rotate(-0 214.776 197.90385)">Avaliador (gpt-4.1-mini)</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 6.2px; font-family: 'DejaVu Sans'; fill: #ffffff" transform="translate(165.412375 210.099991)">custo do benchmark; EXCLUÍDO</text>
+    <text style="font-size: 6.2px; font-family: 'DejaVu Sans'; fill: #ffffff" transform="translate(180.378594 216.526194)">de C_with e C_without</text>
+   </g>
+   <g id="text_11">
+    <text style="font-weight: 700; font-size: 8px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="482.895" y="198.06385" transform="rotate(-0 482.895 198.06385)">Registro contábil (fluxo de produção)</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 6.2px; font-family: 'DejaVu Sans'; fill: #ffffff" transform="translate(419.878781 209.210194)">metrics_json: jev_input_tokens, jev_cost,</text>
+    <text style="font-size: 6.2px; font-family: 'DejaVu Sans'; fill: #ffffff" transform="translate(428.263797 216.526194)">context_tokens, total_tokens_spent</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p99da1da967">
+   <rect x="7.2" y="7.2" width="631.377" height="257.796"/>
+  </clipPath>
+ </defs>
+</svg>

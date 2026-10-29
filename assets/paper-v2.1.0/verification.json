@@ -1,0 +1,26 @@
+{
+  "en": {
+    "pdf": "Anamnesia_Research_Paper.pdf",
+    "pages": 20,
+    "figures": 16,
+    "out_of_page_spans": 0,
+    "text_characters": 54648
+  },
+  "pt-BR": {
+    "pdf": "Anamnesia_Research_Paper_PT.pdf",
+    "pages": 21,
+    "figures": 16,
+    "out_of_page_spans": 0,
+    "text_characters": 60132
+  },
+  "checks": [
+    "matching labels/citations/references",
+    "matching numeric table cells",
+    "16 figure sources per language",
+    "nonempty complete PDFs",
+    "no out-of-page text spans"
+  ],
+  "visual_review": "All final PDF pages inspected as contact sheets; all figure PNGs reviewed in EN/PT. No graph/body-text collisions observed.",
+  "latex": "No overfull boxes or undefined citations/references in final build logs. Font substitution/underfull warnings may remain.",
+  "release": "v2.1.0 (technical report only)"
+}
