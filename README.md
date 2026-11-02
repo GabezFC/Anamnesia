@@ -37,6 +37,10 @@ Design documents live in the author's knowledge base (architecture, UX, data mod
 threat model, roadmap). The roadmap order is: base cleanup, security minimum, workspace,
 cost ledger, connections, model routing, orchestration, persistent memory.
 
+<p align="center">
+  <img src="assets/benchmark-2026-10-25/Custo efetivo por modelo e geração.png" width="100%">
+</p>
+
 ---
 
 # Memory Gateway (the utility)
