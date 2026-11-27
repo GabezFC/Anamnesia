@@ -20,7 +20,7 @@ llmlingua==0.2.2            # llmlingua2 (MIT). Model microsoft/llmlingua-2-xlm-
 nltk==3.10.3
 
 # [rerank] -- bge_reranker_v2_m3, mxbai_rerank_base_v2
-sentence-transformers==6.1.0    # bge_reranker_v2_m3 (model BAAI/bge-reranker-v2-m3)
+sentence-transformers==6.3.0    # bge_reranker_v2_m3 (model BAAI/bge-reranker-v2-m3)
 mxbai-rerank==0.1.6             # mxbai_rerank_base_v2 (model mixedbread-ai/mxbai-rerank-base-v2)
 
 # Shared. transformers MUST be <5: mxbai-rerank 0.1.6 calls Qwen2Tokenizer.prepare_for_model, removed
